@@ -161,10 +161,12 @@ streamMap (\temp->temp-100) $ streamFilter (\temp->temp>100) tempSensor
 
 Note that the user does not have to understand the format of events, nor how map or filter are enacted. Instead they can focus solely on how the data in the events is to be processed.
 
-Scan
+## Scan ##
 
 There is sometimes the need for a map function whose output depends on the history of events. 
 
+```
+#!haskell
 streamScan:: (beta -> alpha -> beta) ->  -- the accumulator fn:
                                          --  takes head of stream &
                                          --  accumulator and computes
@@ -172,32 +174,48 @@ streamScan:: (beta -> alpha -> beta) ->  -- the accumulator fn:
               beta ->                    -- initial accumulator value
               Stream alpha ->            -- input stream
               Stream beta                -- output stream
+```
 
 An example is emitting an event giving a count of the number of events received so far in the stream:
 
+```
+#!haskell
 counter:: Stream alpha -> Stream Int
 counter s = scanStream (+1) 0 s
+```
 
-Expand
+## Expand ##
 
 Sometimes, it is necessary to generate multiple events from each input event. A function provided for this is:
+
+```
+#!haskell
 streamExpand::  Stream [alpha] ->          -- input  stream
                 Stream alpha               -- output stream
+```
 
 An example is a function that takes in a stream of Twitter tweets, and generates a stream of the hashtags found in those tweets. Assume a function getHashtags with signature:
 
+```
+#!haskell
 getHashtags:: String -> [String]
+```
 
 This function takes as input a tweet and outputs a list of all the hashtags contained within it.
 This could then be used to generate the stream of hashtags:
 
+```
+#!haskell
 streamExpand $ getHashtags s
+```
 
-Windowing
+## Windowing ##
 
 Windowing provides a way to break a stream into a stream whose elements contain subset of events from the original stream. Other functions can then be used to filter the events in each window. Experience shows that it is useful in many stream applications, and as a result, most CEP systems support a range of types of windowing.
 The basic windowing function is: 
 
+```
+#!haskell
 streamWindow:: WindowMaker alpha ->            -- turns stream
                                                --  into stream of
                                                --  windows 
@@ -205,11 +223,14 @@ streamWindow:: WindowMaker alpha ->            -- turns stream
                Stream [alpha]                  -- output stream
 
 type WindowMaker alpha = Stream alpha -> [Stream alpha]
+```
 
 WindowMaker is a function that generates a list of windows.
 
 A pre-defined set of functions covering the common WindowMaker cases is provided. However, users are free to define their own windowing functions if they require an alternative, specialist window creator. Examples of pre-defined functions are:
 
+```
+#!haskell
 -– create sliding windows that are a fixed number of events in length
 sliding:: Int -> WindowMaker alpha 
 
@@ -221,9 +242,12 @@ chop:: Int -> WindowMaker alpha –- creates non-overlapping windows
 
 -– create non-overlapping windows that are a fixed time length
 chopTime:: NominalDiffTime -> WindowMaker alpha
+```
 
 Building on this, we can then provide a function that combines windowing and aggregation:
 
+```
+#!haskell
 streamWindowAggregate:: WindowMaker alpha ->            -- turns stream
                                                         --  into stream of
                                                         --  windows 
@@ -234,48 +258,70 @@ streamWindowAggregate:: WindowMaker alpha ->            -- turns stream
                         Stream beta                     -- output stream
 
 type WindowAggregator alpha beta = [alpha] -> beta
+```
 
 WindowAggregator takes a list of the values contained in a window of events, and aggregates them into a single value.
 An implementation of streamWindowAggregate in Haskell is:
+
+```
+#!haskell
 streamWindowAggregate fwm fwa s = streamMap fwa $ streamWindow fwm s
+```
 
 As an example, consider an extension to the running example in which we in each want to know how may times in each hour the sensor has measured a temperature over 100. This can be done using the function:
 
+```
+#!haskell
 streamWindowAggregate (chopTime 3600) length 
 $ streamFilter over100 tempSensor
+```
 
 Here, length is the standard Haskell function that returns the length of a list.
 
-Merge
+## Merge ##
 
 Sometimes there is a need to merge multiple streams of the same type into one. This is done with the streamMerge function.
 
+```
+#!haskell
 streamMerge:: [Stream alpha]-> Stream alpha
+```
 
 For example, if there are three temperature sensors then we can combine them as follows:
 
+```
+#!haskell
 streamMerge [tempSensor1,tempSensor2,tempSensor3]
+```
 
 In the running example, the merged stream can then be used as input to one of the previously described stream processing functions, e.g.:
 
+```
+#!haskell
 streamWindowAggregate (chopTime 3600) length 
 $ streamMerge over100
 $ streamMerge [tempSensor1,tempSensor2,tempSensor3]
-
-Join
+```
+## Join ##
 
 The join pattern is used to combine data from two streams that may be of different types. 
 A basic join is provided, along with two others that build on it.
 
 The basic stream join has the signature
 
+```
+#!haskell
 streamJoin:: Stream alpha -> Stream beta -> Stream (alpha,beta)
+```
 
 This takes two streams as input and generates a stream where each event holds pair containing the payload of the events in each stream. The streams are combined in a pairwise manner.
 
 Two higher level join functions are provided that operate on windows of events.
 
 The first - streamJoinE – has the signature:
+
+```
+#!haskell
 type JoinFilter alpha beta        = alpha -> beta -> Bool
 type JoinMap    alpha beta gamma  = alpha -> beta -> gamma
 
@@ -288,32 +334,48 @@ streamJoinE:: WindowMaker alpha ->         -- create windows from stream 1
               Stream alpha ->              -- 1st input stream               
               Stream beta  ->              -- 2nd input stream              
               Stream gamma                 -- the output stream
+```
 
 The user provides a WindowMaker function for each of the two input streams. The Cartesian product of the values in the events in each window is then formed. The resulting pairs of values are then filtered using the user-defined JoinFilter function to determine if the pair of values meets the join criteria. A user-defined map function – JoinMap – is then applied to each conforming pair and the result appears on the output stream.
 
 For example, if our running example temperature sensors are upgraded to ones which give a wider range of data, including location and carbon dioxide:
 
+```
+#!haskell
 data EnvSensor = EnvSensor {loc::Location,temp::Int,co2::Int}
+```
 
 And are joined by another set of sensors with traffic data:
+
+```
+#!haskell
 data Traffic   = Traffic {loc::Location,load::Int}
+```
 
 where load is a measure of the volume of traffic per second. Then, we may want to understand the correlation between load and CO2 levels every minute. As a first step we can combine data at all the locations where there are both types of sensor.
 We can do this using the following function (where envSensors is the merge of the data from all the environmental sensors, and trafficSensors is the merge of the data from all the traffic sensors):
 
+```
+#!haskell
 streamJoinE (chopTime 60) 
             (chopTime 60) 
             (close 50)
             (\(loc1,temp1,co2level)(loc2,ld) -> (loc1,temp1,ld,c02level))
             envSensors     
             trafficSensors
+```
 
 Here close is a function that is true if the locations given by its second and third parameters are within a number of meters specified by its first parameter. Its signature is:
 
+```
+#!haskell
 close:: Int -> Location -> Location -> Bool
+```
 
 We also provide another join function – streamJoinW - that does not perform a cartesian product of the events in the two windows that are being joined. Instead, it operates on whole windows, applying a user defined function to the two windows of data taken from the two input streams. It is defined as:
 
+```
+#!haskell
 streamJoinW:: WindowMaker alpha ->        -- create windows from stream 1
               WindowMaker beta ->         -- create windows from stream 2
               ([alpha]->[beta]->gamma) -> -- combines the two windows
@@ -321,3 +383,4 @@ streamJoinW:: WindowMaker alpha ->        -- create windows from stream 1
               Stream alpha ->             -- 1st input stream 
               Stream beta  ->             -- 2nd input stream               
               Stream gamma                -- the output stream
+```
