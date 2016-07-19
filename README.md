@@ -8,14 +8,14 @@ We model a stream as a (possibly infinite) list of events. Each event may or may
 ```
 #!haskell
 
-data Event alpha = E {time::Timestamp, value::alpha} 
-                   V {                 value::alpha} |
-                   T {time::Timestamp              }
-                          deriving (Eq, Ord)
+data Event alpha  = E {time::Timestamp, value::alpha} 
+                    V {                 value::alpha} |
+                    T {time::Timestamp              }
+                           deriving (Eq, Ord)
 
-type Timestamp       = UTCTime
+type Timestamp    = UTCTime
 
-type Stream alpha    = [Event alpha]  
+type Stream alpha = [Event alpha]  
 ```
 
 The “T” form of Event is used for time-based operations as will be described later).
@@ -49,7 +49,7 @@ streamFilter:: EventFilter alpha -> -- Function applied to each input
                Stream alpha      -> -- The input  stream
                Stream alpha         -- The output stream
 
-type EventFilter alpha = alpha -> Bool – type of the filter function
+type EventFilter alpha = alpha -> Bool –- type of the filter function
 ```
 
 This illustrates the fact that the user does not need to know or understand the exact format of the events as seen by the infrastructure: they only need provide a function of type EventFilter to filter out all events whose value does not meet a particular criterion. This user-provided function is applied by the infrastructure to each the value in each element of the stream, and only those that return “True” are selected.
