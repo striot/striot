@@ -8,7 +8,7 @@ We model a stream as a (possibly infinite) list of events. Each event may or may
 ```
 #!haskell
 
-data Event alpha  = E {time::Timestamp, value::alpha} 
+data Event alpha  = E {time::Timestamp, value::alpha} |
                     V {                 value::alpha} |
                     T {time::Timestamp              }
                            deriving (Eq, Ord)
