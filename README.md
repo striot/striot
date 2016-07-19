@@ -49,7 +49,7 @@ streamFilter:: EventFilter alpha -> -- Function applied to each input
                Stream alpha      -> -- The input  stream
                Stream alpha         -- The output stream
 
-type EventFilter alpha = alpha -> Bool –- type of the filter function
+type EventFilter alpha = alpha -> Bool -- type of the filter function
 ```
 
 This illustrates the fact that the user does not need to know or understand the exact format of the events as seen by the infrastructure: they only need provide a function of type EventFilter to filter out all events whose value does not meet a particular criterion. This user-provided function is applied by the infrastructure to each the value in each element of the stream, and only those that return “True” are selected.
@@ -238,7 +238,7 @@ sliding:: Int -> WindowMaker alpha
 slidingTime:: NominalDiffTime -> WindowMaker alpha
 
 -- create non-overlapping windows that are a fixed # of events in length
-chop:: Int -> WindowMaker alpha –- creates non-overlapping windows
+chop:: Int -> WindowMaker alpha
 
 -- create non-overlapping windows that are a fixed time length
 chopTime:: NominalDiffTime -> WindowMaker alpha
