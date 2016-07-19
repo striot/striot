@@ -384,3 +384,55 @@ streamJoinW:: WindowMaker alpha ->        -- create windows from stream 1
               Stream beta  ->             -- 2nd input stream               
               Stream gamma                -- the output stream
 ```
+
+# Dynamically creating Functional Stream Graphs #
+
+If the programmer composes the functional stream operations introduced above then the stream graph is statically defined. However, as Haskell supports higher-order functions we can introduce some new functions that can be used to create sub-graphs either statically or dynamically. 
+
+Computer science thrives on recursion. However, a stream processing system composed of the functions described in the previous section doe not directly support recursion. We can provide it by adding a new function:
+
+
+```
+#!Haskell
+streamGraph  :: (Stream alpha->Stream beta)->   -- stream graph
+                Stream alpha ->                 -- input stream
+                Stream beta                     -- output stream
+```
+
+This can be implemented as:
+
+```
+#!Haskell
+streamGraph g s = streamMerge $ map (\e->g [e]) s
+```
+
+This function applies the stream processing graph defined by the first parameter (g) to each event in the input stream, and merges the resulting streams. An example which maps and filters each window created from a stream is:
+
+```
+#!Haskell
+streamGraph (\ss-> streamMap mf $ streamFilter ff ss)
+            $ streamWindow (sliding 10) s
+```
+
+As streamGraph can operate on finite length streams (as well as infinite streams), it is useful to define another function that reduces a finite list:
+
+```
+#!Haskell
+streamReduce::(beta -> alpha -> beta) ->  -- the accumulator fn:
+                                           --  takes head of stream &
+                                           --  accumulator and computes
+                                           --  the new accumulator
+              beta ->                      -- initial accumulator value
+              Stream alpha ->              -- input stream
+              Stream beta                  -- output stream
+```
+
+The output is a stream with one Event - the result of reducing the list using the first parameter.
+
+An example is counting the number of events in a stream:
+
+```
+#!Haskell
+counter:: Stream alpha -> Stream Int
+counter s = streamReduce (+1) 0 s
+```
