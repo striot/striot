@@ -231,16 +231,16 @@ A pre-defined set of functions covering the common WindowMaker cases is provided
 
 ```
 #!haskell
--– create sliding windows that are a fixed number of events in length
+-- create sliding windows that are a fixed number of events in length
 sliding:: Int -> WindowMaker alpha 
 
--– create sliding windows that are a fixed time length
+-- create sliding windows that are a fixed time length
 slidingTime:: NominalDiffTime -> WindowMaker alpha
 
--– create non-overlapping windows that are a fixed # of events in length
+-- create non-overlapping windows that are a fixed # of events in length
 chop:: Int -> WindowMaker alpha –- creates non-overlapping windows
 
--– create non-overlapping windows that are a fixed time length
+-- create non-overlapping windows that are a fixed time length
 chopTime:: NominalDiffTime -> WindowMaker alpha
 ```
 
@@ -326,7 +326,7 @@ type JoinFilter alpha beta        = alpha -> beta -> Bool
 type JoinMap    alpha beta gamma  = alpha -> beta -> gamma
 
 streamJoinE:: WindowMaker alpha ->         -- create windows from stream 1
-        WindowMaker beta ->          -- create windows from stream 2
+              WindowMaker beta ->          -- create windows from stream 2
               JoinFilter alpha beta ->     -- determines if this pair of 
                                            --   values meets join criteria
               JoinMap alpha beta gamma ->  -- combines the pair of values
