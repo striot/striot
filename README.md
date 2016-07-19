@@ -6,7 +6,7 @@ We model a stream as a (possibly infinite) list of events. Each event may or may
 data Event    alpha = E {time::Timestamp, value::alpha} |
 	              V {                 value::alpha} |
                       T {time::Timestamp              }
-     deriving (Eq, Ord)
+                                                           deriving (Eq, Ord)
 
 type Timestamp       = UTCTime
 
@@ -267,4 +267,4 @@ streamJoinW:: WindowMaker alpha ->        -- create windows from stream 1
                                           --  into the output event 
               Stream alpha ->             -- 1st input stream 
               Stream beta  ->             -- 2nd input stream               
-              Stream gamma                -- the output stream 
+              Stream gamma                -- the output stream
