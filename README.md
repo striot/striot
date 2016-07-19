@@ -3,61 +3,92 @@
 This is a haskell stream processing engine for IoT
 
 We model a stream as a (possibly infinite) list of events. Each event may or may not be timestamped:
-data Event    alpha = E {time::Timestamp, value::alpha} |
-	              V {                 value::alpha} |
-                      T {time::Timestamp              }
-                                                           deriving (Eq, Ord)
+
+
+```
+#!haskell
+
+data Event alpha = E {time::Timestamp, value::alpha} 
+                   V {                 value::alpha} |
+                   T {time::Timestamp              }
+                          deriving (Eq, Ord)
 
 type Timestamp       = UTCTime
 
 type Stream alpha    = [Event alpha]  
+```
 
 The “T” form of Event is used for time-based operations as will be described later).
 Note that an Event can hold data of any type (e.g. integers, strings, tuples, lists, trees, graphs and even functions). An important principle is that separation between the view of the system seen by the user and the infrastructure: the details of the processing infrastructure are hidden allowing for multiple different implementations, and the addition of functionality to transparently support non-functional requirements. The functions that we provide for the user to process streams allow the user to only see a simple view of a stream as a list of type alpha: [alpha]
 
 In the rest of the  note we describe the stream operators that can be contained in a stream graph.
 
-Stream Operators
+# Stream Operators#
 
 One approach to functional stream processing would be to define the stream datatype (so allowing interoperability) but then allow the user to define any functions require that consume and generate streams. We have taken a different approach - by analysis of the literature on stream and complex event processing, and by experimenting with the implementation of a range of applications, we have defined and implemented a library of key functions that an application developer can use to create applications. We believe that this will make it easier to create applications, and it also means that – as will be described – other parts of the infrastructure (including an optimiser) can take advantage of knowledge of the semantics and performance characteristics of these functions that would be difficult to derive automatically from arbitrary, user-defined, functions.
 There are 6 main tasks any stream processing system must perform:
-•	Filter 		(select only those events that match a criterion)
-•	Map 		(transform all events into another type of event)
-•	Window 	        (break a stream of events into a stream of windows of events)
-•	Merge 		(combine streams of the same type)
-•	Join 		(combine streams of different types)
+
+* Filter   (select only those events that match a criterion)
+* Map      (transform all events into another type of event)
+* Window   (break a stream of events into a stream of windows of events)
+* Merge    (combine streams of the same type)
+* Join     (combine streams of different types)
 
 We now define a set of Haskell functions that implement these operators on the stream datatype defined in the previous section.
 
-Filter
+## Filter ##
+
 The streamFilter function takes a stream as input, and generates a stream containing only those events that meet a user-provided criteria. The type signature is:
+
+
+```
+#!haskell
 streamFilter:: EventFilter alpha -> -- Function applied to each input
                                     --   event to determine if it
                                     --   meets the criteria
                Stream alpha      -> -- The input  stream
                Stream alpha         -- The output stream
 
-type Event Filter alpha = alpha -> Bool – type of the filter function
+type EventFilter alpha = alpha -> Bool – type of the filter function
+```
 
 This illustrates the fact that the user does not need to know or understand the exact format of the events as seen by the infrastructure: they only need provide a function of type EventFilter to filter out all events whose value does not meet a particular criterion. This user-provided function is applied by the infrastructure to each the value in each element of the stream, and only those that return “True” are selected.
 
 To show how filterStream can be used, assume a temperature sensor generates a stream of events of type Int.
 
+```
+#!haskell
 tempSensor:: Stream Int
+```
+
 If we are interested only in temperatures of over 100 then the user can define a function:
 
+```
+#!haskell
 over100:: EventFilter Int
 over100 temp = temp>100
+```
 
 and stream can be filtered:
+
+```
+#!haskell
 streamFilter over100 tempSensor
+```
 
 Alternatively, the user may choose to use lambda notation to provide an unnamed function, and so the filter can also be written as:
-streamFilter (\temp->temp>100) tempSensor
 
-Filtering with an Accumulating Parameter
+```
+#!haskell
+streamFilter (\temp->temp>100) tempSensor
+```
+
+## Filtering with an Accumulating Parameter ##
+
 Sometimes, it is necessary to filter events based partly on past results. This can be done using the function streamFilterAcc whose signature is as follows:
 
+```
+#!haskell
 streamFilterAcc:: (beta -> alpha -> beta) ->  -- the accumulator fn:
                                               --- takes accumulator &
                                               --- head of stream 
@@ -68,43 +99,65 @@ streamFilterAcc:: (beta -> alpha -> beta) ->  -- the accumulator fn:
                                               --- of stream & accumulator
                   Stream alpha ->             -- input stream
                   Stream alpha                -- output stream
-
+```
 
 An example of its use is where we only want to propagate an event if its value is different to the previous event (though the timestamp may differ). This can be written:
 
+```
+#!haskell
 changes:: Eq alpha=> Stream alpha -> Stream alpha
 changes s = streamFilterAcc (\acc h -> if (h==acc) then acc else h) 
                             (value $ head s) 
                             (\h acc->(h/=acc))
                             (tail s)
+```
 
 Another example is a function that samples its input, only passing through one event in n:
 
+```
+#!haskell
 sample:: Int -> Stream alpha -> Stream alpha
 sample n s = streamFilterAcc (\acc h -> if acc==0 then n else acc-1)
                              n
                              (\h acc -> acc==0)
                              s
-Mapping Streams
+```
+
+## Mapping Streams ##
 
 The function mapStream is used to transform the values in a stream. The user supplies a function of type EventMap which is applied to the value within each event in the input stream to generate the output stream. The function streamMap has the signature:
+
+```
+#!haskell
 streamMap:: EventMap alpha beta -> -- the user-supplied map function
             Stream alpha        -> -- input stream
             Stream beta            -- output stream
 
 type EventMap alpha beta = alpha -> beta -- type of the 
                                          -- user-supplied map function 
+```
 
 To illustrate this with the running example, let us say that after filtering all temperatures over 100, the user wants to use 100 as the baseline temperature, and represent all temperatures as their value over 100. To do this we can define a function:
 
+```
+#!haskell
 amountOver100:: EventMap Int Int
 amountOver100 temp = temp-100
+```
 
 and then include this in the application:
+
+```
+#!haskell
 streamMap amountOver100 $ streamFilter over100 tempSensor
+```
 
 again, this can also be written using anonymous functions:
+
+```
+#!haskell
 streamMap (\temp->temp-100) $ streamFilter (\temp->temp>100) tempSensor
+```
 
 Note that the user does not have to understand the format of events, nor how map or filter are enacted. Instead they can focus solely on how the data in the events is to be processed.
 
