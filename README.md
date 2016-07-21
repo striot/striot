@@ -1,6 +1,13 @@
 # README #
 
-This is a haskell stream processing engine for IoT
+This is a haskell stream processing engine for IoT.  It is built as a cabal module, to build it:
+
+```
+$ cabal build
+$ cabal install
+```
+
+Following this it can be imported in a standard way.
 
 We model a stream as a (possibly infinite) list of events. Each event may or may not be timestamped:
 
