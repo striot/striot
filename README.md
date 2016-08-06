@@ -345,6 +345,15 @@ streamJoinE:: WindowMaker alpha ->         -- create windows from stream 1
 
 The user provides a WindowMaker function for each of the two input streams. The Cartesian product of the values in the events in each window is then formed. The resulting pairs of values are then filtered using the user-defined JoinFilter function to determine if the pair of values meets the join criteria. A user-defined map function – JoinMap – is then applied to each conforming pair and the result appears on the output stream.
 
+This can be implemented using the core stream processing functions:
+```
+#!haskell
+streamJoinE fwm1 fwm2 fwj fwm s1 s2 = streamExpand $ 
+                                      streamMap  (cartesianJoin fwj fwm) $
+                                      streamJoin (streamWindow fwm1 s1)
+                                                 (streamWindow fwm2 s2)
+```
+
 For example, if our running example temperature sensors are upgraded to ones which give a wider range of data, including location and carbon dioxide:
 
 ```
@@ -390,6 +399,14 @@ streamJoinW:: WindowMaker alpha ->        -- create windows from stream 1
               Stream alpha ->             -- 1st input stream 
               Stream beta  ->             -- 2nd input stream               
               Stream gamma                -- the output stream
+```
+
+This can be implemented using the core stream processing functions as:
+```
+#!haskell
+streamJoinW fwm1 fwm2 fwj s1 s2 = streamMap  (\(w1,w2)->fwj w1 w2) $
+                                  streamJoin (streamWindow fwm1 s1)
+                                             (streamWindow fwm2 s2)
 ```
 
 # Dynamically creating Functional Stream Graphs #
