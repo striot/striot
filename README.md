@@ -450,13 +450,19 @@ streamReduce::(beta -> alpha -> beta) ->  -- the accumulator fn:
               Stream alpha ->              -- input stream
               Stream beta                  -- output stream
 ```
-
 The output is a stream with one Event - the result of reducing the list using the first parameter.
 
-An example is counting the number of events in a stream:
-
+This could be implemented as
 ```
 #!Haskell
-counter:: Stream alpha -> Stream Int
-counter s = streamReduce (+1) 0 s
+streamReduce f acc s = streamMap (foldl f acc) $ streamWindow complete s
+```
+
+where complete is a WindowMaker that takes all elements of a finite stream that contain a value.
+
+An example application is adding up the contents of a finite stream of integers:
+```
+#!Haskell
+sumEvents:: Stream Int -> Stream Int
+sumEvents s = streamReduce (\acc a ->acc+a) 0 s
 ```
