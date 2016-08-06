@@ -458,7 +458,7 @@ This could be implemented as
 streamReduce f acc s = streamMap (foldl f acc) $ streamWindow complete s
 ```
 
-where complete is a WindowMaker that takes all elements of a finite stream that contain a value.
+where "complete" is a WindowMaker that takes all elements of a finite stream that contain a value.
 
 An example application is adding up the contents of a finite stream of integers:
 ```
