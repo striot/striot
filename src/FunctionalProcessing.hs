@@ -1,11 +1,8 @@
-module FunctionalProcessing(Source,streamFilter,streamMap,streamWindow,streamWindowAggregate,joinWindowsE,joinWindowsW,
+module FunctionalProcessing(Source,streamFilter,streamMap,streamWindow,streamWindowAggregate,   --joinWindowsE,joinWindowsW,
                             streamMerge,streamJoin,streamJoinE,streamJoinW,streamFilterAcc,streamScan,streamExpand,WindowMaker,WindowAggregator,
-                            sliding,slidingTime,chop,chopTime,EventFilter,EventMap,JoinFilter,JoinMap,combineStreamWindows) where
+                            sliding,slidingTime,chop,chopTime,complete,EventFilter,EventMap,JoinFilter,JoinMap) where
 import FunctionalIoTtypes
 import Data.Time (UTCTime,addUTCTime,diffUTCTime,NominalDiffTime)
-
--- as IoT5 except that windowing creates a Stream [alpha]
---- and join uses streamJoin
 
 type Source alpha = Stream alpha -- a source of data
 
@@ -109,6 +106,9 @@ chopTime' tLength start s@(h:t) = let endTime = addUTCTime tLength start in
                                       fstBuffer:(chopTime' tLength endTime rest)
 chopTime' tLength start []      = []
 
+complete:: WindowMaker alpha
+complete s = [s]
+
 -- Merge a set of streams that are of the same type. Preserve time ordering
 streamMerge:: [Stream alpha]-> Stream alpha
 streamMerge []     = []
@@ -132,6 +132,7 @@ streamJoin []             _              = []
 streamJoin ((E t1 v1):r1) ((E t2 v2):r2) = (E t1 (v1,v2)):(streamJoin r1 r2)
 streamJoin ((E t1 v1):r1) ((V    v2):r2) = (E t1 (v1,v2)):(streamJoin r1 r2)
 streamJoin ((V    v1):r1) ((E t2 v2):r2) = (E t2 (v1,v2)):(streamJoin r1 r2)
+streamJoin ((V    v1):r1) ((V    v2):r2) = (V    (v1,v2)):(streamJoin r1 r2)
 streamJoin s1             ((T t2   ):r2) = (T t2)        :(streamJoin s1 r2)
 streamJoin ((T t1   ):r1) s2             = (T t1)        :(streamJoin r1 s2)
                             
@@ -146,42 +147,20 @@ streamJoinE:: WindowMaker alpha ->
               Stream alpha ->
               Stream beta  -> 
               Stream gamma
-streamJoinE fwm1 fwm2 fwj fwm s1 s2 = joinWindowsE fwj fwm $ combineStreamWindows fwm1 fwm2 s1 s2
+streamJoinE fwm1 fwm2 fwj fwm s1 s2 = streamExpand $ streamMap (cartesianJoin fwj fwm) $ streamJoin (streamWindow fwm1 s1) (streamWindow fwm2 s2)
 
-processJoinPair:: JoinFilter alpha beta -> JoinMap alpha beta gamma -> Event ([alpha],[beta]) -> Stream gamma
-processJoinPair jf jm (E t (w1,w2)) = let eventPairs = cartesianProduct w1 w2 in
-                                      let events     = map (\(e1,e2)-> V (e1,e2)) eventPairs in
-                                          map (\(V (v1,v2))-> V (jm v1 v2)) 
-                                          $ filter (\(V (v1,v2)) -> jf v1 v2) events
-processJoinPair jf jm (V   (w1,w2)) = let eventPairs = cartesianProduct w1 w2 in
-                                      let events     = map (\(e1,e2)-> V (e1,e2)) eventPairs in
-                                          map (\(V (v1,v2))-> V (jm v1 v2)) 
-                                          $ filter (\(V (v1,v2)) -> jf v1 v2) events
+--was joinWindowsE fwj fwm $ combineStreamWindows fwm1 fwm2 s1 s2
+
+cartesianJoin:: JoinFilter alpha beta -> JoinMap alpha beta gamma -> ([alpha],[beta]) -> [gamma]
+cartesianJoin jf jm (w1,w2) = map (\(e1,e2)->jm e1 e2) $ filter (\(e1,e2)->jf e1 e2) $ cartesianProduct w1 w2
 
 cartesianProduct:: [alpha] -> [beta] -> [(alpha,beta)]
 cartesianProduct s1 s2 = [(a,b)|a<-s1,b<-s2]
 
-joinWindowsE:: JoinFilter alpha beta -> JoinMap alpha beta gamma -> Stream ([alpha],[beta]) -> Stream gamma
-joinWindowsE fwj fwm s = concatMap (processJoinPair fwj fwm) s
-
 streamJoinW:: WindowMaker alpha ->
               WindowMaker beta  -> 
               ([alpha] -> [beta] -> gamma)      -> Stream alpha -> Stream beta  -> Stream gamma
-streamJoinW fwm1 fwm2 fwj s1 s2 =  joinWindowsW fwj $ combineStreamWindows fwm1 fwm2 s1 s2
-
-combineStreamWindows:: WindowMaker alpha ->
-                       WindowMaker beta  ->
-                       Stream alpha -> 
-                       Stream beta  ->
-                       Stream ([alpha],[beta])
-combineStreamWindows fwm1 fwm2 s1 s2 = streamJoin (streamWindow fwm1 s1) (streamWindow fwm2 s2)
-
-joinWindowsW:: ([alpha] -> [beta] -> gamma) -> Stream ([alpha],[beta]) -> Stream gamma
-joinWindowsW fwm s = map (join2Windows fwm) s
-
-join2Windows:: ([alpha] -> [beta] -> gamma) -> Event ([alpha],[beta]) -> Event gamma
-join2Windows fwm (V   (w1,w2)) = V   (fwm w1 w2)
-join2Windows fwm (E t (w1,w2)) = E t (fwm w1 w2)
+streamJoinW fwm1 fwm2 fwj s1 s2 = streamMap (\(w1,w2)->fwj w1 w2) $ streamJoin (streamWindow fwm1 s1) (streamWindow fwm2 s2)
 
 -- Stream Filter with accumulating parameter
 streamFilterAcc:: (beta -> alpha -> beta) -> beta -> (alpha -> beta -> Bool) -> Stream alpha -> Stream alpha
@@ -227,6 +206,9 @@ s4 = [V i|i<-[0..]]
 s5:: Stream Int
 s5 = streamMerge [s2,s4]
 
+s6:: Stream Int
+s6 = [V i|i<-[100..]]
+
 ex1 i = streamWindow (sliding i) s3
 
 ex2 i = streamWindow (chop i) s3
@@ -241,3 +223,7 @@ ex6 = streamFilter (\v->v<1000) s1
 
 sample:: Int -> Stream alpha -> Stream alpha
 sample n s = streamFilterAcc (\acc h -> if acc==0 then n else acc-1) n (\h acc -> acc==0) s
+
+ex7 = streamJoin s1 s4 
+ex8 = streamJoinW (chop 2) (chop 2) (\a b->(sum a)+(sum b)) s4 s6
+ex9 = streamJoinE (chop 2) (chop 2) (\a b->a<b) (\a b->a+b) s4 s6
