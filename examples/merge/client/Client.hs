@@ -10,7 +10,7 @@ main :: IO ()
 main = withSocketsDo $ do
         -- Sleep to ensure the server is up
          threadDelay (1 * 1000 * 1000)                          -- boilerplate (parameterised)
-         handle <- connectTo "haskellserver" (PortNumber 9001)  -- boilerplate (parameterised)
+         handle <- connectTo "localhost" (PortNumber 9001)  -- boilerplate (parameterised)
          now    <- getCurrentTime
          let payload = "Hello From Client 1"
          let msg = show (E now payload)
