@@ -3,19 +3,20 @@ import Control.Concurrent
 import System.IO
 import FunctionalProcessing
 import FunctionalIoTtypes
-import HandleConnections
-import Data.Time (UTCTime,NominalDiffTime,getCurrentTime)
+import Nodes
 
 main :: IO ()
-main = withSocketsDo $ do
-        -- Sleep 5 seconds to ensure the server is up
+main = do
          threadDelay (1 * 1000 * 1000)
-         handle <- connectTo "haskellserver" (PortNumber 9001)
-         now    <- getCurrentTime
---         let now = "2013-01-01 00:00:00"
-         let payload = "Hello from Client2!"
---         hPutStr handle ("E," ++ show now ++ "," ++ payload)
-         hPutStr handle (show (E now payload))
---         hPutStr handle ("V," ++ payload)
-         hClose handle
-         main --  Recurse forever
+         nodeSource src1 streamGraph1 -- processes source before sending it to another node
+         
+streamGraph1 :: Stream String -> Stream String
+streamGraph1 s = streamMap (\st-> st++st) s
+
+src1:: IO String
+src1 = clockStreamNamed "Hello from Client 2" 1000
+
+clockStreamNamed:: String -> Int -> IO String -- returns the (next) payload to be added into an event and sent to a server
+clockStreamNamed message period = do -- period is in ms                                   
+                                    threadDelay (period*1000)
+                                    return message                                 

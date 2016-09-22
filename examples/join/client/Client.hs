@@ -14,7 +14,7 @@ streamGraph1 :: Stream String -> Stream String
 streamGraph1 s = streamMap (\st-> st++st) s
 
 src1:: IO String
-src1 = clockStreamNamed "Hello from Client 1" 1000
+src1 = clockStreamNamed "Hello from Client1" 1000
 
 clockStreamNamed:: String -> Int -> IO String -- returns the (next) payload to be added into an event and sent to a server
 clockStreamNamed message period = do -- period is in ms                                   
