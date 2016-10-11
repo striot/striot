@@ -12,4 +12,15 @@ portNumInput2 = 9002::PortNumber
 portNumOutput:: PortNumber
 portNumOutput = 9003::PortNumber
 
+hostNameOutput = "localhost"::HostName
+
+
+{-
+portNumInput1:: PortNumber
+portNumInput1 = 9001::PortNumber -- needs fixing
+
+portNumOutput:: PortNumber
+portNumOutput = 9001::PortNumber -- needs fixing
+
 hostNameOutput = "haskellserver"::HostName
+-}
