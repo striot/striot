@@ -12,6 +12,7 @@ nodeSink:: Read alpha => Show beta => (Stream alpha -> Stream beta) -> (Stream b
 nodeSink streamGraph iofn = withSocketsDo $ do
                                               sock <- listenOn $ PortNumber portNumInput1
                                               putStrLn "Starting server ..."
+                                              hFlush stdout
                                               nodeSink' sock streamGraph iofn
 
 nodeSink' :: Read alpha => Show beta => Socket -> (Stream alpha -> Stream beta) -> (Stream beta -> IO ()) -> IO ()
@@ -26,6 +27,7 @@ nodeSink2 streamGraph iofn = withSocketsDo $ do
                                           sock1 <- listenOn $ PortNumber portNumInput1
                                           sock2 <- listenOn $ PortNumber portNumInput2
                                           putStrLn "Starting server ..."
+                                          hFlush stdout
                                           nodeSink2' sock1 sock2 streamGraph iofn
                                                 
 nodeSink2' :: Read alpha => Read beta => Show gamma => Socket -> Socket -> (Stream alpha -> Stream beta -> Stream gamma) -> (Stream gamma -> IO ()) -> IO ()
@@ -49,6 +51,7 @@ nodeLink:: Read alpha => Show beta => (Stream alpha -> Stream beta) -> IO ()
 nodeLink streamGraph = withSocketsDo $ do
                                          sockIn <- listenOn $ PortNumber portNumInput1
                                          putStrLn "Starting link ..."
+                                         hFlush stdout
                                          nodeLink' sockIn streamGraph
 
 nodeLink' :: Read alpha => Show beta => Socket -> (Stream alpha -> Stream beta) -> IO ()
@@ -63,6 +66,7 @@ nodeLink2 streamGraph = withSocketsDo $ do
                                           sock1 <- listenOn $ PortNumber portNumInput1
                                           sock2 <- listenOn $ PortNumber portNumInput2
                                           putStrLn "Starting server ..."
+                                          hFlush stdout
                                           nodeLink2' sock1 sock2 streamGraph
                                                 
 nodeLink2' :: Read alpha => Read beta => Show gamma => Socket -> Socket -> (Stream alpha -> Stream beta -> Stream gamma) -> IO ()

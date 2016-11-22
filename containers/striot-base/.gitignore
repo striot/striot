@@ -1,0 +1,8 @@
+#Ignore the binary files that are copied in from elsewhere
+bin/
+lib/
+striot/
+
+*.swo
+*.swp
+
