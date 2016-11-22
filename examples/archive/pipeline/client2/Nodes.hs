@@ -106,11 +106,11 @@ nodeSource pay streamGraph = do
                                sendStream result  --- or printStream if it's a completely self contained streamGraph
 
 readListFromSource :: IO alpha -> IO (Stream alpha)
-readListFromSource pay = do {l <- go pay 0; return l}
+readListFromSource pay = do {l <- go pay; return l}
   where
-    go pay i  = do 
+    go pay   = do 
                    now <- getCurrentTime
                    payload <- pay
-                   let msg = E i now payload             
-                   r <- System.IO.Unsafe.unsafeInterleaveIO (go pay (i+1)) -- at some point this will overflow
+                   let msg = E now payload                 
+                   r <- System.IO.Unsafe.unsafeInterleaveIO (go pay)
                    return (msg:r)

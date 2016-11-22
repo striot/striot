@@ -11,11 +11,11 @@ type EventFilter alpha = alpha -> Bool                                     -- th
 
 streamFilter:: EventFilter alpha -> Stream alpha -> Stream alpha           -- if the value in the event meets the criteria then it can pass through
 streamFilter ff []                      = []
-streamFilter ff (e@(E id t v):r) | ff v      = e         : streamFilter ff r
-                                 | otherwise = (T id t  ): streamFilter ff r     -- always allow timestamps to pass through for use in time-based windowing
-streamFilter ff (e@(V id   v):r) | ff v      = e         : streamFilter ff r
-                                 | otherwise =             streamFilter ff r     -- needs a T to be generated?
-streamFilter ff (e@(T id t  ):r)             = e         : streamFilter ff r
+streamFilter ff (e@(E t v):r) | ff v      = e      : streamFilter ff r
+                              | otherwise = (T t  ): streamFilter ff r     -- always allow timestamps to pass through for use in time-based windowing
+streamFilter ff (e@(V   v):r) | ff v      = e      : streamFilter ff r
+                              | otherwise =          streamFilter ff r     -- needs a T to be generated?
+streamFilter ff (e@(T t  ):r)             = e      : streamFilter ff r
 
 -- Map a Stream ...
 streamMap:: EventMap alpha beta -> Stream alpha -> Stream beta
@@ -23,9 +23,9 @@ streamMap fm s = map (eventMap fm) s
 
 type EventMap alpha beta = alpha -> beta
 eventMap:: EventMap alpha beta -> Event alpha -> Event beta
-eventMap fm (E id t v) = E id t (fm v)
-eventMap fm (V id   v) = V id   (fm v)
-eventMap fm (T id t  ) = T id t        -- allow timestamps to pass through untouched
+eventMap fm (E t v) = E t (fm v)
+eventMap fm (V   v) = V   (fm v)
+eventMap fm (T t  ) = T t        -- allow timestamps to pass through untouched
 
 -- create and aggregate windows
 type WindowMaker alpha = Stream alpha -> [Stream alpha]
@@ -33,8 +33,8 @@ type WindowAggregator alpha beta = [alpha] -> beta
 
 streamWindow:: WindowMaker alpha -> Stream alpha -> Stream [alpha]
 streamWindow fwm s = map (\win-> if timedEvent $ head win 
-                                 then E 0 (time $ head win) (getVals win)
-                                 else V 0                   (getVals win)) 
+                                 then E (time $ head win) (getVals win)
+                                 else V                   (getVals win)) 
                          (fwm s)
 
 streamWindowAggregate:: WindowMaker alpha -> WindowAggregator alpha beta -> Stream alpha -> Stream beta
@@ -126,15 +126,15 @@ merge' s1@(e1:xs) s2@(e2:ys) | timedEvent e1 && timedEvent e2 = if   time e1 < t
                                
 -- Join 2 streams by combining elements
 streamJoin:: Stream alpha -> Stream beta -> Stream (alpha,beta)
-streamJoin []                 []                 = []
-streamJoin _                  []                 = []
-streamJoin []                 _                  = []
-streamJoin ((E id1 t1 v1):r1) ((E id2 t2 v2):r2) = (E id1 t1 (v1,v2)):(streamJoin r1 r2)
-streamJoin ((E id1 t1 v1):r1) ((V id2    v2):r2) = (E id1 t1 (v1,v2)):(streamJoin r1 r2)
-streamJoin ((V id1    v1):r1) ((E id2 t2 v2):r2) = (E id1 t2 (v1,v2)):(streamJoin r1 r2)
-streamJoin ((V id1    v1):r1) ((V id2    v2):r2) = (V id2    (v1,v2)):(streamJoin r1 r2)
-streamJoin s1                 ((T id2 t2   ):r2) = (T id2 t2)        :(streamJoin s1 r2)
-streamJoin ((T id1 t1   ):r1) s2                 = (T id1 t1)        :(streamJoin r1 s2)
+streamJoin []             []             = []
+streamJoin _              []             = []
+streamJoin []             _              = []
+streamJoin ((E t1 v1):r1) ((E t2 v2):r2) = (E t1 (v1,v2)):(streamJoin r1 r2)
+streamJoin ((E t1 v1):r1) ((V    v2):r2) = (E t1 (v1,v2)):(streamJoin r1 r2)
+streamJoin ((V    v1):r1) ((E t2 v2):r2) = (E t2 (v1,v2)):(streamJoin r1 r2)
+streamJoin ((V    v1):r1) ((V    v2):r2) = (V    (v1,v2)):(streamJoin r1 r2)
+streamJoin s1             ((T t2   ):r2) = (T t2)        :(streamJoin s1 r2)
+streamJoin ((T t1   ):r1) s2             = (T t1)        :(streamJoin r1 s2)
                             
 -- Join 2 streams of different types by combining windows
 type JoinFilter alpha beta        = alpha -> beta -> Bool
@@ -164,56 +164,50 @@ streamJoinW fwm1 fwm2 fwj s1 s2 = streamMap (\(w1,w2)->fwj w1 w2) $ streamJoin (
 
 -- Stream Filter with accumulating parameter
 streamFilterAcc:: (beta -> alpha -> beta) -> beta -> (alpha -> beta -> Bool) -> Stream alpha -> Stream alpha
-streamFilterAcc accfn acc filterfn []              = []
-streamFilterAcc accfn acc filterfn ((T id t):rest) =         streamFilterAcc accfn    acc filterfn rest
-streamFilterAcc accfn acc filterfn (e       :rest) = let  newAcc = accfn acc (value e) in 
-                                                        if   filterfn (value e) acc 
-                                                        then e:(streamFilterAcc accfn newAcc filterfn rest)
-                                                        else   (streamFilterAcc accfn newAcc filterfn rest)
+streamFilterAcc accfn acc filterfn []           = []
+streamFilterAcc accfn acc filterfn ((T t):rest) =         streamFilterAcc accfn    acc filterfn rest
+streamFilterAcc accfn acc filterfn (e    :rest) = let  newAcc = accfn acc (value e) in 
+                                                  if   filterfn (value e) acc 
+                                                  then e:(streamFilterAcc accfn newAcc filterfn rest)
+                                                  else   (streamFilterAcc accfn newAcc filterfn rest)
 
 -- Stream map with accumulating parameter
 streamScan:: (beta -> alpha -> beta) -> beta -> Stream alpha -> Stream beta
-streamScan mapfn acc ((T id t  ):rest) =                 (streamScan mapfn acc    rest)
-streamScan mapfn acc ((E id t v):rest) = (E id t newacc):(streamScan mapfn newacc rest) where newacc = mapfn acc v
-streamScan mapfn acc ((V id   v):rest) = (V id   newacc):(streamScan mapfn newacc rest) where newacc = mapfn acc v
-streamScan mapfn acc []                = (V 0    acc   ):[]
+streamScan mapfn acc ((T t  ):rest) =              (streamScan mapfn acc    rest)
+streamScan mapfn acc ((E t v):rest) = (E t newacc):(streamScan mapfn newacc rest) where newacc = mapfn acc v
+streamScan mapfn acc ((V   v):rest) = (V   newacc):(streamScan mapfn newacc rest) where newacc = mapfn acc v
+streamScan mapfn acc []             = (V   acc   ):[]
 
 -- Map a Stream to a set of events
 streamExpand:: Stream [alpha] -> Stream alpha
 streamExpand s = concatMap eventExpand s
 
 eventExpand:: Event [alpha] -> [Event alpha]
-eventExpand (E id t v) = map (\nv->E id t nv) v
-eventExpand (V id   v) = map (\nv->V id   nv) v
-eventExpand (T id t  ) = [T id t]
-
-streamSource:: Stream alpha -> Stream alpha
-streamSource ss = ss
-
-streamSink:: (Stream alpha -> beta) -> Stream alpha -> beta
-streamSink ssink s = ssink s
+eventExpand (E t v) = map (\nv->E t nv) v
+eventExpand (V   v) = map (\nv->V   nv) v
+eventExpand (T t  ) = [T t]
 
 --- Tests ------
 t1:: Int -> Int -> Stream alpha -> (Bool,Stream alpha,Stream alpha)
 t1 tLen sLen s = splitAtValuedEvents tLen (take sLen s)
 
 s1:: Stream Int
-s1 = [(E 0 (addUTCTime i (read "2013-01-01 00:00:00")) 999)|i<-[0..]]
+s1 = [(E (addUTCTime i (read "2013-01-01 00:00:00")) 999)|i<-[0..]]
 
 s2:: Stream Int
-s2 = [T 0 (addUTCTime i (read "2013-01-01 00:00:00")) |i<-[0..]]
+s2 = [T (addUTCTime i (read "2013-01-01 00:00:00")) |i<-[0..]]
 
 s3:: Stream Int
 s3 = streamMerge [s1,s2]
 
 s4:: Stream Int
-s4 = [V i i|i<-[0..]]
+s4 = [V i|i<-[0..]]
 
 s5:: Stream Int
 s5 = streamMerge [s2,s4]
 
 s6:: Stream Int
-s6 = [V i i|i<-[100..]]
+s6 = [V i|i<-[100..]]
 
 ex1 i = streamWindow (sliding i) s3
 
