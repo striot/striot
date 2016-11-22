@@ -8,34 +8,34 @@ import System.IO.Unsafe
 import Data.Time (getCurrentTime)
 import PortConfiguration
 
-nodeSink:: Read alpha => Show beta => (Stream alpha -> Stream beta) -> IO ()
-nodeSink streamGraph = withSocketsDo $ do
-                                         sock <- listenOn $ PortNumber portNumInput1
-                                         putStrLn "Starting server ..."
-                                         nodeSink' sock streamGraph
+nodeSink:: Read alpha => Show beta => (Stream alpha -> Stream beta) -> (Stream beta -> IO ()) -> IO ()
+nodeSink streamGraph iofn = withSocketsDo $ do
+                                              sock <- listenOn $ PortNumber portNumInput1
+                                              putStrLn "Starting server ..."
+                                              nodeSink' sock streamGraph iofn
 
-nodeSink' :: Read alpha => Show beta => Socket -> (Stream alpha -> Stream beta) -> IO ()
-nodeSink' sock streamOps = do
-                             stream <- readListFromSocket sock          -- read stream of Strings from socket
-                             let eventStream = map read stream
-                             let result = streamOps eventStream         -- process stream
-                             printStream result                         -- to print stream
-                                          
-nodeSink2:: Read alpha => Read beta => Show gamma => (Stream alpha -> Stream beta -> Stream gamma) -> IO () -- A Link with 2 inputs
-nodeSink2 streamGraph = withSocketsDo $ do
+nodeSink' :: Read alpha => Show beta => Socket -> (Stream alpha -> Stream beta) -> (Stream beta -> IO ()) -> IO ()
+nodeSink' sock streamOps iofn = do
+                                   stream <- readListFromSocket sock          -- read stream of Strings from socket
+                                   let eventStream = map read stream
+                                   let result = streamOps eventStream         -- process stream
+                                   iofn result            
+                                                                              
+nodeSink2:: Read alpha => Read beta => Show gamma => (Stream alpha -> Stream beta -> Stream gamma) -> (Stream gamma -> IO ()) -> IO () -- A Link with 2 inputs
+nodeSink2 streamGraph iofn = withSocketsDo $ do
                                           sock1 <- listenOn $ PortNumber portNumInput1
                                           sock2 <- listenOn $ PortNumber portNumInput2
                                           putStrLn "Starting server ..."
-                                          nodeSink2' sock1 sock2 streamGraph
+                                          nodeSink2' sock1 sock2 streamGraph iofn
                                                 
-nodeSink2' :: Read alpha => Read beta => Show gamma => Socket -> Socket -> (Stream alpha -> Stream beta -> Stream gamma) -> IO ()
-nodeSink2' sock1 sock2 streamOps = do
-                                     stream1 <- readListFromSocket sock1          -- read stream of Strings from socket
-                                     stream2 <- readListFromSocket sock2          -- read stream of Strings from socket
-                                     let eventStream1 = map read stream1
-                                     let eventStream2 = map read stream2
-                                     let result = streamOps eventStream1 eventStream2     -- process stream
-                                     printStream result                                    -- to send stream to another node
+nodeSink2' :: Read alpha => Read beta => Show gamma => Socket -> Socket -> (Stream alpha -> Stream beta -> Stream gamma) -> (Stream gamma -> IO ()) -> IO ()
+nodeSink2' sock1 sock2 streamOps iofn = do
+                                          stream1 <- readListFromSocket sock1          -- read stream of Strings from socket
+                                          stream2 <- readListFromSocket sock2          -- read stream of Strings from socket
+                                          let eventStream1 = map read stream1
+                                          let eventStream2 = map read stream2
+                                          let result = streamOps eventStream1 eventStream2     -- process stream
+                                          iofn result                                
                                
 readListFromSocket :: Socket -> IO [String]
 readListFromSocket sock = do {l <- go sock; return l}
@@ -44,11 +44,6 @@ readListFromSocket sock = do {l <- go sock; return l}
                    eventMsg             <- hGetLine handle                  
                    r                    <- System.IO.Unsafe.unsafeInterleaveIO (go sock)
                    return (eventMsg:r)
-
-printStream:: Show alpha => Stream alpha -> IO ()
-printStream (h:t) = do
-                      putStrLn $ show h
-                      printStream t
 
 nodeLink:: Read alpha => Show beta => (Stream alpha -> Stream beta) -> IO ()
 nodeLink streamGraph = withSocketsDo $ do
