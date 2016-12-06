@@ -1,0 +1,15 @@
+source:
+  build: source
+  # image: sjwoodman/haskell-client2
+  links:
+    - sink
+  stdin_open: true
+  tty: true
+
+sink:
+  build: sink
+  # image: sjwoodman/haskell-server
+  ports:
+    - "61616:61616"
+  stdin_open: true
+  tty: true

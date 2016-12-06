@@ -1,3 +1,4 @@
+
 # Run from a pre-built Haskell container
 FROM sjwoodman/striot-base
 
@@ -10,4 +11,7 @@ WORKDIR /opt/haskell
 RUN ghc Main.hs
 
 # Run the wrapper
-CMD /opt/wrapper/bin/startserver.sh
+CMD /opt/wrapper/bin/startserver.sh source
+
+
+
