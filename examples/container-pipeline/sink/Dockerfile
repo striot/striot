@@ -1,5 +1,5 @@
 # Run from a pre-built Haskell container
-FROM sjwoodman/striot-base
+FROM sjwoodman/striot-base:0.1
 
 # Add and Install Application Code
 COPY . /opt/haskell
