@@ -1,5 +1,5 @@
 # Run from a pre-built Haskell container
-FROM haskell:7.10
+FROM haskell:8.0.1
 
 RUN apt-get update && apt-get install -y openjdk-7-jdk
 

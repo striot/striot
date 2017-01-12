@@ -1,15 +1,23 @@
-source:
+source1:
   build: source
-  # image: sjwoodman/haskell-client2
+  stdin_open: true
+  ports:
+    - "61616"
+  tty: true
+
+link:
+  build: link
   links:
-    - sink
+    - source1:upstream1
+#    - source2:upstream2
+  ports:
+    - "61616"
   stdin_open: true
   tty: true
 
 sink:
   build: sink
-  # image: sjwoodman/haskell-server
-  ports:
-    - "61616:61616"
+  links:
+    - link:upstream1
   stdin_open: true
   tty: true
