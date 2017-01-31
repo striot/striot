@@ -66,26 +66,11 @@ sliding' s@(_:tb) (h:t) | dataEvent h = let newWindow = tb++[h] in
                         | otherwise   = sliding' s t
 sliding' _        []                  = []
 
-slidingTime:: NominalDiffTime -> WindowMaker alpha -- needs checking
-slidingTime tLength s@(h:t) = let endTime             = addUTCTime tLength (time h) in
-                              let (revfstBuffer,rest) = timeTake endTime s in
-                              let fstBuffer           = reverse revfstBuffer in
-                              let validWindow         = time (head fstBuffer) >= endTime in
-                                  if   validWindow
-                                  then fstBuffer:(slidingTime' tLength fstBuffer rest)
-                                  else []
-
-slidingTime':: NominalDiffTime -> Stream alpha -> WindowMaker alpha
-slidingTime' tLength buffer s@(h:t) = let (newEvents ,rest) = span (\e->time e==time h) t in -- find all next events with same time
-                                      let startTime         = addUTCTime (-tLength) (time h) in
-                                      let (newWindow,rem)   = span (\e-> time e >= startTime) (h:newEvents++buffer) in
-                                      let validWindow       = (time (last newWindow) == startTime) || (not (null rem)) in
-                                          if   validWindow
-                                          then newWindow:(slidingTime' tLength newWindow rest)
-                                          else []
-
-timeTake:: UTCTime -> Stream alpha -> (Stream alpha,Stream alpha)
-timeTake endTime s = span (\h->(time h)<=endTime) s
+slidingTime:: NominalDiffTime -> WindowMaker alpha
+slidingTime tLength s@(h:t) = let endTime   = addUTCTime tLength (time h)         in -- calculate the end time for the window
+                              let fstWindow = takeWhile (\h->(time h)<=endTime) s in -- create a window of events with times that are less than the end of the window 
+                                  fstWindow:(slidingTime tLength t)                  -- each event is the start of a new window
+slidingTime tLength []      = []
  
 chop:: Int -> WindowMaker alpha
 chop wLength s = let (validWindow,fstWindow,rest) = splitAtValuedEvents wLength s in -- remove events with no value
@@ -94,17 +79,16 @@ chop wLength s = let (validWindow,fstWindow,rest) = splitAtValuedEvents wLength 
                      else []
 
 chopTime:: NominalDiffTime -> WindowMaker alpha -- assumes all events have a timestamp; the first argument is in seconds
-chopTime tLength s@(h:t) = let endTime = addUTCTime tLength (time h) in
-                           let (fstBuffer,rest) = timeTake endTime s in
+chopTime tLength s@(h:t) = let endTime          = addUTCTime tLength (time h)    in
+                           let (fstBuffer,rest) = break (\h->(time h)>endTime) s in
                                fstBuffer:(chopTime' tLength endTime rest)
 chopTime tLength []      = []
 
 chopTime':: NominalDiffTime -> UTCTime -> WindowMaker alpha -- assumes all events have a timestamp; the first argument is in seconds
-chopTime' tLength start s@(h:t) = let endTime = addUTCTime tLength start in
-                                  let (revfstBuffer,rest) = timeTake endTime s in
-                                  let fstBuffer           = reverse revfstBuffer in
-                                      fstBuffer:(chopTime' tLength endTime rest)
-chopTime' tLength start []      = []
+chopTime' tLength startTime s@(h:t) = let endTime          = addUTCTime tLength startTime   in
+                                      let (fstBuffer,rest) = break (\h->(time h)>endTime) s in
+                                          fstBuffer:(chopTime' tLength endTime rest)
+chopTime' tLength startTime []      = []
 
 complete:: WindowMaker alpha
 complete s = [s]
