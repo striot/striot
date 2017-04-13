@@ -6,6 +6,8 @@ import Data.Time (UTCTime,addUTCTime,diffUTCTime,NominalDiffTime)
 
 type Source alpha = Stream alpha -- a source of data
 
+-- Define the Basic IoT Stream Functions
+
 -- Filter a Stream ...
 type EventFilter alpha = alpha -> Bool                                     -- the type of the user-supplied function
 
