@@ -32,20 +32,20 @@ type WindowMaker alpha = Stream alpha -> [Stream alpha]
 type WindowAggregator alpha beta = [alpha] -> beta
 
 streamWindow:: WindowMaker alpha -> Stream alpha -> Stream [alpha]
-streamWindow fwm s = map (\win-> if timedEvent $ head win 
+streamWindow fwm s = map (\win-> if timedEvent $ head win
                                  then E 0 (time $ head win) (getVals win)
-                                 else V 0                   (getVals win)) 
+                                 else V 0                   (getVals win))
                          (fwm s)
 
 streamWindowAggregate:: WindowMaker alpha -> WindowAggregator alpha beta -> Stream alpha -> Stream beta
 streamWindowAggregate fwm fwa s = streamMap fwa $ streamWindow fwm s
- 
+
 getVals:: Stream alpha -> [alpha]
-getVals s = map value $ filter dataEvent s 
+getVals s = map value $ filter dataEvent s
 
 splitAtValuedEvents:: Int -> Stream alpha -> (Bool,Stream alpha,Stream alpha)
 splitAtValuedEvents length s = splitAtValuedEvents' length [] s
-   
+
 splitAtValuedEvents':: Int -> Stream alpha -> Stream alpha -> (Bool,Stream alpha,Stream alpha)
 splitAtValuedEvents' 0      acc s                     = (True ,acc, s)
 splitAtValuedEvents' length acc []                    = (False,[] ,[])
@@ -53,7 +53,7 @@ splitAtValuedEvents' length acc (h:t) | dataEvent h = splitAtValuedEvents' (leng
                                       | otherwise   = splitAtValuedEvents' length     acc        t
 
 -- Examples of WindowMaker functions
--- A sliding window of specified length : a new window is created for every event received 
+-- A sliding window of specified length : a new window is created for every event received
 sliding:: Int -> WindowMaker alpha
 sliding wLength s = let (validWindow,fstWindow,rest) = splitAtValuedEvents wLength s in -- ignores events with no value
                         if   validWindow
@@ -86,7 +86,7 @@ slidingTime' tLength buffer s@(h:t) = let (newEvents ,rest) = span (\e->time e==
 
 timeTake:: UTCTime -> Stream alpha -> (Stream alpha,Stream alpha)
 timeTake endTime s = span (\h->(time h)<=endTime) s
- 
+
 chop:: Int -> WindowMaker alpha
 chop wLength s = let (validWindow,fstWindow,rest) = splitAtValuedEvents wLength s in -- remove events with no value
                      if   validWindow
@@ -123,7 +123,7 @@ merge' s1@(e1:xs) s2@(e2:ys) | timedEvent e1 && timedEvent e2 = if   time e1 < t
                                                                 else e2: merge' ys s1
                              | otherwise                      = e1: merge' s2 xs  -- arbitrary ordering if 1 or 2 of the events aren't timed
                                                                                   -- swap order of streams so as to interleave
-                               
+
 -- Join 2 streams by combining elements
 streamJoin:: Stream alpha -> Stream beta -> Stream (alpha,beta)
 streamJoin []                 []                 = []
@@ -135,17 +135,17 @@ streamJoin ((V id1    v1):r1) ((E id2 t2 v2):r2) = (E id1 t2 (v1,v2)):(streamJoi
 streamJoin ((V id1    v1):r1) ((V id2    v2):r2) = (V id2    (v1,v2)):(streamJoin r1 r2)
 streamJoin s1                 ((T id2 t2   ):r2) = (T id2 t2)        :(streamJoin s1 r2)
 streamJoin ((T id1 t1   ):r1) s2                 = (T id1 t1)        :(streamJoin r1 s2)
-                            
+
 -- Join 2 streams of different types by combining windows
 type JoinFilter alpha beta        = alpha -> beta -> Bool
 type JoinMap    alpha beta gamma  = alpha -> beta -> gamma
 
 streamJoinE:: WindowMaker alpha ->
-              WindowMaker beta -> 
+              WindowMaker beta ->
               JoinFilter alpha beta ->
               JoinMap alpha beta gamma ->
               Stream alpha ->
-              Stream beta  -> 
+              Stream beta  ->
               Stream gamma
 streamJoinE fwm1 fwm2 fwj fwm s1 s2 = streamExpand $ streamMap (cartesianJoin fwj fwm) $ streamJoin (streamWindow fwm1 s1) (streamWindow fwm2 s2)
 
@@ -158,7 +158,7 @@ cartesianProduct:: [alpha] -> [beta] -> [(alpha,beta)]
 cartesianProduct s1 s2 = [(a,b)|a<-s1,b<-s2]
 
 streamJoinW:: WindowMaker alpha ->
-              WindowMaker beta  -> 
+              WindowMaker beta  ->
               ([alpha] -> [beta] -> gamma)      -> Stream alpha -> Stream beta  -> Stream gamma
 streamJoinW fwm1 fwm2 fwj s1 s2 = streamMap (\(w1,w2)->fwj w1 w2) $ streamJoin (streamWindow fwm1 s1) (streamWindow fwm2 s2)
 
@@ -166,8 +166,8 @@ streamJoinW fwm1 fwm2 fwj s1 s2 = streamMap (\(w1,w2)->fwj w1 w2) $ streamJoin (
 streamFilterAcc:: (beta -> alpha -> beta) -> beta -> (alpha -> beta -> Bool) -> Stream alpha -> Stream alpha
 streamFilterAcc accfn acc filterfn []              = []
 streamFilterAcc accfn acc filterfn ((T id t):rest) =         streamFilterAcc accfn    acc filterfn rest
-streamFilterAcc accfn acc filterfn (e       :rest) = let  newAcc = accfn acc (value e) in 
-                                                        if   filterfn (value e) acc 
+streamFilterAcc accfn acc filterfn (e       :rest) = let  newAcc = accfn acc (value e) in
+                                                        if   filterfn (value e) acc
                                                         then e:(streamFilterAcc accfn newAcc filterfn rest)
                                                         else   (streamFilterAcc accfn newAcc filterfn rest)
 
@@ -230,6 +230,6 @@ ex6 = streamFilter (\v->v<1000) s1
 sample:: Int -> Stream alpha -> Stream alpha
 sample n s = streamFilterAcc (\acc h -> if acc==0 then n else acc-1) n (\h acc -> acc==0) s
 
-ex7 = streamJoin s1 s4 
+ex7 = streamJoin s1 s4
 ex8 = streamJoinW (chop 2) (chop 2) (\a b->(sum a)+(sum b)) s4 s6
 ex9 = streamJoinE (chop 2) (chop 2) (\a b->a<b) (\a b->a+b) s4 s6

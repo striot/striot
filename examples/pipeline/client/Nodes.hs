@@ -20,14 +20,14 @@ nodeSink' sock streamOps = do
                              let eventStream = map read stream
                              let result = streamOps eventStream         -- process stream
                              printStream result                         -- to print stream
-                                          
+
 nodeSink2:: Read alpha => Read beta => Show gamma => (Stream alpha -> Stream beta -> Stream gamma) -> IO () -- A Link with 2 inputs
 nodeSink2 streamGraph = withSocketsDo $ do
                                           sock1 <- listenOn $ PortNumber portNumInput1
                                           sock2 <- listenOn $ PortNumber portNumInput2
                                           putStrLn "Starting server ..."
                                           nodeSink2' sock1 sock2 streamGraph
-                                                
+
 nodeSink2' :: Read alpha => Read beta => Show gamma => Socket -> Socket -> (Stream alpha -> Stream beta -> Stream gamma) -> IO ()
 nodeSink2' sock1 sock2 streamOps = do
                                      stream1 <- readListFromSocket sock1          -- read stream of Strings from socket
@@ -36,12 +36,12 @@ nodeSink2' sock1 sock2 streamOps = do
                                      let eventStream2 = map read stream2
                                      let result = streamOps eventStream1 eventStream2     -- process stream
                                      printStream result                                    -- to send stream to another node
-                               
+
 readListFromSocket :: Socket -> IO [String]
 readListFromSocket sock = do {l <- go sock; return l}
   where
     go sock   = do (handle, host, port) <- accept sock
-                   eventMsg             <- hGetLine handle                  
+                   eventMsg             <- hGetLine handle
                    r                    <- System.IO.Unsafe.unsafeInterleaveIO (go sock)
                    return (eventMsg:r)
 
@@ -69,7 +69,7 @@ nodeLink2 streamGraph = withSocketsDo $ do
                                           sock2 <- listenOn $ PortNumber portNumInput2
                                           putStrLn "Starting server ..."
                                           nodeLink2' sock1 sock2 streamGraph
-                                                
+
 nodeLink2' :: Read alpha => Read beta => Show gamma => Socket -> Socket -> (Stream alpha -> Stream beta -> Stream gamma) -> IO ()
 nodeLink2' sock1 sock2 streamOps = do
                                      stream1 <- readListFromSocket sock1          -- read stream of Strings from socket
@@ -79,23 +79,23 @@ nodeLink2' sock1 sock2 streamOps = do
                                      let result = streamOps eventStream1 eventStream2     -- process stream
                                      sendStream result                                    -- to send stream to another node
 
-                                        
+
 sendStream:: Show alpha => Stream alpha -> IO ()
 sendStream (h:t) = withSocketsDo $ do
                       handle <- connectTo hostNameOutput (PortNumber portNumOutput)
-                      hPutStr handle (show h)                                     
-                      hClose handle                                      
+                      hPutStr handle (show h)
+                      hClose handle
                       sendStream t
 
-{-                      
+{-
 sendSource:: Show alpha => IO alpha -> IO ()
 sendSource pay       = withSocketsDo $ do
                             handle <- connectTo hostNameOutput (PortNumber portNumOutput)
                             now    <- getCurrentTime
                             payload <- pay
                             let msg = show (E now payload)
-                            hPutStr handle msg                                    
-                            hClose handle                                      
+                            hPutStr handle msg
+                            hClose handle
                             sendSource pay
 -}
 
@@ -108,9 +108,9 @@ nodeSource pay streamGraph = do
 readListFromSource :: IO alpha -> IO (Stream alpha)
 readListFromSource pay = do {l <- go pay 0; return l}
   where
-    go pay i  = do 
+    go pay i  = do
                    now <- getCurrentTime
                    payload <- pay
-                   let msg = E i now payload             
+                   let msg = E i now payload
                    r <- System.IO.Unsafe.unsafeInterleaveIO (go pay (i+1)) -- at some point this will overflow
                    return (msg:r)
