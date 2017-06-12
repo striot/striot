@@ -1,10 +1,6 @@
 #!/bin/bash
 
-echo "Copying wrapper"
-mkdir -p striot-base/bin
-cp -R ../../haskell-wrapper/bin/* striot-base/bin;
-mkdir -p striot-base/lib
-cp -R ../../haskell-wrapper/lib/* striot-base/lib;
+prefix=${prefix-sjwoodman}
 
 echo "Copying Striot"
 mkdir -p striot-base/striot/src
@@ -13,4 +9,4 @@ cp -R ../striot.cabal striot-base/striot/
 cp -R ../src/* striot-base/striot/src
 
 echo "Building"
-docker build -t sjwoodman/striot-base striot-base
+docker build -t $prefix/striot-base striot-base
