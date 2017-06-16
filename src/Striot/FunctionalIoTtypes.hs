@@ -1,4 +1,4 @@
-module FunctionalIoTtypes where
+module Striot.FunctionalIoTtypes where
 import Data.Time (UTCTime) -- http://two-wrongs.com/haskell-time-library-tutorial
 
 data Event alpha     =  E {id:: Int, time::Timestamp, value::alpha} |

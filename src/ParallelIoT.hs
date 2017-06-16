@@ -1,6 +1,6 @@
-module ParallelIoT where
-import FunctionalIoTtypes
-import FunctionalProcessing
+module Striot.ParallelIoT where
+import Striot.FunctionalIoTtypes
+import Striot.FunctionalProcessing
 import Data.List
 
 --type Distributor alpha = Stream alpha -> [Stream alpha]

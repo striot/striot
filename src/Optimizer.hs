@@ -1,7 +1,7 @@
-module OptimizerIoT where
-import FunctionalIoTtypes
-import FunctionalProcessing
-import CompileIoT(StreamGraph(..),StreamOperation(..),StreamOperator(..),Partition,createPartitions)
+module Striot.OptimizerIoT where
+import Striot.FunctionalIoTtypes
+import Striot.FunctionalProcessing
+import Striot.CompileIoT(StreamGraph(..),StreamOperation(..),StreamOperator(..),Partition,createPartitions)
 import Data.List
 import qualified Data.Map as Map
 

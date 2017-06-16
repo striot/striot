@@ -1,9 +1,9 @@
 --import Network
 import Control.Concurrent
 import System.IO
-import FunctionalProcessing
-import FunctionalIoTtypes
-import Nodes
+import Striot.FunctionalProcessing
+import Striot.FunctionalIoTtypes
+import Striot.Nodes
 import Network
 
 portNum  = 9002::PortNumber

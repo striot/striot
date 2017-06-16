@@ -1,6 +1,6 @@
 module VizGraph(drawPartitionedStreamGraph,drawStreamGraph) where
 import Data.List
-import CompileIoT
+import Striot.CompileIoT
 import Data.GraphViz
 import Data.Text.Lazy (Text, pack, unpack)
 import Data.Graph.Inductive (Gr, mkGraph)

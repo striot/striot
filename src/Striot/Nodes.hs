@@ -1,9 +1,15 @@
-module Nodes(nodeSink,nodeSink2,nodeLink,nodeLink2,nodeSource) where
+module Striot.Nodes ( nodeSink
+                    , nodeSink2
+                    , nodeLink
+                    , nodeLink2
+                    , nodeSource
+                    ) where
+
 import Network
 import System.IO
 import Control.Concurrent
 import Data.List
-import FunctionalIoTtypes
+import Striot.FunctionalIoTtypes
 import System.IO.Unsafe
 import Data.Time (getCurrentTime)
 

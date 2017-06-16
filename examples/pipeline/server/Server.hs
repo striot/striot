@@ -1,9 +1,9 @@
 import Network
 import System.IO
 import Data.List
-import FunctionalProcessing
-import FunctionalIoTtypes
-import Nodes
+import Striot.FunctionalProcessing
+import Striot.FunctionalIoTtypes
+import Striot.Nodes
 import Network
 
 listenPort = 9001 :: PortNumber
