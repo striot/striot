@@ -1,7 +1,30 @@
-module FunctionalProcessing(Source,streamFilter,streamMap,streamWindow,streamWindowAggregate,   --joinWindowsE,joinWindowsW,
-                            streamMerge,streamJoin,streamJoinE,streamJoinW,streamFilterAcc,streamScan,streamExpand,WindowMaker,WindowAggregator,
-                            sliding,slidingTime,chop,chopTime,complete,EventFilter,EventMap,JoinFilter,JoinMap) where
-import FunctionalIoTtypes
+module Striot.FunctionalProcessing ( Source
+                                   , streamFilter
+                                   , streamMap
+                                   , streamWindow
+                                   , streamWindowAggregate
+                                   --, joinWindowsE
+                                   --, joinWindowsW
+                                   , streamMerge
+                                   , streamJoin
+                                   , streamJoinE
+                                   , streamJoinW
+                                   , streamFilterAcc
+                                   , streamScan
+                                   , streamExpand
+                                   , WindowMaker
+                                   , WindowAggregator
+                                   , sliding
+                                   , slidingTime
+                                   , chop
+                                   , chopTime
+                                   , complete
+                                   , EventFilter
+                                   , EventMap
+                                   , JoinFilter
+                                   , JoinMap) where
+
+import Striot.FunctionalIoTtypes
 import Data.Time (UTCTime,addUTCTime,diffUTCTime,NominalDiffTime)
 
 type Source alpha = Stream alpha -- a source of data

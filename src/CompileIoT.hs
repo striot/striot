@@ -1,6 +1,15 @@
-module CompileIoT(StreamGraph(..),StreamOperation(..),StreamOperator(..),Partition,Id,createPartitions,createPartitionsAndEdges,graphEdgesWithTypes,printParams,generateCode) where
-import FunctionalIoTtypes
-import FunctionalProcessing
+module Striot.CompileIoT ( StreamGraph(..)
+                         , StreamOperation(..)
+                         , StreamOperator(..)
+                         , Partition
+                         , Id
+                         , createPartitions
+                         , createPartitionsAndEdges
+                         , graphEdgesWithTypes
+                         , printParams
+                         , generateCode) where
+import Striot.FunctionalIoTtypes
+import Striot.FunctionalProcessing
 import Data.List
 import qualified Data.Map as Map
 import System.IO

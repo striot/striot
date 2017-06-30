@@ -1,6 +1,6 @@
 module Taxi where
-import FunctionalIoTtypes
-import FunctionalProcessing
+import Striot.FunctionalIoTtypes
+import Striot.FunctionalProcessing
 import qualified Data.Map as Map
 import Data.List
 import System.IO
