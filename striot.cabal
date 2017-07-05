@@ -16,7 +16,7 @@ extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Striot.FunctionalIoTtypes, Striot.FunctionalProcessing, Striot.Nodes
+  exposed-modules:     Striot.FunctionalIoTtypes, Striot.FunctionalProcessing, Striot.Nodes, Striot.CompileIoT
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.9 && <4.10, containers >=0.5 && <0.6, split >=0.2 && <0.3, time >=1.6 && <1.7, network >=2.6 && <2.7, stm >=2.4 && <2.5
