@@ -1,4 +1,3 @@
-import Network
 import System.IO
 import Data.List
 import Striot.FunctionalProcessing

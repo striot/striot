@@ -1,4 +1,3 @@
---import Network
 --import Control.Concurrent
 import System.IO
 import Striot.FunctionalProcessing
