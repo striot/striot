@@ -1,14 +1,17 @@
---import Network
+import Network
 import Control.Concurrent
 import System.IO
-import FunctionalProcessing
-import FunctionalIoTtypes
-import Nodes
+import Striot.FunctionalProcessing
+import Striot.FunctionalIoTtypes
+import Striot.Nodes
+
+connectPort = 61616  :: PortNumber
+connectHost = "link" :: HostName
 
 main :: IO ()
 main = do
          threadDelay (1 * 1000 * 1000)
-         nodeSource src1 streamGraph2 -- processes source before sending it to another node
+         nodeSource src1 streamGraph2 connectHost connectPort -- processes source before sending it to another node
 
 streamGraph2 :: Stream String -> Stream String
 streamGraph2 s = streamMap (\st-> st++st) s

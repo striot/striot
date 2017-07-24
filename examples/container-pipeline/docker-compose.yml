@@ -1,5 +1,7 @@
 source1:
   build: source
+  links:
+    - link
   stdin_open: true
   ports:
     - "61616"
@@ -8,8 +10,7 @@ source1:
 link:
   build: link
   links:
-    - source1:upstream1
-#    - source2:upstream2
+    - sink
   ports:
     - "61616"
   stdin_open: true
@@ -17,7 +18,5 @@ link:
 
 sink:
   build: sink
-  links:
-    - link:upstream1
   stdin_open: true
   tty: true
