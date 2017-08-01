@@ -1,4 +1,4 @@
-FROM sjwoodman/striot-base:latest
+FROM jmtd/striot-base:latest
 WORKDIR /opt/server
 COPY . /opt/server
 RUN ghc Server.hs
