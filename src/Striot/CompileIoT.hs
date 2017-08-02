@@ -379,6 +379,17 @@ test_partition_s0 = assertEqual (createPartitions s0 [(1,[1]),(2,[2])])
                                                                        , parameters = ["print"]
                                                                        , outputType = ""
                                                                        , imports = [] }]})]
+-- Test certain inputs generate a failure.
+-- Expect an exception to be thrown (not yet implemented, so these tests fail)
+
+test_empty_partitionmap = assertThrowsSome $ createPartitions s0 []
+
+-- partition map refers to non-existent graph nodes
+test_too_many_partitions = assertThrowsSome $ createPartitions s0 [(1,[1]),(2,[2]),(3,[3])]
+
+-- partition map has multiple references to graph nodes
+test_repeating_nodes = assertThrowsSome $ createPartitions s0 [(1,[1]),(2,[1])]
+
 
 ex21 = createPartitions s1 [(1,[1,2]),(2,[3,4,5,6,7])]
 
