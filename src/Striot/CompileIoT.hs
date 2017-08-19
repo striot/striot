@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
+
 module Striot.CompileIoT ( StreamGraph(..)
                          , StreamOperation(..)
                          , StreamOperator(..)
@@ -7,12 +9,17 @@ module Striot.CompileIoT ( StreamGraph(..)
                          , createPartitionsAndEdges
                          , graphEdgesWithTypes
                          , printParams
-                         , generateCode) where
+                         , generateCode
+                         , htf_thisModulesTests
+                         ) where
+
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
 import Data.List
 import qualified Data.Map as Map
 import System.IO
+import Test.Framework
+
 
 type Id     = Int 
 type Port   = Int
@@ -29,13 +36,13 @@ data StreamOperator  = Map             |
                        Source          |
                        Sink
                        deriving (Eq)
-                       
+
 data StreamGraph = StreamGraph
    { gid        :: String
    , resultId   :: Id
    , ginputs    :: [(Id,String)] -- the String is the Type of the input
    , operations :: [StreamOperation]}
-      deriving (Show)
+      deriving (Show, Eq)
 
 data StreamOperation  = StreamOperation
    { opid       :: Int
@@ -44,8 +51,8 @@ data StreamOperation  = StreamOperation
    , parameters :: [String]
    , outputType :: String
    , imports    :: [String]}
-     deriving (Show)     
- 
+     deriving (Show, Eq)
+
 instance Show StreamOperator where
     show Map             = "streamMap"
     show Filter          = "streamFilter"
@@ -257,6 +264,12 @@ idToPartition::[(Partition,[Int])] -> Map.Map Int Partition
 idToPartition partitionMap = Map.unions $ map (\(pid,opids)->Map.fromList (zip opids (repeat pid))) partitionMap
                                               
 -------------Examples----------------------                                                
+s0 :: StreamGraph
+s0 = StreamGraph "jmtdtest" 2 [] [
+       StreamOperation 1 [ ] Source ["sourceGen"] "Stream Trip" ["Taxi.hs","SourceGenerator.hs"],
+       StreamOperation 2 [1] Sink   ["print"]     ""            []
+     ]
+
 s1:: StreamGraph
 s1  = StreamGraph "test" 7 [] [
        StreamOperation 1 [ ] Source    ["sourceGen"]                                                                           "Stream Trip"            ["Taxi.hs","SourceGenerator.hs"],
@@ -345,6 +358,27 @@ ex19 = do
          hClose handle 
 
 -- ex20 = allDeployments s1g [1..2] -}
+
+-- some basic tests
+test_partition_s0 = assertEqual (createPartitions s0 [(1,[1]),(2,[2])])
+        [(1 :: Partition, StreamGraph { gid = "jmtdtest1"
+                                      , resultId = 1
+                                      , ginputs = []
+                                      , operations = [ StreamOperation { opid = 1
+                                                                       , opinputs = []
+                                                                       , operator = Source
+                                                                       , parameters = ["sourceGen"]
+                                                                       , outputType = "Stream Trip"
+                                                                       , imports = ["Taxi.hs","SourceGenerator.hs"]}]}),
+         (2 :: Partition, StreamGraph { gid = "jmtdtest2"
+                                      , resultId = 2
+                                      , ginputs = [(1, "Stream Trip")]
+                                      , operations = [ StreamOperation { opid = 2
+                                                                       , opinputs = [1]
+                                                                       , operator = Sink
+                                                                       , parameters = ["print"]
+                                                                       , outputType = ""
+                                                                       , imports = [] }]})]
 
 ex21 = createPartitions s1 [(1,[1,2]),(2,[3,4,5,6,7])]
 
@@ -512,5 +546,3 @@ exs63 = putStrLn $ exs6!!2
 exs64 = createPartitionsAndEdges s6 [(1,[1]),(2,[2,3]),(3,[4..6])]
 exs65 = replaceMergeNodes exs64
 exs66 = map (updateMergeLink [3]) [((1,1),(3,1)),((2,1),(3,2))]
-
-
