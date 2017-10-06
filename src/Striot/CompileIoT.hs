@@ -156,6 +156,42 @@ type Partition = Int
 createPartitions:: StreamGraph -> [(Partition,[Id])] -> [(Partition,StreamGraph)]
 createPartitions g partitionMap = map (\(pid,ids)->(pid,subsetGraphByIds g ids pid)) partitionMap
 
+unPartition :: [(Partition, StreamGraph)] -> StreamGraph
+unPartition ps = foldl graphJoin emptyGraph gs where
+    gs = map snd ps
+    emptyGraph = StreamGraph "0" newID [] []
+    newID = head $ [0..] \\ allIDs
+    allIDs = map resultId gs
+
+-- join two StreamGraphs together
+-- ASSUMPTION: graph a connects to graph b (a's output is to an id in b)
+--  => resulting resultId is b
+-- ASSUMPTION: all graph b's inputs are contained in graph a
+graphJoin :: StreamGraph -> StreamGraph -> StreamGraph
+graphJoin a b = StreamGraph newgid newResultId newgInputs newOperations where
+    newgid = (gid a) ++ (gid b) -- *shrug*
+    newResultId = resultId b
+    newgInputs = ginputs a
+    newOperations = (operations a) ++ (operations b)
+
+-- icky test, we override the gid since we can't recover that easily
+-- demonstrates recomposition of stream graphs
+splitJoinTester sg = assertEqual (sg { gid = "overridden" }) (joined { gid = "overridden" }) where
+    parts = createPartitions sg pmap
+    joined = unPartition parts
+    pmap = mkPartitionMap $ length $ operations sg
+
+-- partition generator for tests. One streamOperator per partition
+mkPartitionMap n = [ (x,[x]) | x <- [1..n] ]
+
+test_split_s0 = splitJoinTester s0
+test_split_s1 = splitJoinTester s1
+test_split_s2 = splitJoinTester s2
+fest_split_s3 = splitJoinTester s3
+test_split_s4 = splitJoinTester s4
+test_split_s5 = splitJoinTester s5
+test_split_s6 = splitJoinTester s6
+
 subsetGraphByIds:: StreamGraph -> [Id] -> Partition -> StreamGraph
 subsetGraphByIds sg ids pid = StreamGraph ((gid sg) ++(show pid)) -- name
                                           (opid $ head $ filter (\sop -> not (elem (opid sop) allInputs)) allOpsInPartition) -- output node id
