@@ -161,9 +161,8 @@ subsetGraphByIds sg ids pid = StreamGraph ((gid sg) ++(show pid)) -- name
                                           (opid $ head $ filter (\sop -> not (elem (opid sop) allInputs)) allOpsInPartition) -- output node id
                                           (map (\ip-> (ip,outputType $ getStreamOperation ip $ operations sg)) $ allInputs \\ ids)   -- inputs to partition
                                           allOpsInPartition
-                                                   where allOpsInPartition           = filter (\op -> elem (opid op) ids) $ operations sg
-                                                         idsOfallOpsOutsidePartition = (map opid (operations sg)) \\ ids
-                                                         allInputs                   = nub (concatMap (\op -> opinputs op) allOpsInPartition)
+                                                   where allOpsInPartition = filter (\op -> elem (opid op) ids) $ operations sg
+                                                         allInputs         = nub (concatMap (\op -> opinputs op) allOpsInPartition)
 
 createPartitionEdges:: [(Partition,[Id])] -> [(Partition,StreamGraph)] -> [((Partition,Int),(Partition,Int))]
 createPartitionEdges partitionMap partitions = let idToPart = idToPartition partitionMap in -- creates a map from opid to partition
