@@ -179,10 +179,10 @@ graphJoin a b = StreamGraph newgid newResultId newgInputs newOperations where
 splitJoinTester sg = assertEqual (sg { gid = "overridden" }) (joined { gid = "overridden" }) where
     parts = createPartitions sg pmap
     joined = unPartition parts
-    pmap = mkPartitionMap $ length $ operations sg
+    pmap = mkPartitionMap sg
 
 -- partition generator for tests. One streamOperator per partition
-mkPartitionMap n = [ (x,[x]) | x <- [1..n] ]
+mkPartitionMap sg = [ (x,[x]) | x <- map opid (operations sg) ]
 
 test_split_s0 = splitJoinTester s0
 test_split_s1 = splitJoinTester s1
