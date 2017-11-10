@@ -102,48 +102,8 @@ printParams ss = intercalate " " (map addBrackets ss)
 addBrackets:: String -> String
 addBrackets a = "(" ++ a ++ ")" 
 
--- Sgraph operations
-data Graph alpha = Graph {nodes::[(Id,alpha)],edges::[(Id,PortId)]}
-    deriving (Show)
-    
-type Sgraph = Graph (StreamOperator,[Param])
-
-toGraph:: StreamGraph -> Sgraph 
-toGraph sg = foldl (\g s->addStreamOperationToGraph g s) (Graph [] []) (operations sg)
-
-removeNode:: Graph alpha -> Id -> Graph alpha
-removeNode g id = Graph (filter (\(i,v)->i/=id) (nodes g)) (filter (\(s,(d,p))->s/=id && d/=id) (edges g))
-
-removeNodeNotEdges:: Graph alpha -> Id -> Graph alpha
-removeNodeNotEdges g i = Graph (filter (\(id,v)->id /= i) (nodes g)) (edges g)
-
-removeNodeButNotInlinks:: Graph alpha -> Id -> Graph alpha
-removeNodeButNotInlinks g id = Graph (filter (\(i,v)->i/=id) (nodes g)) (filter (\(s,d)->s/=id) (edges g))
-                                 
-updateSources:: [(Id,PortId)] -> Id -> Id -> [(Id,PortId)]
-updateSources es n n' = map (\(s,d)-> if s == n then (n',d) else (s,d)) es
-
-updateDestinations:: [(Id,PortId)] -> Id -> Id -> [(Id,PortId)]
-updateDestinations es n n' = map (\(s,(d,p))-> if d == n then (s,(n',p)) else (s,(d,p))) es
-
-destinations:: Graph alpha -> [Id] -> [PortId]
-destinations g ns = map snd $ filter (\(s,d)    -> elem s ns) $ edges g
-
-sources:: Graph alpha -> [Id] -> [Id]
-sources      g ns = map fst $ filter (\(s,(d,p))-> elem d ns) $ edges g
-
-addStreamOperationToGraph:: Sgraph -> StreamOperation -> Sgraph
-addStreamOperationToGraph (Graph gn ge) sop = Graph ((opid sop,(operator sop,parameters sop)):gn) ((mkEdges (opinputs sop) (opid sop))++ge)
-
-mkEdges:: [Id] -> Id -> [(Id,PortId)]
-mkEdges inputs target = [(input,(target,port))|(input,port)<-zip inputs [1..]]
-
-outLinks:: Graph alpha -> Graph alpha -> [PortId] -- Full graph -> a subset of the graph
-outLinks g p = filter (\(d,p)->not (elem d nodesInPartition)) $ destinations g nodesInPartition
-                  where nodesInPartition = nodeIds p
 ------
 
-graphInLinks:: StreamGraph -> [Id] -- Links into a Graph
 graphInLinks g = map fst $ ginputs g
 
 graphOperationIds:: StreamGraph -> [Id]
@@ -169,24 +129,6 @@ graphEdgesWithTypes g = concatMap mkGraphEdgesWithType $ map (\sop-> (opid sop,
 mkGraphEdgesWithType:: (Id,[Id],[String]) -> [(Id,PortId,String)]
 mkGraphEdgesWithType (dest,sources,oTypes) = map (\(portId,source,oType)->(source,(dest,portId),oType++":"++(show portId))) $ zip3 [1..] sources oTypes
 
-inLinks:: Graph alpha -> Graph alpha -> [Id] -- Full graph -> a subset of the graph
-inLinks  g p = sources g (nodeIds p) \\ (nodeIds p)
-
-nodeIds:: Graph alpha -> [Id]
-nodeIds g = map fst (nodes g)
-
-nodeOutlinks:: Graph alpha -> Id -> [PortId]
-nodeOutlinks g i = destinations g [i]
-
-nodeInlinks:: Graph alpha -> Id -> [Id]
-nodeInlinks g i = sources g [i]
-
-zeroOps:: Graph alpha -> [Id]
-zeroOps g = filter (\n->null (nodeOutlinks g n)) $ nodeIds g
-
-zeroIps:: Graph alpha -> [Id]
-zeroIps g = filter (\n->null (nodeInlinks g n)) $ nodeIds g
-
 data PartitionType = SingularPartition | SourcePartition | LinkPartition | Link2Partition | SinkPartition | Sink2Partition
     deriving (Show)
 {-    
@@ -208,37 +150,8 @@ graphPartitionCategory' 2 0 = Sink2Partition
 graphPartitionCategory' 1 _ = LinkPartition
 graphPartitionCategory' 2 _ = Link2Partition
 
-{-
-partitionCategory:: Sgraph -> Sgraph -> PartitionType -- the full graph -> this partition
-partitionCategory s p   | null (inLinks  s p) && null (outLinks s p) = SingularPartition
-                        | null (inLinks  s p)                        = SourcePartition
-                        | null (outLinks s p)                        = SinkPartition
-                        | otherwise                                  = LinkPartition
-
-partitionCatAndLinks:: Sgraph -> Sgraph -> (PartitionType,[Id],[PortId])
-partitionCatAndLinks g p = (partitionCategory g p,inLinks  g p,outLinks g p)
--}
---------Replace Node----------
-replaceNode:: Graph alpha -> Id -> Graph alpha -> Id -> Id ->  Graph alpha
-replaceNode g nid r rStart rEnd = combineGraphs (removeNodeButNotInlinks g nid) (renumberGraph r g nid (nodeOutlinks g nid) rStart rEnd)  -- nid is node to be replaced in g by r (which starts at rStart and ends at rEnd) 
-
-renumberGraph:: Graph alpha -> Graph alpha -> Id -> [PortId] -> Id -> Id -> Graph alpha
-renumberGraph r g nid outs rStart rEnd = let freeIds   = [((maximum (nodeIds g))+1) ..] in
-                                         let repMap    = (rStart,nid):(zip ((nodeIds r) \\ [rStart]) freeIds) in
-                                             Graph (map (replaceNodeId repMap) (nodes r)) ((map (replaceEdgeId repMap) (edges r))++(zip (repeat (let Just newEnd = lookup rEnd repMap in newEnd)) outs))
-
-replaceNodeId:: [(Id,Id)] -> (Id,alpha) -> (Id,alpha)
-replaceNodeId aTob (i,v) = let Just a = lookup i aTob in (a,v)
-
-replaceEdgeId:: [(Id,Id)] -> (Id,PortId) -> (Id,PortId)
-replaceEdgeId aTob (s,(d,p)) = let Just s' = lookup s aTob in 
-                               let Just d' = lookup d aTob in
-                                  (s',(d',p))
-                                           
-combineGraphs:: Graph alpha -> Graph alpha -> Graph alpha
-combineGraphs g1 g2 = Graph ((nodes g1) ++ (nodes g2)) ((edges g1) ++ (edges g2))
-
 -----------
+
 type Partition = Int
 createPartitions:: StreamGraph -> [(Partition,[Id])] -> [(Partition,StreamGraph)]
 createPartitions g partitionMap = map (\(pid,ids)->(pid,subsetGraphByIds g ids pid)) partitionMap
@@ -248,9 +161,8 @@ subsetGraphByIds sg ids pid = StreamGraph ((gid sg) ++(show pid)) -- name
                                           (opid $ head $ filter (\sop -> not (elem (opid sop) allInputs)) allOpsInPartition) -- output node id
                                           (map (\ip-> (ip,outputType $ getStreamOperation ip $ operations sg)) $ allInputs \\ ids)   -- inputs to partition
                                           allOpsInPartition
-                                                   where allOpsInPartition           = filter (\op -> elem (opid op) ids) $ operations sg
-                                                         idsOfallOpsOutsidePartition = (map opid (operations sg)) \\ ids
-                                                         allInputs                   = nub (concatMap (\op -> opinputs op) allOpsInPartition)
+                                                   where allOpsInPartition = filter (\op -> elem (opid op) ids) $ operations sg
+                                                         allInputs         = nub (concatMap (\op -> opinputs op) allOpsInPartition)
 
 createPartitionEdges:: [(Partition,[Id])] -> [(Partition,StreamGraph)] -> [((Partition,Int),(Partition,Int))]
 createPartitionEdges partitionMap partitions = let idToPart = idToPartition partitionMap in -- creates a map from opid to partition
@@ -313,23 +225,6 @@ parMap = StreamGraph "parallelMap" 4 [] [
          StreamOperation 4 [2,3] Merge []                                                                     "Stream alpha" []]
        
 ex1 = putStrLn $ showStreamGraph [] s1
-ex2 = toGraph s1
-s1g = toGraph s1
-p1g = toGraph p1
-p2g = toGraph p2
-p3g = toGraph p3
-ex3 = edges ex2
-ex4 = partitionCategory s1g p1g
-ex5 = partitionCategory s1g p2g
-ex6 = partitionCategory s1g p3g
-ex7 = partitionCategory s1g s1g
-ex8 = inLinks s1g p3g
-ex9 = outLinks s1g p3g
-ex10 = partitionCatAndLinks s1g p1g
-ex11 = partitionCatAndLinks s1g p2g
-ex12 = partitionCatAndLinks s1g p3g
-ex13 = partitionCatAndLinks s1g s1g
-parMapg = toGraph parMap
 ex14 = replaceNode s1g 2 parMapg 1 4
 
 ex15 = do  
@@ -382,11 +277,7 @@ test_partition_s0 = assertEqual (createPartitions s0 [(1,[1]),(2,[2])])
 
 ex21 = createPartitions s1 [(1,[1,2]),(2,[3,4,5,6,7])]
 
---ex22 = map (partitionCatAndLinks s1g) (map snd ex21)
-
 ex23 = createPartitions s1 [(1,[1,2]),(2,[3,4]),(3,[5,6,7])]
-
---ex24 = map (partitionCatAndLinks s1g) (map snd ex23)
 
 ex25 = graphPartitionCategory s1 p1
 ex26 = graphPartitionCategory s1 p2
@@ -457,15 +348,6 @@ ex416 = generateCode s1 [(1,[1]),(2,[2,3,4,5,6]),(3,[7])] ["FunctionalIoTtypes",
 ex415p2:: StreamGraph
 ex415p2 = StreamGraph "p2" 7 [(6,"String")] [StreamOperation 7 [6] Sink ["print"] "" [""]]
 ex415 = graphPartitionCategory s1 ex415p2
-
-{-
-data PartitionGraph = PartitionGraph
-   { pid         :: Partition
-   , pCategory   :: PartitionType
-   , pInputTypes :: [String]
-   , streamGraph :: StreamGraph}
-      deriving (Show)
--}
 
 s4:: StreamGraph
 s4 = StreamGraph "pipeline" 5 [] [
