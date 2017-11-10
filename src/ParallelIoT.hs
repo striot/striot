@@ -7,7 +7,7 @@ import Data.List
 type Distributor alpha = Stream alpha -> [(Int,Event alpha)]
 
 aStream:: Stream Int -- example stream
-aStream = [E (read "2013-01-01 00:00:00") i|i<-[0..]]
+aStream = [E i (read "2013-01-01 00:00:00") i|i<-[0..]]
 
 parallelise:: Distributor alpha -> (Stream alpha -> Stream beta) -> Stream alpha -> Stream beta
 parallelise df f s = f $ map snd $ df s

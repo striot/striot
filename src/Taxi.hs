@@ -97,8 +97,9 @@ inRangeQ2 = inRange 600 600
 
 --- Parse the input file --------------------------------------------------------------------------------------
 tripSource:: String -> Stream Trip -- parse input file into a Stream of Trips
-tripSource s = map (\t->E (dropoff_datetime t) t) 
+tripSource s = map (\t->E dummyId (dropoff_datetime t) t)
                    (map stringsToTrip (map (Data.List.Split.splitOn ",") (lines s)))
+                   where dummyId = 0
 
 -- turns a line from the input file (already split into a list of fields) into a Trip datastructure
 stringsToTrip:: [String] -> Trip
@@ -145,7 +146,7 @@ main3 = do contents <- readFile "sorteddata.csv"
            putStr $ show $ take 10 $ streamFilter (\j->(inRangeQ1 (start j) && inRangeQ1 (end j))) $ streamMap (\t-> Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t)}) $ tripSource contents
 
 main4 = do contents <- readFile "sorteddata.csv"
-           putStr $ show $ take 10 $ FunctionalProcessing.chop 10 $ streamFilter (\j->(inRangeQ1 (start j) && inRangeQ1 (end j))) $ streamMap (\t-> Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t)}) $ tripSource contents
+           putStr $ show $ take 10 $ Striot.FunctionalProcessing.chop 10 $ streamFilter (\j->(inRangeQ1 (start j) && inRangeQ1 (end j))) $ streamMap (\t-> Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t)}) $ tripSource contents
 
 q1map    = streamMap    (\t-> Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t)})
 q1filter = streamFilter (\j-> inRangeQ1 (start j) && inRangeQ1 (end j))
