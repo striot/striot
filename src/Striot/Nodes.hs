@@ -153,8 +153,7 @@ readListFromSocket' sockIn = do
 readEventStreamFromSocket :: Read alpha => Socket -> IO (Handle, Stream alpha)
 readEventStreamFromSocket sock = do
     (hdl, stringStream) <- readListFromSocket' sock
-    stream <- hGetLines' hdl
-    let eventStream = map read stream
+    let eventStream = map read stringStream
     return (hdl, eventStream)
 
 
