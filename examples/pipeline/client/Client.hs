@@ -5,7 +5,7 @@ import Striot.FunctionalIoTtypes
 import Striot.Nodes
 import Network
 
-portNum  = 9002::PortNumber
+portNum  = 9001::PortNumber
 hostName = "haskellclient2"::HostName
 
 main :: IO ()

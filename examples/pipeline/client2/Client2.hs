@@ -5,7 +5,7 @@ import Striot.FunctionalIoTtypes
 import Striot.Nodes
 import Network
 
-listenPort =  9002 :: PortNumber
+listenPort =  9001 :: PortNumber
 connectPort = 9001 :: PortNumber
 connectHost = "haskellserver" :: HostName
 
