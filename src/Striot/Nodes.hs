@@ -128,7 +128,7 @@ readListFromSource = go 0
   where
     go i pay = System.IO.Unsafe.unsafeInterleaveIO $ do
         x  <- msg i
-        xs <- readListFromSource pay
+        xs <- go (i + 1) pay
         return (x : xs)
       where
         msg x = do
