@@ -4,10 +4,15 @@ FROM haskell:8.0.1
 RUN apt-get update && apt-get upgrade -y
 
 # Install the network stack from Cabal as this isn't part of the core
-RUN cabal update
-RUN cabal install network split stm HTF
+RUN cabal update && \
+    cabal install \
+    network \
+    split \
+    stm \
+    HTF
 
 COPY striot /opt/striot
 
 WORKDIR /opt/striot
-RUN cabal build && cabal install
+RUN cabal build && \
+    cabal install
