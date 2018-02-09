@@ -14,6 +14,4 @@ streamGraph1 :: Stream String -> Stream [String]
 streamGraph1 s = streamWindow (chop 2) $ streamMap (\st-> "Incoming Message at Server: " ++ st) s
 
 printStream:: Show alpha => Stream alpha -> IO ()
-printStream (h:t) = do
-                      putStrLn $ show h
-                      printStream t
+printStream = mapM_ (putStrLn.show)
