@@ -6,7 +6,8 @@ module Striot.Nodes ( nodeSink
                     ) where
 
 import           Control.Concurrent
-import           Control.Monad             (when)
+import           Control.Concurrent.STM
+import           Control.Monad             (when,forever)
 import           Data.List
 import           Data.Time                 (getCurrentTime)
 import           Network                   (PortID (PortNumber), connectTo,
@@ -65,7 +66,7 @@ nodeLink streamGraph portNumInput1 hostNameOutput portNumOutput = withSocketsDo 
     sockIn <- listenOn $ PortNumber portNumInput1
     putStrLn "Starting link ..."
     hFlush stdout
-    nodeLink' sockIn streamGraph hostNameOutput portNumOutput
+    nodeLinkConcurrent sockIn streamGraph hostNameOutput portNumOutput
 
 
 nodeLink' :: (Read alpha, Show beta) => Socket -> (Stream alpha -> Stream beta) -> HostName -> PortNumber -> IO ()
@@ -77,6 +78,16 @@ nodeLink' sock streamOps host port = do
     -- print "Closed input handle"
     nodeLink' sock streamOps host port
 
+nodeLinkConcurrent :: (Read alpha, Show beta) => Socket -> (Stream alpha -> Stream beta) -> HostName -> PortNumber -> IO ()
+nodeLinkConcurrent sock streamOps host port = do
+    eventChan <- acceptConnections sock
+    stream <- tChanGetEvents' eventChan
+    let result = streamOps stream
+    sendStream result host port
+
+    -- fork new thread to accept all connections
+    -- simply process input on channel
+    -- sendStream
 
 -- A Link with 2 inputs
 nodeLink2 :: (Read alpha, Read beta, Show gamma) => (Stream alpha -> Stream beta -> Stream gamma) -> PortNumber -> PortNumber -> HostName -> PortNumber -> IO ()
@@ -151,6 +162,44 @@ readListFromSocket' sockIn = do
     -- print "Open input connection"
     stream <- hGetLines' hdl
     return (hdl, stream)
+
+
+acceptConnections :: Read alpha => Socket -> IO (TChan (Event alpha))
+acceptConnections sock = do
+    eventChan <- newTChanIO
+    _         <- forkIO $ readListFromSocketConcurrent sock eventChan
+    return eventChan
+
+
+readListFromSocketConcurrent :: Read alpha => Socket -> TChan (Event alpha) -> IO ()
+readListFromSocketConcurrent sockIn eventChan = forever $ do
+    putStrLn "Awaiting new connection"
+    (sock, _) <- accept sockIn
+    hdl       <- socketToHandle sock ReadWriteMode
+    hSetBuffering hdl                             NoBuffering
+    putStrLn "Forking to process new connection"
+    forkFinally   (readWriteEvents hdl eventChan) (\_ -> hClose hdl)
+
+
+readWriteEvents :: Read alpha => Handle -> TChan (Event alpha) -> IO ()
+readWriteEvents handle eventChan = do
+    stringStream <- hGetLines' handle
+    let eventStream = map read stringStream
+    writeEventsTChan eventStream eventChan
+
+
+writeEventsTChan :: Read alpha => Stream alpha -> TChan (Event alpha) -> IO ()
+writeEventsTChan (h:t) eventChan = do
+    atomically $ writeTChan eventChan h
+    writeEventsTChan t eventChan
+writeEventsTChan [] _ = return ()
+
+
+tChanGetEvents' :: Read alpha => TChan (Event alpha) -> IO (Stream alpha)
+tChanGetEvents' eventChan = System.IO.Unsafe.unsafeInterleaveIO $ do
+    x <- atomically $ readTChan eventChan
+    xs <- tChanGetEvents' eventChan
+    return (x : xs)
 
 
 readEventStreamFromSocket :: Read alpha => Socket -> IO (Handle, Stream alpha)
