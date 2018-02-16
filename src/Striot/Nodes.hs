@@ -125,25 +125,28 @@ nodeSource pay streamGraph host port = do
 
 readListFromSource :: IO alpha -> IO (Stream alpha)
 readListFromSource = go 0
-    where
-        go i pay  = do
-            now <- getCurrentTime
+  where
+    go i pay = System.IO.Unsafe.unsafeInterleaveIO $ do
+        x  <- msg i
+        xs <- go (i + 1) pay
+        return (x : xs)
+      where
+        msg x = do
+            now     <- getCurrentTime
             payload <- pay
-            let msg = E i now payload
-            r <- System.IO.Unsafe.unsafeInterleaveIO (go (i+1) pay) -- at some point this will overflow
-            return (msg:r)
+            return (E x now payload)
 
 
 readListFromSocket :: Socket -> IO [String]
 readListFromSocket sock = do
-    (_,stream) <- readListFromSocket' sock
+    (_, stream) <- readListFromSocket' sock
     return stream
 
 
 readListFromSocket' :: Socket -> IO (Handle, [String])
 readListFromSocket' sockIn = do
-    (sock,_) <- accept sockIn
-    hdl <- socketToHandle sock ReadWriteMode
+    (sock, _) <- accept sockIn
+    hdl       <- socketToHandle sock ReadWriteMode
     hSetBuffering hdl NoBuffering
     -- print "Open input connection"
     stream <- hGetLines' hdl
@@ -157,26 +160,26 @@ readEventStreamFromSocket sock = do
     return (hdl, eventStream)
 
 
-sendStream:: Show alpha => Stream alpha -> HostName -> PortNumber -> IO ()
-sendStream [] host port = return ()
+sendStream :: Show alpha => Stream alpha -> HostName -> PortNumber -> IO ()
+sendStream []     host port = return ()
 sendStream stream host port = withSocketsDo $ do
     handle <- connectTo host (PortNumber port)
     hSetBuffering handle NoBuffering
     -- print "Open output connection"
-    hPutLines' handle stream
+    hPutLines'    handle stream
 
 
 hGetLines' :: Handle -> IO [String]
 hGetLines' handle = System.IO.Unsafe.unsafeInterleaveIO $ do
     readable <- hIsReadable handle
-    eof <- hIsEOF handle
+    eof      <- hIsEOF handle
     if not eof && readable
         then do
-            x <- hGetLine handle
+            x  <- hGetLine handle
             xs <- hGetLines' handle
             -- print x
-            return (x:xs)
-     else return []
+            return (x : xs)
+        else return []
 
 
 hPutLines' :: Show alpha => Handle -> Stream alpha -> IO ()
@@ -186,9 +189,8 @@ hPutLines' handle [] = do
     return ()
 hPutLines' handle (x:xs) = do
     writeable <- hIsWritable handle
-    open <- hIsOpen handle
-    when (open && writeable) $
-        do
+    open      <- hIsOpen handle
+    when (open && writeable) $ do
             -- print h
-            hPrint handle x
-            hPutLines' handle xs
+        hPrint     handle x
+        hPutLines' handle xs
