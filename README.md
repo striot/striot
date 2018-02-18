@@ -1,4 +1,4 @@
-# README #
+# Striot — functional stream processing for IoT
 
 This is a haskell stream processing engine for IoT.  It is built as a cabal module, to build it:
 
@@ -12,8 +12,7 @@ Following this it can be imported in a standard way.
 We model a stream as a (possibly infinite) list of events. Each event may or may not be timestamped:
 
 
-```
-#!haskell
+```haskell
 
 data Event alpha  = E {time::Timestamp, value::alpha} |
                     V {                 value::alpha} |
@@ -30,7 +29,7 @@ Note that an Event can hold data of any type (e.g. integers, strings, tuples, li
 
 In the rest of the  note we describe the stream operators that can be contained in a stream graph.
 
-# Stream Operators#
+## Stream Operators
 
 One approach to functional stream processing would be to define the stream datatype (so allowing interoperability) but then allow the user to define any functions require that consume and generate streams. We have taken a different approach - by analysis of the literature on stream and complex event processing, and by experimenting with the implementation of a range of applications, we have defined and implemented a library of key functions that an application developer can use to create applications. We believe that this will make it easier to create applications, and it also means that – as will be described – other parts of the infrastructure (including an optimiser) can take advantage of knowledge of the semantics and performance characteristics of these functions that would be difficult to derive automatically from arbitrary, user-defined, functions.
 There are 6 main tasks any stream processing system must perform:
@@ -43,13 +42,12 @@ There are 6 main tasks any stream processing system must perform:
 
 We now define a set of Haskell functions that implement these operators on the stream datatype defined in the previous section.
 
-## Filter ##
+### Filter 
 
 The streamFilter function takes a stream as input, and generates a stream containing only those events that meet a user-provided criteria. The type signature is:
 
 
-```
-#!haskell
+```haskell
 streamFilter:: EventFilter alpha -> -- Function applied to each input
                                     --   event to determine if it
                                     --   meets the criteria
@@ -63,39 +61,34 @@ This illustrates the fact that the user does not need to know or understand the 
 
 To show how filterStream can be used, assume a temperature sensor generates a stream of events of type Int.
 
-```
-#!haskell
+```haskell
 tempSensor:: Stream Int
 ```
 
 If we are interested only in temperatures of over 100 then the user can define a function:
 
-```
-#!haskell
+```haskell
 over100:: EventFilter Int
 over100 temp = temp>100
 ```
 
 and stream can be filtered:
 
-```
-#!haskell
+```haskell
 streamFilter over100 tempSensor
 ```
 
 Alternatively, the user may choose to use lambda notation to provide an unnamed function, and so the filter can also be written as:
 
-```
-#!haskell
+```haskell
 streamFilter (\temp->temp>100) tempSensor
 ```
 
-## Filtering with an Accumulating Parameter ##
+### Filtering with an Accumulating Parameter 
 
 Sometimes, it is necessary to filter events based partly on past results. This can be done using the function streamFilterAcc whose signature is as follows:
 
-```
-#!haskell
+```haskell
 streamFilterAcc:: (beta -> alpha -> beta) ->  -- the accumulator fn:
                                               --- takes accumulator &
                                               --- head of stream 
@@ -110,8 +103,7 @@ streamFilterAcc:: (beta -> alpha -> beta) ->  -- the accumulator fn:
 
 An example of its use is where we only want to propagate an event if its value is different to the previous event (though the timestamp may differ). This can be written:
 
-```
-#!haskell
+```haskell
 changes:: Eq alpha=> Stream alpha -> Stream alpha
 changes s = streamFilterAcc (\acc h -> if (h==acc) then acc else h) 
                             (value $ head s) 
@@ -121,8 +113,7 @@ changes s = streamFilterAcc (\acc h -> if (h==acc) then acc else h)
 
 Another example is a function that samples its input, only passing through one event in n:
 
-```
-#!haskell
+```haskell
 sample:: Int -> Stream alpha -> Stream alpha
 sample n s = streamFilterAcc (\acc h -> if acc==0 then n else acc-1)
                              n
@@ -130,12 +121,11 @@ sample n s = streamFilterAcc (\acc h -> if acc==0 then n else acc-1)
                              s
 ```
 
-## Mapping Streams ##
+### Mapping Streams 
 
 The function mapStream is used to transform the values in a stream. The user supplies a function of type EventMap which is applied to the value within each event in the input stream to generate the output stream. The function streamMap has the signature:
 
-```
-#!haskell
+```haskell
 streamMap:: EventMap alpha beta -> -- the user-supplied map function
             Stream alpha        -> -- input stream
             Stream beta            -- output stream
@@ -146,34 +136,30 @@ type EventMap alpha beta = alpha -> beta -- type of the
 
 To illustrate this with the running example, let us say that after filtering all temperatures over 100, the user wants to use 100 as the baseline temperature, and represent all temperatures as their value over 100. To do this we can define a function:
 
-```
-#!haskell
+```haskell
 amountOver100:: EventMap Int Int
 amountOver100 temp = temp-100
 ```
 
 and then include this in the application:
 
-```
-#!haskell
+```haskell
 streamMap amountOver100 $ streamFilter over100 tempSensor
 ```
 
 again, this can also be written using anonymous functions:
 
-```
-#!haskell
+```haskell
 streamMap (\temp->temp-100) $ streamFilter (\temp->temp>100) tempSensor
 ```
 
 Note that the user does not have to understand the format of events, nor how map or filter are enacted. Instead they can focus solely on how the data in the events is to be processed.
 
-## Scan ##
+### Scan 
 
 There is sometimes the need for a map function whose output depends on the history of events. 
 
-```
-#!haskell
+```haskell
 streamScan:: (beta -> alpha -> beta) ->  -- the accumulator fn:
                                          --  takes head of stream &
                                          --  accumulator and computes
@@ -185,44 +171,39 @@ streamScan:: (beta -> alpha -> beta) ->  -- the accumulator fn:
 
 An example is emitting an event giving a count of the number of events received so far in the stream:
 
-```
-#!haskell
+```haskell
 counter:: Stream alpha -> Stream Int
 counter s = scanStream (+1) 0 s
 ```
 
-## Expand ##
+### Expand 
 
 Sometimes, it is necessary to generate multiple events from each input event. A function provided for this is:
 
-```
-#!haskell
+```haskell
 streamExpand::  Stream [alpha] ->          -- input  stream
                 Stream alpha               -- output stream
 ```
 
 An example is a function that takes in a stream of Twitter tweets, and generates a stream of the hashtags found in those tweets. Assume a function getHashtags with signature:
 
-```
-#!haskell
+```haskell
 getHashtags:: String -> [String]
 ```
 
 This function takes as input a tweet and outputs a list of all the hashtags contained within it.
 This could then be used to generate the stream of hashtags:
 
-```
-#!haskell
+```haskell
 streamExpand $ getHashtags s
 ```
 
-## Windowing ##
+### Windowing 
 
 Windowing provides a way to break a stream into a stream whose elements contain subset of events from the original stream. Other functions can then be used to filter the events in each window. Experience shows that it is useful in many stream applications, and as a result, most CEP systems support a range of types of windowing.
 The basic windowing function is: 
 
-```
-#!haskell
+```haskell
 streamWindow:: WindowMaker alpha ->            -- turns stream
                                                --  into stream of
                                                --  windows 
@@ -236,8 +217,7 @@ WindowMaker is a function that generates a list of windows.
 
 A pre-defined set of functions covering the common WindowMaker cases is provided. However, users are free to define their own windowing functions if they require an alternative, specialist window creator. Examples of pre-defined functions are:
 
-```
-#!haskell
+```haskell
 -- create sliding windows that are a fixed number of events in length
 sliding:: Int -> WindowMaker alpha 
 
@@ -253,8 +233,7 @@ chopTime:: NominalDiffTime -> WindowMaker alpha
 
 Building on this, we can then provide a function that combines windowing and aggregation:
 
-```
-#!haskell
+```haskell
 streamWindowAggregate:: WindowMaker alpha ->            -- turns stream
                                                         --  into stream of
                                                         --  windows 
@@ -270,54 +249,48 @@ type WindowAggregator alpha beta = [alpha] -> beta
 WindowAggregator takes a list of the values contained in a window of events, and aggregates them into a single value.
 An implementation of streamWindowAggregate in Haskell is:
 
-```
-#!haskell
+```haskell
 streamWindowAggregate fwm fwa s = streamMap fwa $ streamWindow fwm s
 ```
 
 As an example, consider an extension to the running example in which we in each want to know how may times in each hour the sensor has measured a temperature over 100. This can be done using the function:
 
-```
-#!haskell
+```haskell
 streamWindowAggregate (chopTime 3600) length 
 $ streamFilter over100 tempSensor
 ```
 
 Here, length is the standard Haskell function that returns the length of a list.
 
-## Merge ##
+### Merge 
 
 Sometimes there is a need to merge multiple streams of the same type into one. This is done with the streamMerge function.
 
-```
-#!haskell
+```haskell
 streamMerge:: [Stream alpha]-> Stream alpha
 ```
 
 For example, if there are three temperature sensors then we can combine them as follows:
 
-```
-#!haskell
+```haskell
 streamMerge [tempSensor1,tempSensor2,tempSensor3]
 ```
 
 In the running example, the merged stream can then be used as input to one of the previously described stream processing functions, e.g.:
 
-```
-#!haskell
+```haskell
 streamWindowAggregate (chopTime 3600) length 
 $ streamMerge over100
 $ streamMerge [tempSensor1,tempSensor2,tempSensor3]
 ```
-## Join ##
+### Join 
 
 The join pattern is used to combine data from two streams that may be of different types. 
 A basic join is provided, along with two others that build on it.
 
 The basic stream join has the signature
 
-```
-#!haskell
+```haskell
 streamJoin:: Stream alpha -> Stream beta -> Stream (alpha,beta)
 ```
 
@@ -327,8 +300,7 @@ Two higher level join functions are provided that operate on windows of events.
 
 The first - streamJoinE – has the signature:
 
-```
-#!haskell
+```haskell
 type JoinFilter alpha beta        = alpha -> beta -> Bool
 type JoinMap    alpha beta gamma  = alpha -> beta -> gamma
 
@@ -346,8 +318,7 @@ streamJoinE:: WindowMaker alpha ->         -- create windows from stream 1
 The user provides a WindowMaker function for each of the two input streams. The Cartesian product of the values in the events in each window is then formed. The resulting pairs of values are then filtered using the user-defined JoinFilter function to determine if the pair of values meets the join criteria. A user-defined map function – JoinMap – is then applied to each conforming pair and the result appears on the output stream.
 
 This can be implemented using the core stream processing functions:
-```
-#!haskell
+```haskell
 streamJoinE fwm1 fwm2 fwj fwm s1 s2 = streamExpand $ 
                                       streamMap  (cartesianJoin fwj fwm) $
                                       streamJoin (streamWindow fwm1 s1)
@@ -356,23 +327,20 @@ streamJoinE fwm1 fwm2 fwj fwm s1 s2 = streamExpand $
 
 For example, if our running example temperature sensors are upgraded to ones which give a wider range of data, including location and carbon dioxide:
 
-```
-#!haskell
+```haskell
 data EnvSensor = EnvSensor {loc::Location,temp::Int,co2::Int}
 ```
 
 And are joined by another set of sensors with traffic data:
 
-```
-#!haskell
+```haskell
 data Traffic   = Traffic {loc::Location,load::Int}
 ```
 
 where load is a measure of the volume of traffic per second. Then, we may want to understand the correlation between load and CO2 levels every minute. As a first step we can combine data at all the locations where there are both types of sensor.
 We can do this using the following function (where envSensors is the merge of the data from all the environmental sensors, and trafficSensors is the merge of the data from all the traffic sensors):
 
-```
-#!haskell
+```haskell
 streamJoinE (chopTime 60) 
             (chopTime 60) 
             (close 50)
@@ -383,15 +351,13 @@ streamJoinE (chopTime 60)
 
 Here close is a function that is true if the locations given by its second and third parameters are within a number of meters specified by its first parameter. Its signature is:
 
-```
-#!haskell
+```haskell
 close:: Int -> Location -> Location -> Bool
 ```
 
 We also provide another join function – streamJoinW - that does not perform a cartesian product of the events in the two windows that are being joined. Instead, it operates on whole windows, applying a user defined function to the two windows of data taken from the two input streams. It is defined as:
 
-```
-#!haskell
+```haskell
 streamJoinW:: WindowMaker alpha ->        -- create windows from stream 1
               WindowMaker beta ->         -- create windows from stream 2
               ([alpha]->[beta]->gamma) -> -- combines the two windows
@@ -402,14 +368,14 @@ streamJoinW:: WindowMaker alpha ->        -- create windows from stream 1
 ```
 
 This can be implemented using the core stream processing functions as:
-```
-#!haskell
+
+```haskell
 streamJoinW fwm1 fwm2 fwj s1 s2 = streamMap  (\(w1,w2)->fwj w1 w2) $
                                   streamJoin (streamWindow fwm1 s1)
                                              (streamWindow fwm2 s2)
 ```
 
-# Dynamically creating Functional Stream Graphs #
+## Dynamically creating Functional Stream Graphs 
 
 If the programmer composes the functional stream operations introduced above then the stream graph is statically defined. However, as Haskell supports higher-order functions we can introduce some new functions that can be used to create sub-graphs either statically or dynamically. 
 
