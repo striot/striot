@@ -5,10 +5,10 @@ name:                striot
 version:             0.1.0.4
 -- synopsis:
 -- description:
-license:             AllRightsReserved
-license-file:        license.txt
-author:              Paul Watson
-maintainer:          paul.watson@ncl.ac.uk
+license:             Apache (Just (makeVersion [2,0]))
+license-file:        LICENSE
+author:              Striot maintainers
+maintainer:          striot@ncl.ac.uk
 -- copyright:
 category:            Data
 build-type:          Simple
