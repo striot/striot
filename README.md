@@ -382,8 +382,7 @@ If the programmer composes the functional stream operations introduced above the
 Computer science thrives on recursion. However, a stream processing system composed of the functions described in the previous section doe not directly support recursion. We can provide it by adding a new function:
 
 
-```
-#!Haskell
+```haskell
 streamGraph  :: (Stream alpha->Stream beta)->   -- stream graph
                 Stream alpha ->                 -- input stream
                 Stream beta                     -- output stream
@@ -391,23 +390,20 @@ streamGraph  :: (Stream alpha->Stream beta)->   -- stream graph
 
 This can be implemented as:
 
-```
-#!Haskell
+```haskell
 streamGraph g s = streamMerge $ map (\e->g [e]) s
 ```
 
 This function applies the stream processing graph defined by the first parameter (g) to each event in the input stream, and merges the resulting streams. An example which maps and filters each window created from a stream is:
 
-```
-#!Haskell
+```haskell
 streamGraph (\ss-> streamMap mf $ streamFilter ff ss)
             $ streamWindow (sliding 10) s
 ```
 
 As streamGraph can operate on finite length streams (as well as infinite streams), it is useful to define another function that reduces a finite list:
 
-```
-#!Haskell
+```haskell
 streamReduce::(beta -> alpha -> beta) ->  -- the accumulator fn:
                                            --  takes head of stream &
                                            --  accumulator and computes
@@ -419,16 +415,14 @@ streamReduce::(beta -> alpha -> beta) ->  -- the accumulator fn:
 The output is a stream with one Event - the result of reducing the list using the first parameter.
 
 This could be implemented as
-```
-#!Haskell
+```haskell
 streamReduce f acc s = streamMap (foldl f acc) $ streamWindow complete s
 ```
 
 where "complete" is a WindowMaker that takes all elements of a finite stream that contain a value.
 
 An example application is adding up the contents of a finite stream of integers:
-```
-#!Haskell
+```haskell
 sumEvents:: Stream Int -> Stream Int
 sumEvents s = streamReduce (\acc a ->acc+a) 0 s
 ```
