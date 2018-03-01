@@ -2,16 +2,24 @@ Examples of the stream operators:
 
 | operator  | example
 | --------- | ----------------------
-| map       | <simplest>, <pipeline>
+| map       | [simplest], [pipeline]
 | scan      |
-| filter    | <filter>
+| filter    | [filter]
 | filterAcc |
-| window    | <simplest>, <pipeline>
+| window    | [simplest], [pipeline]
 | expand    | 
-| merge     | <merge>
-| join      | <join>
+| merge     | [merge]
+| join      | [join]
 
 More in-depth examples
 
- * <taxi>
- * <wearable>
+ * [taxi]
+ * [wearable]
+
+[simplest]: simplest
+[pipeline]: pipeline
+[filter]: filter
+[merge]: merge
+[join]: join
+[taxi]: taxi
+[wearable]: wearable
