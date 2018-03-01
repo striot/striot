@@ -9,10 +9,9 @@ main :: IO ()
 main = nodeSink streamGraph1 printStream (9001::PortNumber)
 
 streamGraph1 :: Stream String -> Stream [String]
-streamGraph1 s = streamWindow (chop 1) s
+streamGraph1 s = streamWindow (chop 1) (streamFilter evfilter s)
+    where
+        evfilter s = (read s :: Int) > 5
 
 printStream:: Show alpha => Stream alpha -> IO ()
-printStream []  = return ()
-printStream (h:t) = do
-                      putStrLn $ show h
-                      printStream t
+printStream = mapM_ (\s -> putStrLn $ "receiving " ++ (show (value s)))
