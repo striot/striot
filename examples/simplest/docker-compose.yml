@@ -9,4 +9,4 @@ haskellclient:
   links:
     - haskellserver
   stdin_open: true
-  #tty: true
+  tty: true
