@@ -42,7 +42,7 @@ There are 6 main tasks any stream processing system must perform:
 
 We now define a set of Haskell functions that implement these operators on the stream datatype defined in the previous section.
 
-### Filter 
+### Filter
 
 The streamFilter function takes a stream as input, and generates a stream containing only those events that meet a user-provided criteria. The type signature is:
 
@@ -84,7 +84,7 @@ Alternatively, the user may choose to use lambda notation to provide an unnamed 
 streamFilter (\temp->temp>100) tempSensor
 ```
 
-### Filtering with an Accumulating Parameter 
+### Filtering with an Accumulating Parameter
 
 Sometimes, it is necessary to filter events based partly on past results. This can be done using the function streamFilterAcc whose signature is as follows:
 
@@ -121,7 +121,7 @@ sample n s = streamFilterAcc (\acc h -> if acc==0 then n else acc-1)
                              s
 ```
 
-### Mapping Streams 
+### Mapping Streams
 
 The function mapStream is used to transform the values in a stream. The user supplies a function of type EventMap which is applied to the value within each event in the input stream to generate the output stream. The function streamMap has the signature:
 
@@ -155,7 +155,7 @@ streamMap (\temp->temp-100) $ streamFilter (\temp->temp>100) tempSensor
 
 Note that the user does not have to understand the format of events, nor how map or filter are enacted. Instead they can focus solely on how the data in the events is to be processed.
 
-### Scan 
+### Scan
 
 There is sometimes the need for a map function whose output depends on the history of events. 
 
@@ -176,7 +176,7 @@ counter:: Stream alpha -> Stream Int
 counter s = scanStream (+1) 0 s
 ```
 
-### Expand 
+### Expand
 
 Sometimes, it is necessary to generate multiple events from each input event. A function provided for this is:
 
@@ -198,7 +198,7 @@ This could then be used to generate the stream of hashtags:
 streamExpand $ getHashtags s
 ```
 
-### Windowing 
+### Windowing
 
 Windowing provides a way to break a stream into a stream whose elements contain subset of events from the original stream. Other functions can then be used to filter the events in each window. Experience shows that it is useful in many stream applications, and as a result, most CEP systems support a range of types of windowing.
 The basic windowing function is: 
@@ -262,7 +262,7 @@ $ streamFilter over100 tempSensor
 
 Here, length is the standard Haskell function that returns the length of a list.
 
-### Merge 
+### Merge
 
 Sometimes there is a need to merge multiple streams of the same type into one. This is done with the streamMerge function.
 
@@ -283,7 +283,7 @@ streamWindowAggregate (chopTime 3600) length
 $ streamMerge over100
 $ streamMerge [tempSensor1,tempSensor2,tempSensor3]
 ```
-### Join 
+### Join
 
 The join pattern is used to combine data from two streams that may be of different types. 
 A basic join is provided, along with two others that build on it.
@@ -375,7 +375,7 @@ streamJoinW fwm1 fwm2 fwj s1 s2 = streamMap  (\(w1,w2)->fwj w1 w2) $
                                              (streamWindow fwm2 s2)
 ```
 
-## Dynamically creating Functional Stream Graphs 
+## Dynamically creating Functional Stream Graphs
 
 If the programmer composes the functional stream operations introduced above then the stream graph is statically defined. However, as Haskell supports higher-order functions we can introduce some new functions that can be used to create sub-graphs either statically or dynamically. 
 
