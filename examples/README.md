@@ -7,7 +7,7 @@ Examples of the stream operators:
 | filter    | [filter]
 | filterAcc |
 | window    | [simplest], [pipeline]
-| expand    | 
+| expand    | [expand]
 | merge     | [merge]
 | join      | [join]
 
@@ -23,3 +23,4 @@ More in-depth examples
 [join]: join
 [taxi]: taxi
 [wearable]: wearable
+[expand]: expand
