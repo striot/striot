@@ -5,7 +5,7 @@ name:                striot
 version:             0.1.0.4
 -- synopsis:
 -- description:
-license:             Apache (Just (makeVersion [2,0]))
+license:             Apache
 license-file:        LICENSE
 author:              Striot maintainers
 maintainer:          striot@ncl.ac.uk
