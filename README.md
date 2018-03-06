@@ -191,11 +191,11 @@ An example is a function that takes in a stream of Twitter tweets, and generates
 getHashtags:: String -> [String]
 ```
 
-This function takes as input a tweet and outputs a list of all the hashtags contained within it.
-This could then be used to generate the stream of hashtags:
+If we apply this to a Stream of type String via `streamMap`, the result will be of type `Stream [String]`.
+We could then expand that back to `Stream String` using `streamExpand`:
 
 ```haskell
-streamExpand $ getHashtags s
+streamExpand $ streamMap getHashtags s
 ```
 
 ### Windowing 
