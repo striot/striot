@@ -14,12 +14,7 @@ main = nodeSink streamGraph1 printStream (9001::PortNumber)
     next value matches.
  -}
 streamGraph1 :: Stream String -> Stream String
-streamGraph1 = streamFilterAcc acc 0 test
-    where
-        test :: String -> Int -> Bool
-        test s prev = (read s) /= prev
-        acc :: Int -> String -> Int
-        acc _ s = read s
+streamGraph1 s = (head s):(streamFilterAcc (\_ s -> s) (value $ head s) (/=) (tail s))
 
 printStream:: Show alpha => Stream alpha -> IO ()
 printStream = mapM_ (\s -> putStrLn $ "receiving " ++ (show (value s)))
