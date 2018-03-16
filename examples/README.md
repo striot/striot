@@ -3,7 +3,7 @@ Examples of the stream operators:
 | operator  | example
 | --------- | ----------------------
 | map       | [simplest], [pipeline]
-| scan      |
+| scan      | [scan]
 | filter    | [filter]
 | filterAcc | [filterAcc]
 | window    | [simplest], [pipeline]
@@ -25,3 +25,4 @@ More in-depth examples
 [wearable]: wearable
 [expand]: expand
 [filterAcc]: filterAcc
+[scan]: scan
