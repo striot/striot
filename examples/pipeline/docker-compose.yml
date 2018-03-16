@@ -1,15 +1,19 @@
-haskellserver:
-  build: server
-  ports:
-    - "9001:9001"
-  tty: true
-haskellclient2:
-  build: client2
-  links:
-    - haskellserver
-  ports:
-    - "9002:9002"
-haskellclient:
-  build: client
-  links:
-    - haskellclient2
+version: '3'
+services:
+
+  haskellserver:
+    build: server
+    stdin_open: true
+    tty: true
+
+  haskellclient2:
+    build: client2
+    stdin_open: true
+    tty: true
+    depends_on:
+      - haskellserver
+
+  haskellclient:
+    build: client
+    depends_on:
+      - haskellclient2
