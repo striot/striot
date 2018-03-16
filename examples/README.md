@@ -5,7 +5,7 @@ Examples of the stream operators:
 | map       | [simplest], [pipeline]
 | scan      |
 | filter    | [filter]
-| filterAcc |
+| filterAcc | [filterAcc]
 | window    | [simplest], [pipeline]
 | expand    | [expand]
 | merge     | [merge]
@@ -24,3 +24,4 @@ More in-depth examples
 [taxi]: taxi
 [wearable]: wearable
 [expand]: expand
+[filterAcc]: filterAcc
