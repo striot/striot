@@ -1,5 +1,5 @@
 #Run from a pre-built Haskell container
-FROM sjwoodman/striot-base:latest
+FROM jmtd/striot-base:latest
 
 WORKDIR /opt/client2
 
@@ -10,5 +10,6 @@ COPY . /opt/client2
 # Compile
 RUN ghc Client2.hs
 
-# Run the client
+# Run the client 
 CMD ["/opt/client2/Client2"]
+
