@@ -1,16 +1,16 @@
-node3:
-  build: server
-  stdin_open: true
-  tty: true
-node2:
-  build: client2
-  links:
-    - node3
-  stdin_open: true
-  tty: true
-node1:
-  build: client
-  stdin_open: true
-  tty: true
-  links:
-    - node3
+version: '3'
+services:
+
+  node3:
+    build: server
+    tty: true
+
+  node2:
+    build: client2
+    depends_on:
+      - node3
+
+  node1:
+    build: client
+    depends_on:
+      - node3
