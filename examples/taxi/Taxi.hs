@@ -12,6 +12,7 @@ import Data.Time (UTCTime,NominalDiffTime)
 -- Needs Parallel top-K ... see http://www.cs.yale.edu/homes/dongqu/PTA.pdf 
 
 -- Define the types and data structures needed by the application
+-- Define the types and data structures needed by the application
 type MD5Sum  = String
 type Dollars = Float
 
@@ -53,8 +54,10 @@ instance Show Cell where
     show c = show (clat c) ++ "." ++ show (clong c)
    
 data Journey  = Journey -- a taxi journey from one cell to another
-   { start :: Cell
-   , end   :: Cell}
+   { start       :: Cell
+   , end         :: Cell
+   , pickupTime  :: UTCTime
+   , dropoffTime :: UTCTime}
    deriving (Eq, Ord)
 
 instance Show Journey where
@@ -97,9 +100,8 @@ inRangeQ2 = inRange 600 600
 
 --- Parse the input file --------------------------------------------------------------------------------------
 tripSource:: String -> Stream Trip -- parse input file into a Stream of Trips
-tripSource s = map (\t->E dummyId (dropoff_datetime t) t)
+tripSource s = map (\t->E 0 (dropoff_datetime t) t) 
                    (map stringsToTrip (map (Data.List.Split.splitOn ",") (lines s)))
-                   where dummyId = 0
 
 -- turns a line from the input file (already split into a list of fields) into a Trip datastructure
 stringsToTrip:: [String] -> Trip
@@ -114,6 +116,9 @@ stringsToTrip s = error ("error in input: " ++ (intercalate "," s))
 
 ----------------------------------------------------------------------------------------------------------------
 
+journeyChanges:: Stream ((UTCTime,UTCTime),[(Journey,Int)]) -> Stream ((UTCTime,UTCTime),[(Journey,Int)])
+journeyChanges s = streamFilterAcc (\acc h-> if (snd h==snd acc) then acc else h) (value $ head s) (\h acc->((snd h)/=(snd acc))) (tail s)
+
 --- removes consecutive repeated values from a stream, leaving only the changes
 changes:: Eq alpha=> Stream alpha -> Stream alpha
 changes s = streamFilterAcc (\acc h-> if (h==acc) then acc else h) (value $ head s) (\h acc->(h/=acc)) (tail s)
@@ -124,16 +129,19 @@ mostFrequent i l = take i $ sortBy (\(k1,v1)(k2,v2)->compare v2 v1)
                  $ Map.toList $ foldr (\e->Map.insertWith (+) e 1) Map.empty l
 
 ------------------------ Query 1 --------------------------------------------------------------------------------------
-type Q1Output = [(Journey,Int)]
+type Q1Output = ((UTCTime,UTCTime),[(Journey,Int)])
 frequentRoutes:: Stream Trip -> Stream Q1Output
-frequentRoutes s = changes 
-                 $ streamWindowAggregate (slidingTime 1800) (mostFrequent 10)
+frequentRoutes s = journeyChanges 
+                 $ streamWindowAggregate (slidingTime 1800) (\w->(let lj = last w in (pickupTime lj,dropoffTime lj),mostFrequent 10 w))
                  $ streamFilter (\j-> inRangeQ1 (start j) && inRangeQ1 (end j))
-                 $ streamMap    (\t-> Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t)}) s
+                 $ streamMap    tripToJourney s
+
+tripToJourney:: Trip -> Journey
+tripToJourney t = Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t), pickupTime=(pickup_datetime t), dropoffTime=(dropoff_datetime t)}              
 
 -- to run Q1....
 mainQ1 = do contents <- readFile "sorteddata.csv"
-            putStr $ show $ frequentRoutes $ tripSource contents
+            putStr $ concatMap (\res->(show $ value res) ++ "\n") $ frequentRoutes $ tripSource contents
 
 --some tests ---------------------------------------------------------------------------------------------------
 main1 = do contents <- readFile "sorteddata.csv"
@@ -143,12 +151,12 @@ main2 = do contents <- readFile "sorteddata.csv"
            putStr $ show $ take 1 $ tripSource contents
 
 main3 = do contents <- readFile "sorteddata.csv"
-           putStr $ show $ take 10 $ streamFilter (\j->(inRangeQ1 (start j) && inRangeQ1 (end j))) $ streamMap (\t-> Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t)}) $ tripSource contents
+           putStr $ show $ take 10 $ streamFilter (\j->(inRangeQ1 (start j) && inRangeQ1 (end j))) $ streamMap tripToJourney $ tripSource contents
 
 main4 = do contents <- readFile "sorteddata.csv"
-           putStr $ show $ take 10 $ Striot.FunctionalProcessing.chop 10 $ streamFilter (\j->(inRangeQ1 (start j) && inRangeQ1 (end j))) $ streamMap (\t-> Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t)}) $ tripSource contents
+           putStr $ show $ take 10 $ Striot.FunctionalProcessing.chop 10 $ streamFilter (\j->(inRangeQ1 (start j) && inRangeQ1 (end j))) $ streamMap tripToJourney $ tripSource contents
 
-q1map    = streamMap    (\t-> Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t)})
+q1map    = streamMap    tripToJourney
 q1filter = streamFilter (\j-> inRangeQ1 (start j) && inRangeQ1 (end j))
 q1window = streamWindow (slidingTime 1800) 
 q1map2   = streamMap    (mostFrequent 10)
@@ -197,9 +205,14 @@ taxisDroppedOffandNotPickedUp np od ts = map (\(t,j)->start j) $ filter (\(t,j)-
 emptyTaxisPerCell::  [(Trip,Journey)] -> Map.Map Cell Int
 emptyTaxisPerCell ts = foldl (\m c->Map.insertWith (+) c 1 m) Map.empty (taxisDroppedOffandNotPickedUp (newestPickup ts) (oldestDropoff ts) ts)
 
+allCells:: Int -> Int -> [Cell]
+allCells latMax longMax = [Cell lat long|lat<-[1..latMax],long<-[1..longMax]] 
+
+initCellMap:: Int -> Int -> a -> Map.Map Cell a
+initCellMap latMax longMax val = Map.fromList (zip (allCells latMax longMax) (repeat val))
+                           
 profitability:: Map.Map Cell Int -> Map.Map Cell Dollars -> Map.Map Cell Dollars
-profitability emptyTaxis cellProf = let allCells = [Cell lat long|lat<-[1..600],long<-[1..600]] in
-                                        foldl (\m c->Map.insert c (cellProf Map.! c / fromIntegral (emptyTaxis Map.! c)) m) Map.empty allCells    
+profitability emptyTaxis cellProf = foldl (\m c->Map.insert c (Map.findWithDefault 0 c cellProf / fromIntegral (Map.findWithDefault 0 c emptyTaxis)) m) Map.empty (Map.keys emptyTaxis)
 
 --profitableCells:: Stream Trip -> Stream Q2Output
 profitableCells s = changes 
@@ -211,7 +224,51 @@ profitableCells s = changes
                   $ streamJoinW (slidingTime 900) (slidingTime 1800)
                                 (\a b->profitability (emptyTaxisPerCell b)(cellProfit a)) processedStream processedStream
                        where processedStream = streamFilter (\(t,j)-> (inRangeQ2 $ start j) && (inRangeQ2 $ end j)) 
-                                             $ streamMap (\t-> (t,Journey (toCellQ2 $ pickup t) (toCellQ2 $ dropoff t))) s
+                                             $ streamMap (\t-> (t,tripToJourney t)) s
 
 mainQ2 = do contents <- readFile "sorteddata.csv"
             putStr $ show $ profitableCells $ tripSource contents
+            
+---------------- Tests of Q2 ------------------------------------------------------
+q2processedStream s = streamFilter (\(t,j)-> (inRangeQ2 $ start j) && (inRangeQ2 $ end j)) 
+                                      $ streamMap (\t-> (t,tripToJourney t)) s
+                                      
+q2Join s = streamJoinW (slidingTime 900) (slidingTime 1800)
+                                (\a b->profitability (emptyTaxisPerCell b)(cellProfit a)) s s
+
+q2Agg s = streamWindowAggregate (slidingTime 1800)
+                      (\es-> take 10
+                           $ sortBy (\(k1,v1)(k2,v2)->compare v2 v1)
+                           $ Map.toList
+                           $ foldl (\m t->Map.insertWith (+) t 1 m) Map.empty es) s
+
+q2TripSourceTest = do contents <- readFile "sorteddata.csv"
+                      putStr $ show $ take 50 $ tripSource contents 
+
+q2TripSourceTest2 = do contents <- readFile "sorteddata.csv"
+                       putStr $ show $ q2processedStream $ take 50 $ tripSource contents 
+                       
+q2TripSourceTest3 = do contents <- readFile "sorteddata.csv"
+                       putStr $ show $ q2Join $ q2processedStream $ take 50 $ tripSource contents 
+                      
+q2TripSourceTest4 = do contents <- readFile "sorteddata.csv"
+                       putStr $ show $ streamMap emptyTaxisPerCell $ streamWindow (slidingTime  900) $ q2processedStream $ take 50 $ tripSource contents 
+                       
+q2TripSourceTest5 = do contents <- readFile "sorteddata.csv"
+                       putStr $ show $ streamMap cellProfit        $ streamWindow (slidingTime 1800) $ q2processedStream $ take 50 $ tripSource contents 
+
+q2TripSourceTest6 = do contents <- readFile "sorteddata.csv"
+                       putStr $ show $ streamMap pickupHistory     $ streamWindow (slidingTime 1800) $ q2processedStream $ take 50 $ tripSource contents 
+
+q2TripSourceTest7 = do contents <- readFile "sorteddata.csv"
+                       putStr $ show $ q2Agg $ q2Join $ q2processedStream $ take 50 $ tripSource contents 
+
+q2TripSourceTest8 = do contents <- readFile "sorteddata.csv"
+                       putStr $ show $ profitableCells $ take 50 $ tripSource contents 
+
+q2TripSourceTest9 trips = do contents <- readFile "sorteddata.csv"
+                             putStr $ show $ profitableCells $ take trips $ tripSource contents  
+
+q2TripSourceTest10 = do contents <- readFile "sorteddata.csv"
+                        putStr $ show $ length $ tripSource contents
+                        

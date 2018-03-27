@@ -1,13 +1,14 @@
 haskellserver:
   build: server
-  stdin_open: true
+  ports:
+    - "9001:9001"
   tty: true
 haskellclient2:
   build: client2
   links:
     - haskellserver
-  stdin_open: true
-  tty: true
+  ports:
+    - "9002:9002"
 haskellclient:
   build: client
   links:

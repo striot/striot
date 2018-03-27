@@ -95,7 +95,7 @@ streamFilterAcc:: (beta -> alpha -> beta) ->  -- the accumulator fn:
                                               --- and computes
                                               --- the new accumulator
                   beta ->                     -- initial accumulator value
-                  (alpha -> beta -> Bool) ->  -- the filter fn: takes head                                                      
+                  (alpha -> beta -> Bool) ->  -- the filter fn: takes head
                                               --- of stream & accumulator
                   Stream alpha ->             -- input stream
                   Stream alpha                -- output stream
@@ -105,9 +105,9 @@ An example of its use is where we only want to propagate an event if its value i
 
 ```haskell
 changes:: Eq alpha=> Stream alpha -> Stream alpha
-changes s = streamFilterAcc (\acc h -> if (h==acc) then acc else h) 
-                            (value $ head s) 
-                            (\h acc->(h/=acc))
+changes s = streamFilterAcc (\_ h -> h)
+                            (value $ head s)
+                            (/=)
                             (tail s)
 ```
 
@@ -191,11 +191,11 @@ An example is a function that takes in a stream of Twitter tweets, and generates
 getHashtags:: String -> [String]
 ```
 
-This function takes as input a tweet and outputs a list of all the hashtags contained within it.
-This could then be used to generate the stream of hashtags:
+If we apply this to a Stream of type String via `streamMap`, the result will be of type `Stream [String]`.
+We could then expand that back to `Stream String` using `streamExpand`:
 
 ```haskell
-streamExpand $ getHashtags s
+streamExpand $ streamMap getHashtags s
 ```
 
 ### Windowing

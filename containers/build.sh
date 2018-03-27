@@ -4,7 +4,7 @@ prefix=${prefix-sjwoodman}
 
 echo "Copying Striot"
 mkdir -p striot-base/striot/src
-cp -R ../license.txt striot-base/striot/
+cp -R ../LICENSE striot-base/striot/
 cp -R ../striot.cabal striot-base/striot/
 cp -R ../src/* striot-base/striot/src
 
