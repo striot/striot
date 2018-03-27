@@ -2,7 +2,6 @@ haskellserver:
   build: server
   ports:
     - "9001:9001"
-  stdin_open: true
   tty: true
 haskellclient2:
   build: client2
@@ -10,7 +9,6 @@ haskellclient2:
     - haskellserver
   ports:
     - "9002:9002"
-  stdin_open: true
 haskellclient:
   build: client
   links:
