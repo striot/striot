@@ -1,21 +1,17 @@
 haskellserver:
   build: server
-  # image: sjwoodman/haskell-server
   ports:
     - "9001:9001"
   stdin_open: true
   tty: true
 haskellclient2:
   build: client2
-  # image: sjwoodman/haskell-client2
   links:
     - haskellserver
   ports:
     - "9002:9002"
   stdin_open: true
-  tty: true
 haskellclient:
   build: client
-  # image: sjwoodman/haskell-client
   links:
     - haskellclient2
