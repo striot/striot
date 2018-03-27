@@ -156,6 +156,42 @@ type Partition = Int
 createPartitions:: StreamGraph -> [(Partition,[Id])] -> [(Partition,StreamGraph)]
 createPartitions g partitionMap = map (\(pid,ids)->(pid,subsetGraphByIds g ids pid)) partitionMap
 
+unPartition :: [(Partition, StreamGraph)] -> StreamGraph
+unPartition ps = foldl graphJoin emptyGraph gs where
+    gs = map snd ps
+    emptyGraph = StreamGraph "0" newID [] []
+    newID = head $ [0..] \\ allIDs
+    allIDs = map resultId gs
+
+-- join two StreamGraphs together
+-- ASSUMPTION: graph a connects to graph b (a's output is to an id in b)
+--  => resulting resultId is b
+-- ASSUMPTION: all graph b's inputs are contained in graph a
+graphJoin :: StreamGraph -> StreamGraph -> StreamGraph
+graphJoin a b = StreamGraph newgid newResultId newgInputs newOperations where
+    newgid = (gid a) ++ (gid b) -- *shrug*
+    newResultId = resultId b
+    newgInputs = ginputs a
+    newOperations = (operations a) ++ (operations b)
+
+-- icky test, we override the gid since we can't recover that easily
+-- demonstrates recomposition of stream graphs
+splitJoinTester sg = assertEqual (sg { gid = "overridden" }) (joined { gid = "overridden" }) where
+    parts = createPartitions sg pmap
+    joined = unPartition parts
+    pmap = mkPartitionMap sg
+
+-- partition generator for tests. One streamOperator per partition
+mkPartitionMap sg = [ (x,[x]) | x <- map opid (operations sg) ]
+
+test_split_s0 = splitJoinTester s0
+test_split_s1 = splitJoinTester s1
+test_split_s2 = splitJoinTester s2
+fest_split_s3 = splitJoinTester s3
+test_split_s4 = splitJoinTester s4
+test_split_s5 = splitJoinTester s5
+test_split_s6 = splitJoinTester s6
+
 subsetGraphByIds:: StreamGraph -> [Id] -> Partition -> StreamGraph
 subsetGraphByIds sg ids pid = StreamGraph ((gid sg) ++(show pid)) -- name
                                           (opid $ head $ filter (\sop -> not (elem (opid sop) allInputs)) allOpsInPartition) -- output node id
@@ -184,12 +220,12 @@ s0 = StreamGraph "jmtdtest" 2 [] [
 
 s1:: StreamGraph
 s1  = StreamGraph "test" 7 [] [
-       StreamOperation 1 [ ] Source    ["sourceGen"]                                                                           "Stream Trip"            ["Taxi.hs","SourceGenerator.hs"],
-       StreamOperation 2 [1] Map       ["\\t-> Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t)}"]                  "Stream Journey"         ["Taxi.hs"],
-       StreamOperation 3 [2] Filter    ["\\j-> inRangeQ1 (start j) && inRangeQ1 (end j)"]                                      "Stream Journey"         ["Taxi.hs"],
-       StreamOperation 4 [3] Window    ["slidingTime 1800"]                                                                    "Stream [Journey]"       ["Taxi.hs"],
-       StreamOperation 5 [4] Map       ["mostFrequent 10"]                                                                     "Stream [(Journey,Int)]" ["Taxi.hs"],
-       StreamOperation 6 [5] FilterAcc ["value $ head s","\\h acc-> if (h==acc) then acc else h","\\h acc->(h/=acc)","tail s"] "Stream [(Journey,Int)]" ["Taxi.hs"],
+       StreamOperation 1 [ ] Source    ["sourceGen"]                                                                           "Stream Trip"            ["Taxi","SourceGenerator.hs"],
+       StreamOperation 2 [1] Map       ["\\t-> Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t)}"]                  "Stream Journey"         ["Taxi"],
+       StreamOperation 3 [2] Filter    ["\\j-> inRangeQ1 (start j) && inRangeQ1 (end j)"]                                      "Stream Journey"         ["Taxi"],
+       StreamOperation 4 [3] Window    ["slidingTime 1800"]                                                                    "Stream [Journey]"       ["Taxi"],
+       StreamOperation 5 [4] Map       ["mostFrequent 10"]                                                                     "Stream [(Journey,Int)]" ["Taxi"],
+       StreamOperation 6 [5] FilterAcc ["value $ head s","\\h acc-> if (h==acc) then acc else h","\\h acc->(h/=acc)","tail s"] "Stream [(Journey,Int)]" ["Taxi"],
        StreamOperation 7 [6] Sink      ["print"]                                                                               ""                                []]
 
 p1:: StreamGraph
@@ -342,18 +378,20 @@ showSinkGraph stdImports fullsg pid partition nodeName = let [sinkOp] = filter (
 generateCode:: StreamGraph -> [(Partition,[Id])] -> [String] -> [String]
 generateCode sg ps stdImports = map (\(pid,part)->generatePartitionCode sg stdImports pid part) $ createPartitions sg ps
 
-ex41 = generateCode s1 [(1,[1,2]),(2,[3,4]),(3,[5,6,7])] ["FunctionalIoTtypes","FunctionalProcessing","Nodes"]
+stdImports = ["Striot.FunctionalIoTtypes","Striot.FunctionalProcessing","Striot.Nodes"]
+
+ex41 = generateCode s1 [(1,[1,2]),(2,[3,4]),(3,[5,6,7])] stdImports
 ex42 = putStrLn $ ex41!!0
 ex43 = putStrLn $ ex41!!1
 ex44 = putStrLn $ ex41!!2
 ex45 = createPartitions s1 [(1,[1,2]),(2,[3,4]),(3,[5,6,7])]
 
-ex411 = generateCode s1 [(1,[1..5]),(2,[6,7])] ["FunctionalIoTtypes","FunctionalProcessing","Nodes"]
+ex411 = generateCode s1 [(1,[1..5]),(2,[6,7])] stdImports
 ex412 = putStrLn $ ex411!!0
 ex413 = putStrLn $ ex411!!1
 ex414 = createPartitions s1 [(1,[1..5]),(2,[6,7])]
 
-ex416 = generateCode s1 [(1,[1]),(2,[2,3,4,5,6]),(3,[7])] ["FunctionalIoTtypes","FunctionalProcessing","Nodes"]
+ex416 = generateCode s1 [(1,[1]),(2,[2,3,4,5,6]),(3,[7])] stdImports
 
 
 ex415p2:: StreamGraph
@@ -361,14 +399,15 @@ ex415p2 = StreamGraph "p2" 7 [(6,"String")] [StreamOperation 7 [6] Sink ["print"
 ex415 = graphPartitionCategory s1 ex415p2
 
 s4:: StreamGraph
-s4 = StreamGraph "pipeline" 5 [] [
+s4 = StreamGraph "pipeline" 6 [] [
        StreamOperation 1 [ ] Source    ["src1"]                                                                                "Stream String"          ["SourceFileContainingsrc1.hs"],
        StreamOperation 2 [1] Map       ["\\st-> st++st"]                                                                       "Stream String"          [],
        StreamOperation 3 [2] Map       ["\\st-> reverse st"]                                                                   "Stream String"          [],
        StreamOperation 4 [3] Map       ["\\st-> \"Incoming Message at Server: \" ++ st"]                                       "Stream String"          [],
-       StreamOperation 5 [4] Window    ["(chop 2)"]                                                                            "Stream [String]"        []]
+       StreamOperation 5 [4] Window    ["(chop 2)"]                                                                            "Stream [String]"        [],
+       StreamOperation 6 [5] Sink      ["print"]                                                                               ""                       []]
 
-s4parts = generateCode s4 [(1,[1,2]),(2,[3]),(3,[4,5])] ["FunctionalIoTtypes","FunctionalProcessing","Nodes"] 
+s4parts = generateCode s4 [(1,[1,2]),(2,[3]),(3,[4,5])] stdImports
 exs41 = putStrLn $ s4parts!!0
 exs42 = putStrLn $ s4parts!!1
 exs43 = putStrLn $ s4parts!!2
@@ -381,12 +420,12 @@ s5 = StreamGraph "joint-test" 4 [] [
        StreamOperation 4 [3]   Map       ["\\(l,r)-> \"Incoming Message at Server: \" ++ l++\":\"++r"]                           "Stream String"          []]
 
 
-s5parts1 = generateCode s5 [(1,[1]),(2,[2]),(3,[3,4])] ["FunctionalIoTtypes","FunctionalProcessing","Nodes"] 
+s5parts1 = generateCode s5 [(1,[1]),(2,[2]),(3,[3,4])] stdImports
 exs51 = putStrLn $ s5parts1!!0
 exs52 = putStrLn $ s5parts1!!1
 exs53 = putStrLn $ s5parts1!!2
 
-s5parts2 = generateCode s5 [(1,[1]),(2,[2]),(3,[3]),(4,[4])] ["FunctionalIoTtypes","FunctionalProcessing","Nodes"] 
+s5parts2 = generateCode s5 [(1,[1]),(2,[2]),(3,[3]),(4,[4])] stdImports
 exs521 = putStrLn $ s5parts2!!0
 exs522 = putStrLn $ s5parts2!!1
 exs523 = putStrLn $ s5parts2!!2
@@ -431,7 +470,7 @@ s6 = StreamGraph "merge-test" 6 [] [
        StreamOperation 5 [4]   Map       ["\\(l,r)-> \"Incoming Message at Server: \" ++ l++\":\"++r"]                           "Stream String"          [],
        StreamOperation 6 [5]   Sink      ["print"]                                                                               ""                       []]
 
-exs6  = generateCode s6 [(1,[1]),(2,[2,3]),(3,[4..6])] ["FunctionalIoTtypes","FunctionalProcessing","Nodes"] 
+exs6  = generateCode s6 [(1,[1]),(2,[2,3]),(3,[4..6])] stdImports
 exs61 = putStrLn $ exs6!!0
 exs62 = putStrLn $ exs6!!1
 exs63 = putStrLn $ exs6!!2

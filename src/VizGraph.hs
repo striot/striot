@@ -1,9 +1,8 @@
 module VizGraph(drawPartitionedStreamGraph,drawStreamGraph) where
 import Data.List
-import Striot.CompileIoT as CompileIoT
+import Striot.CompileIoT (printParams, graphEdgesWithTypes, Id, Partition, StreamGraph, opid, operations, parameters, operator)
 import Data.GraphViz
 import Data.Text.Lazy (Text, pack, unpack)
-import Data.Graph.Inductive (Gr, mkGraph)
 import qualified Data.Map as Map
 import Data.GraphViz.Printing (toDot, renderDot)
 import Data.GraphViz.Attributes.Complete
@@ -14,30 +13,12 @@ import Data.GraphViz.Attributes.Complete
 -- https://hackage.haskell.org/package/graphviz-2999.18.1.2/docs/Data-GraphViz.html
 -- http://haroldcarr.com/posts/2014-02-28-using-graphviz-via-haskell.html
 
-graph :: DotGraph Int
-graph = graphElemsToDot graphParams gnodes gedges
-
-graphParams :: GraphvizParams Int String Bool () String
-graphParams = defaultParams
-
-gnodes :: [(Int, String)]
-gnodes = map (\x -> (x,"Node")) [1..4]
-gedges:: [(Int, Int, Bool)]
-gedges = [ (1, 3, True)
-         , (1, 4, True)
-         , (2, 3, True)
-         , (2, 4, True)
-         , (3, 4, True)]
-
--- Execute main to output the graph:
-main = addExtension (runGraphviz graph) Png "graph"
-
 -------------
 
 streamGraphToDotGraph:: StreamGraph -> (GraphvizParams Int String String () String) -> Data.GraphViz.DotGraph Int
 streamGraphToDotGraph sg params = graphElemsToDot params
-                                                  (map (\op -> (opid op,(show $ operator op) ++ " " ++ CompileIoT.printParams (parameters op))) (operations sg)) -- nodes -- could remove printParams if operation only is needed
-                                                  (map (\(sourceNode,(destNode,destPort),oType) -> (sourceNode,destNode,oType)) (CompileIoT.graphEdgesWithTypes sg)) -- edges
+                                                  (map (\op -> (opid op,(show $ operator op) ++ " " ++ printParams (parameters op))) (operations sg)) -- nodes -- could remove printParams if operation only is needed
+                                                  (map (\(sourceNode,(destNode,destPort),oType) -> (sourceNode,destNode,oType)) (graphEdgesWithTypes sg)) -- edges
 
 ---------
 -- https://hackage.haskell.org/package/graphviz-2999.18.0.0/docs/Data-GraphViz.html#t:GraphvizParams
@@ -101,8 +82,8 @@ clusteredParams = defaultParams {
 
 clStreamGraphToDotGraph:: StreamGraph -> (GraphvizParams Int String String Int String) -> Data.GraphViz.DotGraph Int
 clStreamGraphToDotGraph sg params = graphElemsToDot params
-                                                  (map (\op -> (opid op,(show $ operator op) ++ " " ++ CompileIoT.printParams (parameters op))) (operations sg)) -- nodes -- could remove printParams if operation only is needed
-                                                  (map (\(sourceNode,(destNode,destPort),oType) -> (sourceNode,destNode,oType)) (CompileIoT.graphEdgesWithTypes sg)) -- edges
+                                                  (map (\op -> (opid op,(show $ operator op) ++ " " ++ printParams (parameters op))) (operations sg)) -- nodes -- could remove printParams if operation only is needed
+                                                  (map (\(sourceNode,(destNode,destPort),oType) -> (sourceNode,destNode,oType)) (graphEdgesWithTypes sg)) -- edges
 
 clusteredParams2 :: Map.Map Id Partition -> GraphvizParams Int String String Int String
 clusteredParams2 idToPart = defaultParams {
