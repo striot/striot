@@ -1,4 +1,4 @@
-prefix = sjwoodman
+prefix = striot 
 
 base = striot-base/striot
 license = ${base}/LICENSE

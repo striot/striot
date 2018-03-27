@@ -2,14 +2,11 @@ version: '3'
 services:
 
   haskellserver:
-    build: server
-    stdin_open: true
+    build: server 
     tty: true
 
   haskellclient2:
-    build: client2
-    stdin_open: true
-    tty: true
+    build: client2   
     depends_on:
       - haskellserver
 

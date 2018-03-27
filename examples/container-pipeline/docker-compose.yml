@@ -5,17 +5,12 @@ services:
     build: source
     depends_on:
       - link
-    stdin_open: true
-    tty: true
 
   link:
     build: link
     depends_on:
-      - sink
-    stdin_open: true
-    tty: true
+      - sink 
     
   sink:
-    build: sink
-    stdin_open: true
+    build: sink 
     tty: true
