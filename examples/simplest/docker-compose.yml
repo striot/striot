@@ -1,12 +1,11 @@
-haskellserver:
-  build: server
-  ports:
-    - "9001:9001"
-  stdin_open: true
-  tty: true
-haskellclient:
-  build: client
-  links:
-    - haskellserver
-  stdin_open: true
-  #tty: true
+version: '3'
+services:
+
+  haskellserver:
+    build: server
+    tty: true
+
+  haskellclient:
+    build: client
+    depends_on:
+      - haskellserver 

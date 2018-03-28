@@ -1,5 +1,5 @@
 # Run from a pre-built Haskell container
-FROM jmtd/striot-base:latest
+FROM striot/striot-base:latest
 
 WORKDIR /opt/server
 
