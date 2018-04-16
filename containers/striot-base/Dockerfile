@@ -9,7 +9,8 @@ RUN cabal update && \
     network \
     split \
     stm \
-    HTF
+    HTF \
+    aeson
 
 COPY striot /opt/striot
 

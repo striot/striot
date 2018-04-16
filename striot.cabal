@@ -19,12 +19,12 @@ library
   exposed-modules:     Striot.FunctionalIoTtypes, Striot.FunctionalProcessing, Striot.Nodes, Striot.CompileIoT
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.9 && <4.10, containers >=0.5 && <0.6, split >=0.2 && <0.3, time >=1.6 && <1.7, network >=2.6 && <2.7, stm >=2.4 && <2.5, HTF
+  build-depends:       base >=4.9 && <4.10, containers >=0.5 && <0.6, split >=0.2 && <0.3, time >=1.6 && <1.7, network >=2.6 && <2.7, stm >=2.4 && <2.5, HTF, aeson, bytestring
   hs-source-dirs:      src
   default-language:    Haskell98
 
 Executable Test
   hs-source-dirs:      src
   Main-is:             Striot/TestMain.hs
-  build-depends:       base >= 4.9 && < 4.10, HTF, time >=1.6 && < 1.7, containers >=0.5 && < 0.6
+  build-depends:       base >= 4.9 && < 4.10, HTF, time >=1.6 && < 1.7, containers >=0.5 && < 0.6, aeson
   Default-language:    Haskell98
