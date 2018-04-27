@@ -1,16 +1,21 @@
-version: '3'
-services:
+# consumer via streamMerge
+node3:
+  build: node3
+  stdin_open: true
+  tty: true
 
-  node3:
-    build: server
-    tty: true
+# first producer
+node2:
+  build: node2
+  stdin_open: true
+  tty: true
+  links:
+    - node3
 
-  node2:
-    build: client2
-    depends_on:
-      - node3
-
-  node1:
-    build: client
-    depends_on:
-      - node3
+# second producer
+node1:
+  build: node1
+  stdin_open: true
+  tty: true
+  links:
+    - node3
