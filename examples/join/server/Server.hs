@@ -13,4 +13,4 @@ streamGraphFn :: Stream String -> Stream String -> Stream [(String, String)]
 streamGraphFn s1 s2 = streamWindow (chop 2) $ streamJoin s1 s2
 
 main :: IO ()
-main = nodeSink2 streamGraphFn sink1 9001 9002
+main = nodeSink2 streamGraphFn sink1 "9001" "9002"

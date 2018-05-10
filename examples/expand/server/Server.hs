@@ -1,10 +1,10 @@
-import Network
+import Network.Socket (ServiceName)
 import Striot.FunctionalProcessing
 import Striot.FunctionalIoTtypes
 import Striot.Nodes
 
 main :: IO ()
-main = nodeSink streamGraph printStream (9001::PortNumber)
+main = nodeSink streamGraph printStream ("9001"::ServiceName)
 
 streamGraph :: Stream [String] -> Stream String
 streamGraph = streamExpand

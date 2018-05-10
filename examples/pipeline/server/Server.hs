@@ -3,9 +3,9 @@ import Data.List
 import Striot.FunctionalProcessing
 import Striot.FunctionalIoTtypes
 import Striot.Nodes
-import Network
+import Network.Socket (ServiceName)
 
-listenPort = 9001 :: PortNumber
+listenPort = "9001" :: ServiceName
 
 main :: IO ()
 main = nodeSink streamGraph1 printStream listenPort

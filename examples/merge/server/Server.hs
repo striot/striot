@@ -16,4 +16,4 @@ streamGraphFn s1 s2 = let
        in n2
 
 main :: IO ()
-main = nodeSink2 streamGraphFn sink1 9001 9002
+main = nodeSink2 streamGraphFn sink1 "9001" "9002"
