@@ -10,7 +10,8 @@ RUN cabal update && \
     split \
     stm \
     HTF \
-    aeson
+    aeson \
+    unagi-chan
 
 COPY striot /opt/striot
 
