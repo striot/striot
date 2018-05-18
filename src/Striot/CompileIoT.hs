@@ -49,9 +49,7 @@ instance Ord StreamVertex where
     compare (StreamVertex x _ _ _) (StreamVertex y _ _ _) = compare x y
 
 instance Show StreamVertex where
-    show v = (show$vertexId v)++(map (\x->if x=='"' then '\'' else x) (show (operator v))) ++
-        (concatMap (\s->"("++s++") ") (parameters v))
-    -- XXX: temporary translate " to ' so output is "dot syntax clean"
+    show v = intercalate " " $ ((show . operator) v) : ((map (\s->"("++s++")")) . parameters) v
 
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
