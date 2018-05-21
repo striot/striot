@@ -1,4 +1,6 @@
-module VizGraph(drawPartitionedStreamGraph,drawStreamGraph) where
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
+
+module VizGraph(drawPartitionedStreamGraph,drawStreamGraph,htf_thisModulesTests) where
 import Data.List
 import Striot.CompileIoT (printParams, graphEdgesWithTypes, Id, Partition, StreamGraph, opid, operations, parameters, operator)
 import Data.GraphViz
@@ -6,6 +8,7 @@ import Data.Text.Lazy (Text, pack, unpack)
 import qualified Data.Map as Map
 import Data.GraphViz.Printing (toDot, renderDot)
 import Data.GraphViz.Attributes.Complete
+import Test.Framework
 
 
 
