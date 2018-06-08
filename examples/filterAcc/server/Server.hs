@@ -1,4 +1,4 @@
-import Network
+import Network.Socket (ServiceName)
 import System.IO
 import Data.List
 import Striot.FunctionalProcessing
@@ -6,7 +6,7 @@ import Striot.FunctionalIoTtypes
 import Striot.Nodes
 
 main :: IO ()
-main = nodeSink streamGraph1 printStream (9001::PortNumber)
+main = nodeSink streamGraph1 printStream ("9001"::ServiceName)
 
 {-
     streamFilterAcc example where the accumulator is simply a copy

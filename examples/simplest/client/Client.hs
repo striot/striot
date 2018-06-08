@@ -4,13 +4,13 @@ import System.IO
 import Striot.FunctionalProcessing
 import Striot.FunctionalIoTtypes
 import Striot.Nodes
-import Network
+import Network.Socket (HostName, ServiceName)
 
 -- processes source before sending it to another node
 main :: IO ()
 main = do
          threadDelay (1 * 1000 * 1000)
-         nodeSource src streamGraph ("haskellserver"::HostName) (9001::PortNumber)
+         nodeSource src streamGraph ("haskellserver"::HostName) ("9001"::ServiceName)
 
 streamGraph :: Stream String -> Stream String
 streamGraph s = streamMap id s where

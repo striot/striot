@@ -1,11 +1,11 @@
-import Network
+import Network.Socket (HostName, ServiceName)
 import Control.Concurrent
 import System.IO
 import Striot.FunctionalProcessing
 import Striot.FunctionalIoTtypes
 import Striot.Nodes
 
-connectPort = 61616  :: PortNumber
+connectPort = "61616"  :: ServiceName
 connectHost = "link" :: HostName
 
 main :: IO ()

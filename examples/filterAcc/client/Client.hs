@@ -4,13 +4,13 @@ import System.IO
 import Striot.FunctionalProcessing
 import Striot.FunctionalIoTtypes
 import Striot.Nodes
-import Network
+import Network.Socket (HostName, ServiceName)
 import System.Random
 
 main :: IO ()
 main = do
          threadDelay 1000000
-         nodeSource src Prelude.id ("haskellserver"::HostName) (9001::PortNumber)
+         nodeSource src Prelude.id ("haskellserver"::HostName) ("9001"::ServiceName)
 
 src :: IO String
 src = do

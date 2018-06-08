@@ -15,4 +15,4 @@ src1 = do
 main :: IO ()
 main = do
     putStrLn "starting Client2...."
-    nodeSource src1 id "node3" 9002
+    nodeSource src1 id "node3" "9002"

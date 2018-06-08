@@ -2,14 +2,14 @@ import Control.Concurrent (threadDelay)
 import Striot.FunctionalProcessing
 import Striot.FunctionalIoTtypes
 import Striot.Nodes
-import Network
+import Network.Socket (HostName, ServiceName)
 import System.Random (getStdRandom, randomR)
 import Control.Monad (replicateM)
 
 main :: IO ()
 main = do
     threadDelay 1000000
-    nodeSource src streamGraph ("haskellserver"::HostName) (9001::PortNumber)
+    nodeSource src streamGraph ("haskellserver"::HostName) ("9001"::ServiceName)
 
 src :: IO String
 src = do

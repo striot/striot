@@ -3,10 +3,10 @@ import System.IO
 import Striot.FunctionalProcessing
 import Striot.FunctionalIoTtypes
 import Striot.Nodes
-import Network
+import Network.Socket (HostName, ServiceName)
 
-listenPort =  9001 :: PortNumber
-connectPort = 9001 :: PortNumber
+listenPort =  "9001" :: ServiceName
+connectPort = "9001" :: ServiceName
 connectHost = "haskellserver" :: HostName
 
 main :: IO ()

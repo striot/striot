@@ -15,4 +15,4 @@ src1 = do
 main :: IO ()
 main = do
     putStrLn "starting Client1...."
-    nodeSource src1 id "haskellserver" 9001
+    nodeSource src1 id "haskellserver" "9001"
