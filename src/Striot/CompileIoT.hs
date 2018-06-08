@@ -173,11 +173,11 @@ generateNodeSrc partId nodes = let
     node = head nodes
     host = "node" ++ (show node)
     port = 9001 + partId -1 -- XXX Unlikely to always be correct
-    in "main = nodeSource src1 streamGraphFn \""++host++"\" "++(show port)
+    in "main = nodeSource src1 streamGraphFn \""++host++"\" \""++(show port)++"\""
 
 generateNodeSink v = case v of
-    1 -> "main = nodeSink streamGraphFn sink1 9001"
-    2 -> "main = nodeSink2 streamGraphFn sink1 9001 9002"
+    1 -> "main = nodeSink streamGraphFn sink1 \"9001\""
+    2 -> "main = nodeSink2 streamGraphFn sink1 \"9001\" \"9002\""
     v -> error "generateNodeSink: unhandled valence " ++ (show v)
 
 generateCodeFromVertex :: (Int, StreamVertex) -> String
