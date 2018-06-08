@@ -11,7 +11,8 @@ RUN cabal update && \
     stm \
     HTF \
     aeson \
-    unagi-chan
+    unagi-chan \
+    algebraic-graphs
 
 COPY striot /opt/striot
 
