@@ -129,7 +129,7 @@ generateCodeFromStreamGraph imports parts cuts (partId,sg) = intercalate "\n" $
         sgTypeSignature = "streamGraphFn ::"++(concat $ take valence $ repeat $ " Stream "++inType++" ->")++" Stream "++outType
         sgIntro = "streamGraphFn "++sgArgs++" = let"
         sgArgs = unwords $ map (('n':).show) [1..valence]
-        imports' = (map ("import "++) ("Network":imports)) ++ ["\n"]
+        imports' = (map ("import "++) imports) ++ ["\n"]
         lastIdentifier = 'n':(show $ (length intVerts) + valence)
         intVerts= filter (\x-> not $ operator x `elem` [Source,Sink]) $ vertexList sg
         valence = partValence sg cuts
