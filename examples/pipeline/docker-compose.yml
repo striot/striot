@@ -1,16 +1,14 @@
-version: '3'
-services:
-
-  haskellserver:
-    build: server 
-    tty: true
-
-  haskellclient2:
-    build: client2   
-    depends_on:
-      - haskellserver
-
-  haskellclient:
-    build: client
-    depends_on:
-      - haskellclient2
+node3:
+  build: node3
+  stdin_open: true
+  tty: true
+node2:
+  build: node2
+  links:
+    - node3
+  stdin_open: true
+  tty: true
+node1:
+  build: node1
+  links:
+    - node2

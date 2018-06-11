@@ -1,123 +1,47 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 
-module VizGraph(drawPartitionedStreamGraph,drawStreamGraph,htf_thisModulesTests) where
-import Data.List
-import Striot.CompileIoT (printParams, graphEdgesWithTypes, Id, Partition, StreamGraph, opid, operations, parameters, operator)
-import Data.GraphViz
-import Data.Text.Lazy (Text, pack, unpack)
-import qualified Data.Map as Map
-import Data.GraphViz.Printing (toDot, renderDot)
-import Data.GraphViz.Attributes.Complete
+module VizGraph(streamGraphToDot, htf_thisModulesTests) where
+
+import Striot.CompileIoT
+import Algebra.Graph
+import Algebra.Graph.Export.Dot
+import Data.String
 import Test.Framework
 
+streamGraphToDot :: StreamGraph -> String
+streamGraphToDot = export myStyle
 
+myStyle :: Style StreamVertex String
+myStyle = Style
+    { graphName               = mempty
+    , preamble                = mempty
+    , graphAttributes         = ["bgcolor":="white"]
+    , defaultVertexAttributes = ["shape" := "box","fillcolor":="white","style":="filled"]
+    , defaultEdgeAttributes   = ["weight":="10","color":="black","fontcolor":="black"]
+    , vertexName              = show . vertexId
+    , vertexAttributes        = (\v -> ["label":=(escape . show) v])
+    , edgeAttributes          = (\_ o -> ["label":=intype o])
+    }
 
--- https://hackage.haskell.org/package/graphviz-2999.18.1.2/docs/Data-GraphViz-Attributes-Complete.html#t:Attributes
--- https://hackage.haskell.org/package/graphviz-2999.18.1.2/docs/Data-GraphViz.html
--- http://haroldcarr.com/posts/2014-02-28-using-graphviz-via-haskell.html
+-- escape a string, suitable for inclusion in a .dot file
+escape [] = []
+escape (x:xs) = if x == '"' then '\\':'"':(escape xs) else x:(escape xs)
 
--------------
+-- test data
+--source x = "do\n    threadDelay (1000*1000)\n    putStrLn \"sending '"++x++"'\"\n    return \""++x++"\""
+source x = "do threadDelay (1000*1000); putStrLn \"sending '"++x++"'\"; return \""++x++"\""
+v1 = StreamVertex 1 Source [source "foo"]  "String"
+v2 = StreamVertex 2 Map    ["Prelude.id"]  "String"
+v3 = StreamVertex 3 Source [source "bar"]  "String"
+v4 = StreamVertex 4 Map    ["Prelude.id"]  "String"
+v5 = StreamVertex 5 Merge  ["[n1,n2]"]     "String"
+v6 = StreamVertex 6 Sink   ["mapM_ print"] "String"
+mergeEx :: StreamGraph
+mergeEx = overlay (path [v3, v4, v5]) (path [v1, v2, v5, v6])
 
-streamGraphToDotGraph:: StreamGraph -> (GraphvizParams Int String String () String) -> Data.GraphViz.DotGraph Int
-streamGraphToDotGraph sg params = graphElemsToDot params
-                                                  (map (\op -> (opid op,(show $ operator op) ++ " " ++ printParams (parameters op))) (operations sg)) -- nodes -- could remove printParams if operation only is needed
-                                                  (map (\(sourceNode,(destNode,destPort),oType) -> (sourceNode,destNode,oType)) (graphEdgesWithTypes sg)) -- edges
-
----------
--- https://hackage.haskell.org/package/graphviz-2999.18.0.0/docs/Data-GraphViz.html#t:GraphvizParams
-myParams :: GraphvizParams Int String String () String
-myParams = nonClusteredParams {
---4. Let the graphing engine know that we want the edges to be directed arrows
--- as follows:
-              isDirected = True
---5. Set our own global attributes for a graph, node, and edge appearance as follows:
-            , globalAttributes = [myGraphAttrs, myNodeAttrs, myEdgeAttrs]
---6. Format nodes in our own way as follows:
-            , fmtNode = myFN
---7. Format edges in our own way as follows:
-            , fmtEdge = myFE
-            }
---8. Define the customizations as shown in the following code snippet:
-           where myGraphAttrs = GraphAttrs [ -- RankDir FromLeft
-                                            BgColor [toWColor White] ]
-                 myNodeAttrs =  NodeAttrs [ Shape BoxShape
-                                          , FillColor [toWColor White]
-                                          , Style [SItem Filled []] ]
-                 myEdgeAttrs =  EdgeAttrs [ Weight (Int 10)
-                                          , Color [toWColor Black]
-                                          , FontColor (toColor Black) ]
-                 myFN (n,l)   = [(Label . StrLabel) (Data.Text.Lazy.pack (drop 6 l))] -- pack converts the strings used in streamGraph to Text used by GraphvizParams 
-                                                                                      -- drop 6 removes the "Stream " prefix
-                 myFE (f,t,l) = [(Label . StrLabel) (Data.Text.Lazy.pack (' ':(drop 7 l)))] -- drop 7 removes the "Stream" prefix from the operators
-                 
--- http://goto.ucsd.edu/~rjhala/llvm-haskell/doc/html/llvm-analysis/src/LLVM-Analysis-CFG.html gives a helpful example
-clusteredParams ::  GraphvizParams Int String String Int String
-clusteredParams = defaultParams {
---4. Let the graphing engine know that we want the edges to be directed arrows
--- as follows:
-              isDirected = True
---5. Set our own global attributes for a graph, node, and edge appearance as follows:
-            , globalAttributes = [myGraphAttrs, myNodeAttrs, myEdgeAttrs]
---6. Format nodes in our own way as follows:
-            , fmtNode    = myFN
---7. Format edges in our own way as follows:
-            , fmtEdge    = myFE
--- Format clusters:
-            , clusterBy  = clustBy
-            , clusterID  = Num . Int
-            , fmtCluster = myFC
-            }
---8. Define the customizations as shown in the following code snippet:
-           where myGraphAttrs  = GraphAttrs [ -- RankDir FromLeft
-                                            BgColor [toWColor White] ]
-                 myNodeAttrs   =  NodeAttrs [ Shape BoxShape
-                                          , FillColor [toWColor White]
-                                          , Style [SItem Filled []] ]
-                 myEdgeAttrs   =  EdgeAttrs [ Weight (Int 10)
-                                          , Color [toWColor Black]
-                                          , FontColor (toColor Black) ]
-                 myFN (n,l)    = [(Label . StrLabel) (Data.Text.Lazy.pack (drop 6 l))] -- pack converts the strings used in streamGraph to Text used by GraphvizParams 
-                                                                                      -- drop 6 removes the "Stream " prefix
-                 myFE (f,t,l)  = [(Label . StrLabel) (Data.Text.Lazy.pack (' ':(drop 7 l)))] -- drop 7 removes the "Stream" prefix from the operators    
-                 clustBy (n,l) = C (n `mod` 2) $ N (n,l)
-                 myFC m        = [GraphAttrs [toLabel $ "n == " ++ show m ++ " (mod 2)"]]
-
-
-clStreamGraphToDotGraph:: StreamGraph -> (GraphvizParams Int String String Int String) -> Data.GraphViz.DotGraph Int
-clStreamGraphToDotGraph sg params = graphElemsToDot params
-                                                  (map (\op -> (opid op,(show $ operator op) ++ " " ++ printParams (parameters op))) (operations sg)) -- nodes -- could remove printParams if operation only is needed
-                                                  (map (\(sourceNode,(destNode,destPort),oType) -> (sourceNode,destNode,oType)) (graphEdgesWithTypes sg)) -- edges
-
-clusteredParams2 :: Map.Map Id Partition -> GraphvizParams Int String String Int String
-clusteredParams2 idToPart = defaultParams {
-              isDirected = True
-            , globalAttributes = [myGraphAttrs, myNodeAttrs, myEdgeAttrs]
-            , fmtNode    = myFN
-            , fmtEdge    = myFE
-            , clusterBy  = clustBy
-            , clusterID  = Num . Int
-            , fmtCluster = myFC
-            }
-           where myGraphAttrs  = GraphAttrs [ -- RankDir FromLeft
-                                            BgColor [toWColor White] ]
-                 myNodeAttrs   =  NodeAttrs [ Shape BoxShape
-                                          , FillColor [toWColor White]
-                                          , Style [SItem Filled []] ]
-                 myEdgeAttrs   =  EdgeAttrs [ Weight (Int 10)
-                                          , Color [toWColor Black]
-                                          , FontColor (toColor Black) ]
-                 myFN (n,l)    = [(Label . StrLabel) (Data.Text.Lazy.pack (drop 6 l))] -- pack converts the strings used in streamGraph to Text used by GraphvizParams 
-                                                                                       -- drop 6 removes the "Stream " prefix
-                 myFE (f,t,l)  = [(Label . StrLabel) (Data.Text.Lazy.pack (' ':(drop 7 l)))] -- drop 7 removes the "Stream" prefix from the operators    
-                 clustBy (n,l) = C (idToPart Map.! n) $ N (n,l)
-                 myFC p        = [GraphAttrs [toLabel $ "Partition " ++ show p]]
-
-drawPartitionedStreamGraph::  StreamGraph -> [(Partition,[Id])] -> String -> IO FilePath
-drawPartitionedStreamGraph sg parts filename = addExtension (runGraphviz (clStreamGraphToDotGraph sg (clusteredParams2 (mkPartMap parts)))) Png filename
-
-mkPartMap:: [(Partition,[Id])] -> Map.Map Id Partition
-mkPartMap ps = foldl (\m (i,p) -> Map.insert i p m) Map.empty (concatMap (\(p,ids)->[(i,p)|i<-ids]) ps)
-
-drawStreamGraph:: StreamGraph -> String -> IO FilePath
-drawStreamGraph sg filename = addExtension (runGraphviz (streamGraphToDotGraph sg myParams)) Png filename 
-
+v7 = StreamVertex 1 Source ["<source of random tweets>"] "String"
+v8 = StreamVertex 2 Map    ["filter (('#'==).head) . words"] "[String]"
+v9 = StreamVertex 5 Expand [""]                 "[String]"
+v10 = StreamVertex 6 Sink   ["mapM_ print"] "String"
+expandEx :: StreamGraph
+expandEx = path [v7, v8, v9, v10]

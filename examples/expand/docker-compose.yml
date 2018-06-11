@@ -1,11 +1,10 @@
-version: '3'
-services:
-
-  haskellserver:
-    build: server
-    tty: true
-
-  haskellclient:
-    build: client
-    depends_on:
-      - haskellserver
+node2:
+  build: node2
+  ports:
+    - "9001:9001"
+  tty: true
+node1:
+  build: node1
+  links:
+    - node2
+  tty: true
