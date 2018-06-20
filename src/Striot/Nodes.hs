@@ -115,7 +115,7 @@ readListFromSource = go 0
         msg x = do
             now     <- getCurrentTime
             payload <- pay
-            return (E x now payload)
+            return (Event x (Just now) (Just payload))
 
 
 {- processSocket is a wrapper function that handles concurrently

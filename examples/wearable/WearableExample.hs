@@ -1,4 +1,4 @@
-module WearableUseCaseCloudCom2 where -- as WearableUseCaseCloudCom1, but keeps the timestamp in the header of the event
+module WearableUseCaseCloudCom2 where
 
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
@@ -82,12 +82,11 @@ jan_1_1900_time = UTCTime jan_1_1900_day 0 -- gives example time for the first e
 sampleDataGenerator :: Int -> UTCTime -> Int -> [Int] -> Stream PebbleMode60 -- Start Time -> Interval between events in ms ->
                                                                           -- List of random numbers -> Events
 sampleDataGenerator i start interval rands =
-    E
+         Event
             i
-            start
-            ( (rands !! 0, rands !! 1, rands !! 2)
-            , if rands !! 3 < 10 then 1 :: Int else 0 :: Int
-            )
+            (Just start)
+            (Just ((rands !! 0, rands !! 1, rands !! 2)
+            , if rands !! 3 < 10 then 1 :: Int else 0 :: Int))
         : sampleDataGenerator
               (i + 1)
               (addUTCTime (toEnum (interval * 10 ^ 9)) start)
