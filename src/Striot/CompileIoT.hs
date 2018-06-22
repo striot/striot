@@ -164,7 +164,8 @@ generateSinkFn:: StreamGraph -> String
 generateSinkFn sg = "sink1 :: Show a => Stream a -> IO ()\nsink1 = " ++
     (intercalate "\n" $ parameters $ head $ reverse $ vertexList sg) ++ "\n"
 
-generateNodeLink n = "main = nodeLink streamGraphFn 9001 \"node"++(show n)++"\" 9001"
+generateNodeLink :: Integer -> String
+generateNodeLink n = "main = nodeLink streamGraphFn \"9001\" \"node"++(show n)++"\" \"9001\""
 
 -- warts:
 --  we accept a list of onward nodes but nodeSource only accepts one anyway
@@ -175,6 +176,7 @@ generateNodeSrc partId nodes = let
     port = 9001 + partId -1 -- XXX Unlikely to always be correct
     in "main = nodeSource src1 streamGraphFn \""++host++"\" \""++(show port)++"\""
 
+generateNodeSink :: Int -> String
 generateNodeSink v = case v of
     1 -> "main = nodeSink streamGraphFn sink1 \"9001\""
     2 -> "main = nodeSink2 streamGraphFn sink1 \"9001\" \"9002\""
@@ -184,10 +186,11 @@ generateCodeFromVertex :: (Int, StreamVertex) -> String
 generateCodeFromVertex (opid, v)  = let
     op = operator v
     params = case op of
-        Join   -> []
-        Expand -> []
-        Scan   -> [" ", intercalate " " (parameters v)]
-        _      -> [" (" , intercalate "\n" (parameters v) , ")"]
+        Join      -> []
+        Expand    -> []
+        Scan      -> [" ", intercalate " " (parameters v)]
+        FilterAcc -> [" ", intercalate " " (parameters v)]
+        _         -> [" (" , intercalate "\n" (parameters v) , ")"]
     args = case op of
         Merge -> []
         Join  -> [" n", show (opid-2), " n", show (opid-1)]
