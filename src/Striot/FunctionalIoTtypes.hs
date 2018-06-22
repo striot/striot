@@ -4,7 +4,9 @@ import Data.Time (UTCTime) -- http://two-wrongs.com/haskell-time-library-tutoria
 import GHC.Generics (Generic)
 import Data.Aeson
 
-data Event alpha     =  Event {eventId :: Int, time :: Maybe Timestamp, value :: Maybe alpha}
+data Event alpha = Event { eventId :: Int
+                         , time    :: Maybe Timestamp
+                         , value   :: Maybe alpha}
      deriving (Eq, Ord, Show, Read, Generic)
 
 type Timestamp       = UTCTime
