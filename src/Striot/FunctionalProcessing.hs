@@ -1,10 +1,7 @@
-module Striot.FunctionalProcessing ( Source
-                                   , streamFilter
+module Striot.FunctionalProcessing (  streamFilter
                                    , streamMap
                                    , streamWindow
                                    , streamWindowAggregate
-                                   --, joinWindowsE
-                                   --, joinWindowsW
                                    , streamMerge
                                    , streamJoin
                                    , streamJoinE
@@ -27,121 +24,74 @@ module Striot.FunctionalProcessing ( Source
 import Striot.FunctionalIoTtypes
 import Data.Time (UTCTime,addUTCTime,diffUTCTime,NominalDiffTime)
 
-type Source alpha = Stream alpha -- a source of data
-
 -- Define the Basic IoT Stream Functions
 
 -- Filter a Stream ...
-type EventFilter alpha = alpha -> Bool                                     -- the type of the user-supplied function
+type EventFilter alpha = alpha -> Bool                                 -- the type of the user-supplied function
 
-streamFilter :: EventFilter alpha -> Stream alpha -> Stream alpha           -- if the value in the event meets the criteria then it can pass through
-streamFilter ff []                      = []
-streamFilter ff (e@(E id t v):r) | ff v      = e         : streamFilter ff r
-                                 | otherwise = (T id t  ): streamFilter ff r     -- always allow timestamps to pass through for use in time-based windowing
-streamFilter ff (e@(V id   v):r) | ff v      = e         : streamFilter ff r
-                                 | otherwise =             streamFilter ff r     -- needs a T to be generated?
-streamFilter ff (e@(T id t  ):r)             = e         : streamFilter ff r
-
--- Map a Stream ...
-streamMap :: EventMap alpha beta -> Stream alpha -> Stream beta
-streamMap fm s = map (eventMap fm) s
+streamFilter :: EventFilter alpha -> Stream alpha -> Stream alpha      -- if the value in the event meets the criteria then it can pass through
+streamFilter ff s = filter (\(Event eid t v) -> case v of
+                                                  Just val -> ff val
+                                                  Nothing  -> True)      -- allow timestamped events to pass through for time-based windowing
+                           s
 
 type EventMap alpha beta = alpha -> beta
-eventMap :: EventMap alpha beta -> Event alpha -> Event beta
-eventMap fm (E id t v) = E id t (fm v)
-eventMap fm (V id   v) = V id   (fm v)
-eventMap fm (T id t  ) = T id t        -- allow timestamps to pass through untouched
+-- Map a Stream ...
+streamMap :: EventMap alpha beta -> Stream alpha -> Stream beta
+streamMap fm s = map (\(Event eid t v) -> case v of
+                                            Just val -> Event eid t (Just (fm val))
+                                            Nothing  -> Event eid t Nothing       ) -- allow timestamped events to pass through for time-based windowing
+                     s
 
 -- create and aggregate windows
 type WindowMaker alpha = Stream alpha -> [Stream alpha]
 type WindowAggregator alpha beta = [alpha] -> beta
 
 streamWindow :: WindowMaker alpha -> Stream alpha -> Stream [alpha]
-streamWindow fwm s = map (\win-> if timedEvent $ head win
-                                 then E 0 (time $ head win) (getVals win)
-                                 else V 0                   (getVals win))
-                         (fwm s)
+streamWindow fwm s = map (\win-> case win of
+                                    (Event _ t _):_ -> Event 0 t       (Just (getVals win))
+                                    []              -> Event 0 Nothing (Just []))
+                        (fwm s)
+           where getVals :: Stream alpha -> [alpha]
+                 getVals s = map (\(Event _ _ (Just val))->val) $ filter dataEvent s
 
+-- a useful function building on streamWindow and streamMap
 streamWindowAggregate :: WindowMaker alpha -> WindowAggregator alpha beta -> Stream alpha -> Stream beta
 streamWindowAggregate fwm fwa s = streamMap fwa $ streamWindow fwm s
 
-getVals :: Stream alpha -> [alpha]
-getVals s = map value $ filter dataEvent s
-
-splitAtValuedEvents :: Int -> Stream alpha -> (Bool,Stream alpha,Stream alpha)
-splitAtValuedEvents length s = splitAtValuedEvents' length [] s
-
-splitAtValuedEvents':: Int -> Stream alpha -> Stream alpha -> (Bool,Stream alpha,Stream alpha)
-splitAtValuedEvents' 0      acc s                     = (True ,acc, s)
-splitAtValuedEvents' length acc []                    = (False,[] ,[])
-splitAtValuedEvents' length acc (h:t) | dataEvent h = splitAtValuedEvents' (length-1) (acc++[h]) t
-                                      | otherwise   = splitAtValuedEvents' length     acc        t
-
--- Examples of WindowMaker functions
--- A sliding window of specified length : a new window is created for every event received
+-- some examples of window functions
 sliding :: Int -> WindowMaker alpha
-sliding wLength s =
-    let (validWindow, fstWindow, rest) = splitAtValuedEvents wLength s
-    in   -- ignores events with no value
-        if validWindow then fstWindow : sliding' fstWindow rest else []
+sliding wLength s = sliding' wLength $ filter dataEvent s
+           where sliding':: Int -> WindowMaker alpha
+                 sliding' wLength []      = []
+                 sliding' wLength s@(h:t) = (take wLength s) : sliding' wLength t
 
-sliding' :: Stream alpha -> WindowMaker alpha
-sliding' s@(_:tb) (h:t)
-    | dataEvent h = let newWindow = tb ++ [h]
-                    in  newWindow : sliding' newWindow t
-    | otherwise = sliding' s t
-sliding' _  [] = []
-sliding' [] _  = []
-
-slidingTime :: Int -> WindowMaker alpha -- needs checking
-slidingTime tLength s@(h:t) =
-    let endTime           = addUTCTime (milliToTimeDiff tLength) (time h)
-        (fstBuffer, rest) = timeTake endTime s
-        revfstBuffer      = reverse fstBuffer
-        validWindow       = time (head revfstBuffer) < endTime
-    in  if validWindow
-            then fstBuffer : slidingTime' tLength revfstBuffer rest
-            else []
-slidingTime _ [] = []
-
-slidingTime' :: Int -> Stream alpha -> WindowMaker alpha
-slidingTime' tLength buffer s@(h:t) =
-    let
-        (sametEvents, rest) = span (\e -> time e == time h) t -- find all next events with same time
-        startTime           = addUTCTime (-(milliToTimeDiff tLength)) (time h)
-        (revnewWindow, remaining) =
-            span (\e -> time e > startTime) (h : sametEvents ++ buffer)
-        newWindow = reverse revnewWindow
-        validWindow =
-            (time (last revnewWindow) == startTime) || not (null remaining)
-    in
-        if validWindow
-            then newWindow : slidingTime' tLength revnewWindow rest
-            else []
-slidingTime' _ _ [] = []
+slidingTime:: Int -> WindowMaker alpha  -- the first argument is the window length in milliseconds
+slidingTime _       []                         = []
+slidingTime tLength s@((Event _ (Just t) _):_) = slidingTime' tLength t $ filter timedEvent s
+    where slidingTime':: Int -> UTCTime -> WindowMaker alpha
+          slidingTime' tLength tStart s@(h:t) = fstBuffer : slidingTime tLength t
+                 where fstBuffer = fst $ timeTake (addUTCTime (milliToTimeDiff tLength) tStart) s
 
 timeTake :: UTCTime -> Stream alpha -> (Stream alpha, Stream alpha)
-timeTake endTime = span (\h -> time h < endTime) -- changed from <=
+timeTake endTime s = span (\(Event _ (Just t) _) -> t < endTime) s -- changed from <=
 
 milliToTimeDiff :: Int -> NominalDiffTime
 milliToTimeDiff x = toEnum (x * 10 ^ 9)
 
 chop :: Int -> WindowMaker alpha
-chop wLength s =
-    let (validWindow, fstWindow, rest) = splitAtValuedEvents wLength s
-    in  -- remove events with no value
-        if validWindow then fstWindow : chop wLength rest else []
+chop wLength s = chop' wLength $ filter dataEvent s
+     where chop' wLength [] = []
+           chop' wLength s  = w:(chop' wLength r) where (w,r) = splitAt wLength s
 
-chopTime :: Int -> WindowMaker alpha -- assumes all events have a timestamp; the first argument is in milli seconds
-chopTime tLength s@(h:t) = chopTime' tLength (time h) s
-chopTime _       []      = []
-
-chopTime' :: Int -> UTCTime -> WindowMaker alpha -- assumes all events have a timestamp; the first argument is in milliseconds
-chopTime' tLength start s@(h:t) =
-    let endTime = addUTCTime (milliToTimeDiff tLength) start
-    in  let (fstBuffer, rest) = timeTake endTime s
-        in  fstBuffer : chopTime' tLength endTime rest
-chopTime' _ _ [] = []
+chopTime :: Int -> WindowMaker alpha -- N.B. discards events without a timestamp
+chopTime _       []                         = []
+chopTime tLength s@((Event _ (Just t) _):_) = chopTime' (milliToTimeDiff tLength) t $ filter timedEvent s
+    where chopTime' :: NominalDiffTime -> UTCTime -> WindowMaker alpha -- the first argument is in milliseconds
+          chopTime' _    _      []    = []
+          chopTime' tLen tStart s     = let endTime           = addUTCTime tLen tStart
+                                            (fstBuffer, rest) = timeTake endTime s
+                                        in  fstBuffer : chopTime' tLen endTime rest
 
 complete :: WindowMaker alpha
 complete s = [s]
@@ -151,106 +101,94 @@ streamMerge:: [Stream alpha]-> Stream alpha
 streamMerge []     = []
 streamMerge (x:[]) = x
 streamMerge (x:xs) = merge' x (streamMerge xs)
-
-merge':: Stream alpha -> Stream alpha -> Stream alpha
-merge' xs         []                                          = xs
-merge' []         ys                                          = ys
-merge' s1@(e1:xs) s2@(e2:ys) | timedEvent e1 && timedEvent e2 = if   time e1 < time e2
-                                                                then e1: merge' s2 xs
-                                                                else e2: merge' ys s1
-                             | otherwise                      = e1: merge' s2 xs  -- arbitrary ordering if 1 or 2 of the events aren't timed
-                                                                                  -- swap order of streams so as to interleave
+    where merge':: Stream alpha -> Stream alpha -> Stream alpha
+          merge' xs                               []                                           = xs
+          merge' []                               ys                                           = ys
+          merge' s1@(e1@(Event _ (Just t1) _):xs) s2@(e2@(Event _ (Just t2) _):ys) | t1 < t2   = e1: merge' s2 xs
+                                                                                   | otherwise = e2: merge' ys s1
+          merge' (e1:xs)                          s2                                           = e1: merge' s2 xs  -- arbitrary ordering if 1 or 2 of the events aren't timed
+                                                                                                                   -- swap order of streams so as to interleave
 
 -- Join 2 streams by combining elements
 streamJoin :: Stream alpha -> Stream beta -> Stream (alpha,beta)
-streamJoin []                 []                 = []
-streamJoin _                  []                 = []
-streamJoin []                 _                  = []
-streamJoin ((E id1 t1 v1):r1) ((E id2 t2 v2):r2) = (E id1 t1 (v1,v2)):(streamJoin r1 r2)
-streamJoin ((E id1 t1 v1):r1) ((V id2    v2):r2) = (E id1 t1 (v1,v2)):(streamJoin r1 r2)
-streamJoin ((V id1    v1):r1) ((E id2 t2 v2):r2) = (E id1 t2 (v1,v2)):(streamJoin r1 r2)
-streamJoin ((V id1    v1):r1) ((V id2    v2):r2) = (V id2    (v1,v2)):(streamJoin r1 r2)
-streamJoin s1                 ((T id2 t2   ):r2) = (T id2 t2)        :(streamJoin s1 r2)
-streamJoin ((T id1 t1   ):r1) s2                 = (T id1 t1)        :(streamJoin r1 s2)
+streamJoin []                               []                               = []
+streamJoin _                                []                               = []
+streamJoin []                               _                                = []
+streamJoin    ((Event id1 t1 (Just v1)):r1)    ((Event _   _  (Just v2)):r2) = (Event id1 t1 (Just(v1,v2))):(streamJoin r1 r2)
+streamJoin    ((Event _   _  Nothing  ):r1) s2@((Event _   _  (Just v2)):_ ) = streamJoin r1 s2
+streamJoin s1@((Event _   _  (Just v1)):_ )    ((Event _   _  Nothing  ):r2) = streamJoin s1 r2
+streamJoin    ((Event _   _  Nothing  ):r1)    ((Event _   _  Nothing  ):r2) = streamJoin r1 r2
 
--- Join 2 streams of different types by combining windows
+-- Join 2 streams by combining windows - some useful functions that build on streamJoin
 type JoinFilter alpha beta        = alpha -> beta -> Bool
 type JoinMap    alpha beta gamma  = alpha -> beta -> gamma
 
 streamJoinE :: WindowMaker alpha ->
-              WindowMaker beta ->
-              JoinFilter alpha beta ->
-              JoinMap alpha beta gamma ->
-              Stream alpha ->
-              Stream beta  ->
-              Stream gamma
+               WindowMaker beta ->
+               JoinFilter alpha beta ->
+               JoinMap alpha beta gamma ->
+               Stream alpha ->
+               Stream beta  ->
+               Stream gamma
 streamJoinE fwm1 fwm2 fwj fwm s1 s2 = streamExpand $ streamMap (cartesianJoin fwj fwm) $ streamJoin (streamWindow fwm1 s1) (streamWindow fwm2 s2)
+    where cartesianJoin :: JoinFilter alpha beta -> JoinMap alpha beta gamma -> ([alpha],[beta]) -> [gamma]
+          cartesianJoin jf jm (w1,w2) = map (\(e1,e2)->jm e1 e2) $ filter (\(e1,e2)->jf e1 e2) $ cartesianProduct w1 w2
 
---was joinWindowsE fwj fwm $ combineStreamWindows fwm1 fwm2 s1 s2
-
-cartesianJoin :: JoinFilter alpha beta -> JoinMap alpha beta gamma -> ([alpha],[beta]) -> [gamma]
-cartesianJoin jf jm (w1,w2) = map (\(e1,e2)->jm e1 e2) $ filter (\(e1,e2)->jf e1 e2) $ cartesianProduct w1 w2
-
-cartesianProduct:: [alpha] -> [beta] -> [(alpha,beta)]
-cartesianProduct s1 s2 = [(a,b)|a<-s1,b<-s2]
+          cartesianProduct:: [alpha] -> [beta] -> [(alpha,beta)]
+          cartesianProduct s1 s2 = [(a,b)|a<-s1,b<-s2]
 
 streamJoinW :: WindowMaker alpha ->
-              WindowMaker beta  ->
+               WindowMaker beta  ->
               ([alpha] -> [beta] -> gamma)      -> Stream alpha -> Stream beta  -> Stream gamma
 streamJoinW fwm1 fwm2 fwj s1 s2 = streamMap (\(w1,w2)->fwj w1 w2) $ streamJoin (streamWindow fwm1 s1) (streamWindow fwm2 s2)
 
 -- Stream Filter with accumulating parameter
 streamFilterAcc:: (beta -> alpha -> beta) -> beta -> (alpha -> beta -> Bool) -> Stream alpha -> Stream alpha
-streamFilterAcc accfn acc filterfn []              = []
-streamFilterAcc accfn acc filterfn ((T id t):rest) =         streamFilterAcc accfn    acc filterfn rest
-streamFilterAcc accfn acc filterfn (e       :rest) = let  newAcc = accfn acc (value e) in
-                                                        if   filterfn (value e) acc
-                                                        then e:(streamFilterAcc accfn newAcc filterfn rest)
-                                                        else   (streamFilterAcc accfn newAcc filterfn rest)
+streamFilterAcc accfn acc ff []                         = []
+streamFilterAcc accfn acc ff (e@(Event _ _ (Just v)):r) | ff v acc  = e:(streamFilterAcc accfn (accfn acc v) ff r)
+                                                        | otherwise =    streamFilterAcc accfn (accfn acc v) ff r
+streamFilterAcc accfn acc ff (e@(Event _ _ Nothing ):r)             = e:(streamFilterAcc accfn acc           ff r) -- allow events without data to pass through
 
 -- Stream map with accumulating parameter
 streamScan:: (beta -> alpha -> beta) -> beta -> Stream alpha -> Stream beta
-streamScan mapfn acc ((T id t  ):rest) =                 (streamScan mapfn acc    rest)
-streamScan mapfn acc ((E id t v):rest) = (E id t newacc):(streamScan mapfn newacc rest) where newacc = mapfn acc v
-streamScan mapfn acc ((V id   v):rest) = (V id   newacc):(streamScan mapfn newacc rest) where newacc = mapfn acc v
-streamScan mapfn acc []                = (V 0    acc   ):[]
+streamScan mf acc []                        = (Event 0  Nothing  (Just acc   )):[]
+streamScan mf acc ((Event id t (Just v)):r) = (Event id t        (Just newacc)):(streamScan mf newacc r) where newacc = mf acc v
+streamScan mf acc ((Event id t Nothing ):r) = (Event id t        Nothing      ):(streamScan mf acc    r) -- allow events without data to pass through
 
 -- Map a Stream to a set of events
 streamExpand :: Stream [alpha] -> Stream alpha
 streamExpand s = concatMap eventExpand s
+      where eventExpand :: Event [alpha] -> [Event alpha]
+            eventExpand (Event id t (Just v)) = map (\nv->Event id t (Just nv)) v
+            eventExpand (Event id t Nothing ) = [Event id t Nothing]
 
-eventExpand :: Event [alpha] -> [Event alpha]
-eventExpand (E id t v) = map (\nv->E id t nv) v
-eventExpand (V id   v) = map (\nv->V id   nv) v
-eventExpand (T id t  ) = [T id t]
+--streamSource :: Stream alpha -> Stream alpha
+--streamSource ss = ss
 
-streamSource :: Stream alpha -> Stream alpha
-streamSource ss = ss
-
-streamSink:: (Stream alpha -> beta) -> Stream alpha -> beta
-streamSink ssink s = ssink s
+-- streamSink:: (Stream alpha -> beta) -> Stream alpha -> beta
+-- streamSink ssink s = ssink s
 
 --- Tests ------
-t1 :: Int -> Int -> Stream alpha -> (Bool,Stream alpha,Stream alpha)
-t1 tLen sLen s = splitAtValuedEvents tLen (take sLen s)
+--t1 :: Int -> Int -> Stream alpha -> (Bool,Stream alpha,Stream alpha)
+--t1 tLen sLen s = splitAtValuedEvents tLen (take sLen s)
 
 s1 :: Stream Int
-s1 = [(E 0 (addUTCTime i (read "2013-01-01 00:00:00")) 999)|i<-[0..]]
+s1 = [(Event 0 (Just (addUTCTime i (read "2013-01-01 00:00:00"))) (Just 999))|i<-[0..]]
 
 s2 :: Stream Int
-s2 = [T 0 (addUTCTime i (read "2013-01-01 00:00:00")) |i<-[0..]]
+s2 = [Event 0 (Just (addUTCTime i (read "2013-01-01 00:00:00"))) Nothing |i<-[0..]]
 
 s3 :: Stream Int
 s3 = streamMerge [s1,s2]
 
 s4 :: Stream Int
-s4 = [V i i|i<-[0..]]
+s4 = [Event i Nothing (Just i)|i<-[0..]]
 
 s5 :: Stream Int
 s5 = streamMerge [s2,s4]
 
 s6 :: Stream Int
-s6 = [V i i|i<-[100..]]
+s6 = [Event i Nothing (Just i)|i<-[100..]]
 
 ex1 i = streamWindow (sliding i) s3
 
