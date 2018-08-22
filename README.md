@@ -173,7 +173,7 @@ An example is emitting an event giving a count of the number of events received 
 
 ```haskell
 counter:: Stream alpha -> Stream Int
-counter s = scanStream (+1) 0 s
+counter s = streamScan (\c _ -> c+1) 0 s
 ```
 
 ### Expand
