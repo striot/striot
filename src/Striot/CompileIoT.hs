@@ -157,7 +157,7 @@ connectNodeId sg parts cuts = let
     in map fst destGs
 
 generateSrcFn :: StreamGraph -> String
-generateSrcFn sg = "src1 :: IO String\nsrc1 = " ++
+generateSrcFn sg = "src1 = " ++
     (intercalate "\n" $ parameters $ head $ vertexList sg) ++ "\n"
 
 generateSinkFn:: StreamGraph -> String
