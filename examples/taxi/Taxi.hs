@@ -121,11 +121,11 @@ stringsToTrip s = error ("error in input: " ++ intercalate "," s)
 ----------------------------------------------------------------------------------------------------------------
 
 journeyChanges :: Stream ((UTCTime, UTCTime),[(Journey, Int)]) -> Stream ((UTCTime, UTCTime),[(Journey, Int)])
-journeyChanges (Event eid t (Just val):r) = streamFilterAcc (\acc h -> if snd h == snd acc then acc else h) val (\h acc -> snd h /= snd acc) r
+journeyChanges (Event _ _ (Just val):r) = streamFilterAcc (\acc h -> if snd h == snd acc then acc else h) val (\h acc -> snd h /= snd acc) r
 
 --- removes consecutive repeated values from a stream, leaving only the changes
 changes :: Eq alpha => Stream alpha -> Stream alpha
-changes (e@(Event eid t (Just val)):r) = e : streamFilterAcc (\acc h -> h) val (/=) r
+changes (e@(Event _ _ (Just val)):r) = e : streamFilterAcc (\_ h -> h) val (/=) r
 
 -- produces an ordered list of the i most frequent elements from list l ---------------------------------
 topk :: (Num freq, Ord freq, Ord alpha) => Int -> [alpha] -> [(alpha, freq)]
@@ -225,11 +225,11 @@ pickupHistory :: [(Trip, Journey)] -> Map.Map Cell [Trip]
 pickupHistory = foldr (\t -> Map.insertWith (++) (start $ snd t) [fst t]) Map.empty
 
 newestPickup :: [(Trip, Journey)] -> Map.Map (Cell, Medallion) UTCTime
-newestPickup = foldr (\t -> Map.insertWith (\newt existing -> if newt>existing then newt else existing)
+newestPickup = foldr (\t -> Map.insertWith (\newt existing -> if newt > existing then newt else existing)
                          (start $ snd t, medallion $ fst t) (pickupDatetime $ fst t)) Map.empty
 
 oldestDropoff :: [(Trip, Journey)] -> Map.Map (Cell, Medallion) UTCTime
-oldestDropoff= foldr (\t -> Map.insertWith (\newt existing -> if newt<existing then newt else existing)
+oldestDropoff = foldr (\t -> Map.insertWith (\newt existing -> if newt < existing then newt else existing)
                           (end $ snd t, medallion $ fst t) (dropoffDatetime $ fst t)) Map.empty
 
 --"The profit that originates from an area is computed by calculating the median fare + tip for trips that started in the area and ended within the last 15 minutes."
@@ -238,23 +238,23 @@ profit ts = median $ map (\t -> fareAmount t + tripAmount t) ts
 
 median :: Ord alpha => [alpha] -> alpha
 median l =  let sl = sort l in
-                sl !! floor (fromIntegral (length sl) / 2.0)
+                sl !! floor (fromIntegral (length sl) / (2.0 :: Double))
 
 cellProfit :: [(Trip, Journey)] -> Map.Map Cell Dollars
 cellProfit tjs = Map.map profit $ pickupHistory tjs
 
 --"The number of empty taxis in an area is the sum of taxis that had a drop-off location in that area less than 30 minutes ago and had no following pickup yet."
 
-taxisDroppedOffandNotPickedUp :: Map.Map (Cell, Medallion) UTCTime -> Map.Map (Cell, Medallion) UTCTime -> [(Trip, Journey)] -> [Cell]
-taxisDroppedOffandNotPickedUp np od ts = map (\(t, j) -> start j)
-                                       $ filter (\(t, j) -> (Map.notMember (start j, medallion t) np ||
-                                                            (np Map.! (start j, medallion t) < dropoffDatetime t))) ts
+taxisDroppedOffandNotPickedUp :: Map.Map (Cell, Medallion) UTCTime -> [(Trip, Journey)] -> [Cell]
+taxisDroppedOffandNotPickedUp np ts = map (\(_, j) -> start j)
+                                    $ filter (\(t, j) -> (Map.notMember (start j, medallion t) np ||
+                                                         (np Map.! (start j, medallion t) < dropoffDatetime t))) ts
 
 emptyTaxisPerCell ::  [(Trip, Journey)] -> Map.Map Cell Int
-emptyTaxisPerCell ts = foldl (\m c -> Map.insertWith (+) c 1 m) Map.empty (taxisDroppedOffandNotPickedUp (newestPickup ts) (oldestDropoff ts) ts)
+emptyTaxisPerCell ts = foldl (\m c -> Map.insertWith (+) c 1 m) Map.empty (taxisDroppedOffandNotPickedUp (newestPickup ts) ts)
 
 allCells :: Int -> Int -> [Cell]
-allCells latMax longMax = [Cell lat long | lat <- [1..latMax], long <- [1..longMax]]
+allCells latMax longMax = [Cell lat' long' | lat' <- [1..latMax], long' <- [1..longMax]]
 
 initCellMap :: Int -> Int -> a -> Map.Map Cell a
 initCellMap latMax longMax val = Map.fromList (zip (allCells latMax longMax) (repeat val))
@@ -270,8 +270,8 @@ profitableCells s = changes
                   $ streamMap (topk 10)
                   $ streamWindow (slidingTime 1800000)
                   $ streamJoinW (slidingTime 900000) (slidingTime 1800000)
-                                (\a b -> profitability (emptyTaxisPerCell b)(cellProfit a)) processedStream processedStream
-                       where processedStream = streamFilter (\(t, j) -> inRangeQ2 (start j) && inRangeQ2 (end j))
+                                (\a b -> profitability (emptyTaxisPerCell b) (cellProfit a)) processedStream processedStream
+                       where processedStream = streamFilter (\(_, j) -> inRangeQ2 (start j) && inRangeQ2 (end j))
                                              $ streamMap (\t -> (t, tripToJourney t)) s
 
 mainQ2 :: IO ()
@@ -280,7 +280,7 @@ mainQ2 = do contents <- readFile "sorteddata.csv"
 
 ---------------- Tests of Q2 ------------------------------------------------------
 q2processedStream :: Stream Trip -> Stream (Trip, Journey)
-q2processedStream s = streamFilter (\(t, j) -> inRangeQ2 (start j) && inRangeQ2 (end j))
+q2processedStream s = streamFilter (\(_, j) -> inRangeQ2 (start j) && inRangeQ2 (end j))
                     $ streamMap (\t -> (t, tripToJourney t)) s
 
 q2Join :: Stream (Trip, Journey) -> Stream (Map.Map Cell Dollars)
