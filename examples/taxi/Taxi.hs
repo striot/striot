@@ -39,7 +39,7 @@ data Trip = Trip
    , fareAmount       :: Dollars
    , surcharge        :: Dollars
    , mtaTax           :: Dollars
-   , tripAmount       :: Dollars
+   , tipAmount        :: Dollars
    , tollsAmount      :: Dollars
    , totalAmount      :: Dollars
    } deriving (Eq, Ord, Show)
@@ -234,7 +234,7 @@ oldestDropoff = foldr (\t -> Map.insertWith (\newt existing -> if newt < existin
 
 --"The profit that originates from an area is computed by calculating the median fare + tip for trips that started in the area and ended within the last 15 minutes."
 profit :: [Trip] -> Dollars
-profit ts = median $ map (\t -> fareAmount t + tripAmount t) ts
+profit ts = median $ map (\t -> fareAmount t + tipAmount t) ts
 
 median :: Ord alpha => [alpha] -> alpha
 median l =  let sl = sort l in
