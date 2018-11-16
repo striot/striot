@@ -14,11 +14,11 @@ source x = "do\n\
 \    return \""++x++"\""
 
 
-v1 = StreamVertex 1 Source [source "foo"]              "String"
-v2 = StreamVertex 2 Map    ["Prelude.id"]              "String"
-v3 = StreamVertex 3 Source [source "bar"]              "String"
-v4 = StreamVertex 4 Map    ["Prelude.id"]              "String"
-v5 = StreamVertex 5 Merge  ["[n1,n2]"]                 "String"
+v1 = StreamVertex 1 Source [source "foo"]  "String"
+v2 = StreamVertex 2 Map    ["id", "s"]     "String"
+v3 = StreamVertex 3 Source [source "bar"]  "String"
+v4 = StreamVertex 4 Map    ["id", "s"]     "String"
+v5 = StreamVertex 5 Merge  ["[s1,s2]"]     "String"
 v6 = StreamVertex 6 Sink   ["mapM_ print"] "String"
 
 mergeEx :: StreamGraph

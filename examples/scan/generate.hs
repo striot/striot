@@ -13,9 +13,9 @@ source x = "do\n\
 \    return \""++x++"\""
 
 v1 = StreamVertex 1 Source [source "foo"] "String"
-v2 = StreamVertex 2 Map    ["Prelude.id"] "String"
+v2 = StreamVertex 2 Map    ["id", "s"] "String"
 
-v5 = StreamVertex 5 Scan   ["(\\old _ -> old + 1)", "0"] "String"
+v5 = StreamVertex 5 Scan   ["(\\old _ -> old + 1)", "0", "s"] "String"
 v6 = StreamVertex 6 Sink   ["mapM_ print"] "Int"
 
 scanEx :: StreamGraph
