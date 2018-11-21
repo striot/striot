@@ -8,7 +8,6 @@ RUN cabal update && \
     cabal install \
     network \
     split \
-    stm \
     HTF \
     aeson \
     unagi-chan \

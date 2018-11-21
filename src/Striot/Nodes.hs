@@ -7,15 +7,14 @@ module Striot.Nodes ( nodeSink
                     ) where
 
 import           Control.Concurrent
-import           Control.Concurrent.STM
 import           Control.Concurrent.Chan.Unagi as U
-import           Control.Monad              (forever, when)
+import           Control.Monad                 (forever, when)
 import           Data.Aeson
-import qualified Data.ByteString            as B
-import qualified Data.ByteString.Char8      as BC (putStrLn)
-import qualified Data.ByteString.Lazy.Char8 as BLC (hPutStrLn, putStrLn)
+import qualified Data.ByteString                as B
+import qualified Data.ByteString.Char8          as BC (putStrLn)
+import qualified Data.ByteString.Lazy.Char8     as BLC (hPutStrLn, putStrLn)
 import           Data.Maybe
-import           Data.Time                  (getCurrentTime)
+import           Data.Time                      (getCurrentTime)
 import           Network.Socket
 import           Striot.FunctionalIoTtypes
 import           System.IO
@@ -263,8 +262,8 @@ createSocket host port hints = do
     sock <- getSocket addr
     return (sock, addr)
   where
-    resolve host port hints = do
-        addr:_ <- getAddrInfo (Just hints) (isHost host) (Just port)
+    resolve host' port' hints' = do
+        addr:_ <- getAddrInfo (Just hints') (isHost host') (Just port')
         return addr
     getSocket addr = socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
     isHost h
