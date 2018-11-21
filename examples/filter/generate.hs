@@ -16,9 +16,9 @@ source = "do\n\
 \        return s"
 
 v1 = StreamVertex 1 Source [source]                         "String"
-v2 = StreamVertex 2 Map    ["Prelude.id"]                   "String"
-v3 = StreamVertex 3 Filter ["(\\s -> (read s :: Int) > 5)"] "String"
-v4 = StreamVertex 4 Window ["chop 1"] "[String]"
+v2 = StreamVertex 2 Map    ["id", "s"]                   "String"
+v3 = StreamVertex 3 Filter ["(\\i -> (read i :: Int) > 5)", "s"] "String"
+v4 = StreamVertex 4 Window ["(chop 1)", "s"] "[String]"
 v5 = StreamVertex 5 Sink   ["mapM_ $ putStrLn . (\"receiving \"++) . show . value"] "[String]"
 
 mergeEx :: StreamGraph

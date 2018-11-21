@@ -182,21 +182,27 @@ generateNodeSink v = case v of
     2 -> "main = nodeSink2 streamGraphFn sink1 \"9001\" \"9002\""
     v -> error "generateNodeSink: unhandled valence " ++ (show v)
 
+-- generateCodeFromVertex:  generates Haskell code to be included in a
+-- let expression, corresponding to the supplied StreamVertex. The Int
+-- argument represents the sequence order of the StreamVertex relative
+-- to others, and is used to calculate the names of the input stream
+-- argument(s).
+-- As the StreamVertex parameters may need to reference the input streams,
+-- the generated expression is wrapped in a lambda expression that names
+-- them 's' for unary input streams and 's1, s2' for binary input streams
+-- (Join and, for the time being, Merge)
+-- XXX: streamMerge is broken. We have no way of knowing how many input
+-- streams there are supposed to be, so we guess at 2.
 generateCodeFromVertex :: (Int, StreamVertex) -> String
 generateCodeFromVertex (opid, v)  = let
-    op = operator v
-    params = case op of
-        Join      -> []
-        Expand    -> []
-        Scan      -> [" ", intercalate " " (parameters v)]
-        FilterAcc -> [" ", intercalate " " (parameters v)]
-        _         -> [" (" , intercalate "\n" (parameters v) , ")"]
-    args = case op of
-        Merge -> []
-        Join  -> [" n", show (opid-2), " n", show (opid-1)]
-        _     -> [" n", show (opid-1)]
+    op      = operator v
+    lparams = if op `elem` [Join,Merge] then "s1 s2" else "s"
+    params  = intercalate " " (parameters v)
+    args    = concat $ if op `elem` [Join,Merge]
+        then ["n", show (opid-2), " n", show (opid-1)]
+        else ["n", show (opid-1)]
     in
-        concat $ [ "n", (show opid), " = " , show (operator v) ] ++ params ++ args
+        "n" ++ show opid ++ " = (\\" ++ lparams ++ " -> " ++ show op ++ " " ++ params ++ ") " ++ args
 
 -- how many incoming edges to this partition?
 -- + how many source nodes
