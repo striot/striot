@@ -1,4 +1,4 @@
-module Striot.FunctionalProcessing (  streamFilter
+module Striot.FunctionalProcessing ( streamFilter
                                    , streamMap
                                    , streamWindow
                                    , streamWindowAggregate
@@ -151,7 +151,7 @@ streamFilterAcc accfn acc ff (e@(Event _ _ Nothing ):r)             = e:(streamF
 
 -- Stream map with accumulating parameter
 streamScan:: (beta -> alpha -> beta) -> beta -> Stream alpha -> Stream beta
-streamScan mf acc []                        = (Event 0  Nothing  (Just acc   )):[]
+streamScan mf acc []                        = []
 streamScan mf acc ((Event id t (Just v)):r) = (Event id t        (Just newacc)):(streamScan mf newacc r) where newacc = mf acc v
 streamScan mf acc ((Event id t Nothing ):r) = (Event id t        Nothing      ):(streamScan mf acc    r) -- allow events without data to pass through
 
