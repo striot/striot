@@ -19,13 +19,13 @@ library
   exposed-modules:     Striot.FunctionalIoTtypes, Striot.FunctionalProcessing, Striot.Nodes, Striot.CompileIoT
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.9 && <4.10, containers >=0.5 && <0.6, split >=0.2 && <0.3, time >=1.6 && <1.7, network, HTF, aeson, bytestring, unagi-chan, algebraic-graphs >= 0.1
+  build-depends:       base, containers, split, time, network, HTF, aeson, bytestring, unagi-chan, algebraic-graphs
   hs-source-dirs:      src
-  default-language:    Haskell98
+  default-language:    Haskell2010
 
 test-suite test-striot
   hs-source-dirs:      src
   type:                exitcode-stdio-1.0
   Main-is:             TestMain.hs
-  build-depends:       base >=4.9 && <4.10, containers >=0.5 && <0.6, split >=0.2 && <0.3, time >=1.6 && <1.7, network, HTF, aeson, bytestring, unagi-chan, algebraic-graphs >= 0.1
-  Default-language:    Haskell98
+  build-depends:       base, containers, split, time, network, HTF, aeson, bytestring, unagi-chan, algebraic-graphs
+  Default-language:    Haskell2010
