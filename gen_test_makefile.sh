@@ -32,8 +32,15 @@ gen()
         done
         echo
     done
+
+    echo clean:
+    for d in "${a[@]}"; do
+        echo -e "\tmake -C $d clean"
+    done
+    echo
+
     echo default2: "${a[@]}"
-    echo .PHONY: default default2 "${a[@]}"
+    echo .PHONY: default default2 clean "${a[@]}"
 }
 
 gen
