@@ -147,7 +147,7 @@ generateCodeFromStreamGraph imports parts cuts (partId,sg) = intercalate "\n" $
 -- determine the node(s?) to connect on to from this partition
 connectNodeId :: StreamGraph -> [(Integer, StreamGraph)] -> [StreamGraph] -> [Integer]
 connectNodeId sg parts cuts = let
-    cut   = foldl overlay empty cuts
+    cut   = overlays cuts
     edges = edgeList cut
     outs  = vertexList sg
     outEs = filter (\(f,t) -> f `elem` outs) edges
