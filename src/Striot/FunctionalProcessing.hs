@@ -1,4 +1,4 @@
-module Striot.FunctionalProcessing (  streamFilter
+module Striot.FunctionalProcessing ( streamFilter
                                    , streamMap
                                    , streamWindow
                                    , streamWindowAggregate
@@ -151,16 +151,16 @@ streamFilterAcc accfn acc ff (e@(Event _ _ Nothing ):r)             = e:(streamF
 
 -- Stream map with accumulating parameter
 streamScan:: (beta -> alpha -> beta) -> beta -> Stream alpha -> Stream beta
-streamScan mf acc []                        = (Event 0  Nothing  (Just acc   )):[]
-streamScan mf acc ((Event id t (Just v)):r) = (Event id t        (Just newacc)):(streamScan mf newacc r) where newacc = mf acc v
-streamScan mf acc ((Event id t Nothing ):r) = (Event id t        Nothing      ):(streamScan mf acc    r) -- allow events without data to pass through
+streamScan _  _   []                       = []
+streamScan mf acc (Event eid t (Just v):r) = Event eid t (Just newacc):streamScan mf newacc r where newacc = mf acc v
+streamScan mf acc (Event eid t Nothing :r) = Event eid t Nothing      :streamScan mf acc    r -- allow events without data to pass through
 
 -- Map a Stream to a set of events
 streamExpand :: Stream [alpha] -> Stream alpha
 streamExpand s = concatMap eventExpand s
       where eventExpand :: Event [alpha] -> [Event alpha]
-            eventExpand (Event id t (Just v)) = map (\nv->Event id t (Just nv)) v
-            eventExpand (Event id t Nothing ) = [Event id t Nothing]
+            eventExpand (Event eid t (Just v)) = map (\nv->Event eid t (Just nv)) v
+            eventExpand (Event eid t Nothing ) = [Event eid t Nothing]
 
 --streamSource :: Stream alpha -> Stream alpha
 --streamSource ss = ss
