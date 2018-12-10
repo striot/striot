@@ -48,12 +48,19 @@ type WindowMaker alpha = Stream alpha -> [Stream alpha]
 type WindowAggregator alpha beta = [alpha] -> beta
 
 streamWindow :: WindowMaker alpha -> Stream alpha -> Stream [alpha]
-streamWindow fwm s = map (\win-> case win of
-                                    (Event _ t _):_ -> Event 0 t       (Just (getVals win))
-                                    []              -> Event 0 Nothing (Just []))
-                        (fwm s)
+streamWindow fwm s = mapWindowId Nothing (fwm s)
            where getVals :: Stream alpha -> [alpha]
-                 getVals s = map (\(Event _ _ (Just val))->val) $ filter dataEvent s
+                 getVals s' = map (\(Event _ _ (Just val))->val) $ filter dataEvent s'
+                 mapWindowId :: Maybe Int -> [Stream alpha] -> Stream [alpha]
+                 mapWindowId _ [] = []
+                 mapWindowId (Just cid) (x:xs) =
+                     case x of
+                         Event _   t _ : _ -> Event cid t       (Just (getVals x)) : mapWindowId (Just (cid + 1)) xs
+                         []                -> Event cid Nothing (Just [])          : mapWindowId (Just (cid + 1)) xs
+                 mapWindowId Nothing    (x:xs) =
+                     case x of
+                         Event eid t _ : _ -> Event eid t       (Just (getVals x)) : mapWindowId (Just (eid + 1)) xs
+                         []                -> Event 0   Nothing (Just [])          : mapWindowId Nothing          xs
 
 -- a useful function building on streamWindow and streamMap
 streamWindowAggregate :: WindowMaker alpha -> WindowAggregator alpha beta -> Stream alpha -> Stream beta
