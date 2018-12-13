@@ -8,6 +8,6 @@ generate: generate.hs
 	ghc generate -i../../src
 
 clean:
-	rm -f generate generate.hi generate.o node1/node1.hs node2/node2.hs
+	rm -f generate generate.hi generate.o node1/node1.hs node2/node2.hs node1/node1 node2/node2
 
 .PHONY: clean
