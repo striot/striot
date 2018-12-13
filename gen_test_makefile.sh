@@ -28,7 +28,7 @@ gen()
         echo -e "\tcd \"$d\" && ./generate"
 
         for n in "$d"/node?/node?.hs
-            do echo -e "\tghc $n"
+            do echo -e "\tghc -i. $n"
         done
         echo
     done
