@@ -15,11 +15,11 @@ source = "do\n\
 \        putStrLn $ \"client sending \" ++ s\n\
 \        return s"
 
-v1 = StreamVertex 1 Source [source]                         "String"
-v2 = StreamVertex 2 Map    ["id", "s"]                   "String"
-v3 = StreamVertex 3 Filter ["(\\i -> (read i :: Int) > 5)", "s"] "String"
-v4 = StreamVertex 4 Window ["(chop 1)", "s"] "[String]"
-v5 = StreamVertex 5 Sink   ["mapM_ $ putStrLn . (\"receiving \"++) . show . value"] "[String]"
+v1 = StreamVertex 1 Source [source]                         "String" "String"
+v2 = StreamVertex 2 Map    ["id", "s"]                   "String" "String"
+v3 = StreamVertex 3 Filter ["(\\i -> (read i :: Int) > 5)", "s"] "String" "String"
+v4 = StreamVertex 4 Window ["(chop 1)", "s"] "String" "[String]"
+v5 = StreamVertex 5 Sink   ["mapM_ $ putStrLn . (\"receiving \"++) . show . value"] "[String]" "IO ()"
 
 mergeEx :: StreamGraph
 mergeEx = path [v1, v2, v3, v4, v5]
