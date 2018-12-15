@@ -79,11 +79,11 @@ sliding wLength s = sliding' wLength $ filter dataEvent s
                  sliding' wLength s@(h:t) = (take wLength s) : sliding' wLength t
 
 slidingTime:: Int -> WindowMaker alpha  -- the first argument is the window length in milliseconds
-slidingTime _       []                         = []
-slidingTime tLength s@((Event _ (Just t) _):_) = slidingTime' tLength t $ filter timedEvent s
-    where slidingTime':: Int -> UTCTime -> WindowMaker alpha
-          slidingTime' tLength tStart s@(h:t) = fstBuffer : slidingTime tLength t
-                 where fstBuffer = fst $ timeTake (addUTCTime (milliToTimeDiff tLength) tStart) s
+slidingTime _       []                        = []
+slidingTime tLength s@(Event _ (Just t) _:xs) =
+    let (fstBuffer,_) = timeTake (addUTCTime (milliToTimeDiff tLength) t)
+                      $ filter timedEvent s
+    in  fstBuffer : slidingTime tLength xs
 
 timeTake :: UTCTime -> Stream alpha -> (Stream alpha, Stream alpha)
 timeTake endTime s = span (\(Event _ (Just t) _) -> t < endTime) s -- changed from <=
