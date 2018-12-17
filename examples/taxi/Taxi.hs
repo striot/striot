@@ -127,12 +127,17 @@ journeyChanges (Event _ _ (Just val):r) = streamFilterAcc (\acc h -> if snd h ==
 changes :: Eq alpha => Stream alpha -> Stream alpha
 changes (e@(Event _ _ (Just val)):r) = e : streamFilterAcc (\_ h -> h) val (/=) r
 
--- produces an ordered list of the i most frequent elements from list l ---------------------------------
+-- produces an ordered list of the i most frequent elements from list a list
 topk :: (Num freq, Ord freq, Ord alpha) => Int -> [alpha] -> [(alpha, freq)]
-topk i l = take i
-         $ sortBy (\(_, v1) (_, v2) -> compare v2 v1)
-         $ Map.toList
-         $ foldr (\k -> Map.insertWith (+) k 1) Map.empty l
+topk i = topkMap i . freqMap
+
+-- generates frequency map for occurrences of elements in a list
+freqMap :: (Num freq, Ord freq, Ord alpha) => [alpha] -> Map.Map alpha freq
+freqMap = foldr (\k -> Map.insertWith (+) k 1) Map.empty
+
+-- produces topk ordered list from a Map, where the value is the criteria we are maximising
+topkMap :: (Num freq, Ord freq, Ord alpha) => Int -> Map.Map alpha freq -> [(alpha, freq)]
+topkMap i = take i . sortBy (\(_, v1) (_, v2) -> compare v2 v1) . Map.toList
 
 ------------------------ Query 1 --------------------------------------------------------------------------------------
 type Q1Output = ((UTCTime, UTCTime), [(Journey, Int)])
@@ -150,8 +155,7 @@ tripToJourney t = Journey{start=toCellQ1 (pickup t), end=toCellQ1 (dropoff t), p
 mainQ1 :: IO ()
 mainQ1 = do
     contents <- readFile "sorteddata.csv"
-    putStr
-        $ concatMap (\res -> show (value res) ++ "\n")
+    mapM_ (print . value)
         $ frequentRoutes
         $ tripSource contents
 
@@ -247,8 +251,8 @@ cellProfit tjs = Map.map profit $ pickupHistory tjs
 
 taxisDroppedOffandNotPickedUp :: Map.Map (Cell, Medallion) UTCTime -> [(Trip, Journey)] -> [Cell]
 taxisDroppedOffandNotPickedUp np ts = map (\(_, j) -> start j)
-                                    $ filter (\(t, j) -> (Map.notMember (start j, medallion t) np ||
-                                                         (np Map.! (start j, medallion t) < dropoffDatetime t))) ts
+                                    $ filter (\(t, j) -> Map.notMember (start j, medallion t) np ||
+                                                         (np Map.! (start j, medallion t) < dropoffDatetime t)) ts
 
 emptyTaxisPerCell ::  [(Trip, Journey)] -> Map.Map Cell Int
 emptyTaxisPerCell ts = foldl (\m c -> Map.insertWith (+) c 1 m) Map.empty (taxisDroppedOffandNotPickedUp (newestPickup ts) ts)
@@ -263,12 +267,9 @@ profitability :: Map.Map Cell Int -> Map.Map Cell Dollars -> Map.Map Cell Dollar
 profitability emptyTaxis cellProf = foldl (\m c -> Map.insert c (Map.findWithDefault 0 c cellProf / fromIntegral (Map.findWithDefault 0 c emptyTaxis)) m) Map.empty (Map.keys emptyTaxis)
 
 
---streamWindowAggregate fwm fwa s = streamMap fwa $ streamWindow fwm s
-type Q2Output a = Stream [(Map.Map Cell Dollars, a)]
-profitableCells :: (Num a, Ord a) => Stream Trip -> Q2Output a
+profitableCells :: Stream Trip -> Stream [(Cell, Dollars)]
 profitableCells s = changes
-                  $ streamMap (topk 10)
-                  $ streamWindow (slidingTime 1800000)
+                  $ streamMap (topkMap 10)
                   $ streamJoinW (slidingTime 900000) (slidingTime 1800000)
                                 (\a b -> profitability (emptyTaxisPerCell b) (cellProfit a)) processedStream processedStream
                        where processedStream = streamFilter (\(_, j) -> inRangeQ2 (start j) && inRangeQ2 (end j))
@@ -276,7 +277,7 @@ profitableCells s = changes
 
 mainQ2 :: IO ()
 mainQ2 = do contents <- readFile "sorteddata.csv"
-            putStr $ show $ profitableCells $ tripSource contents
+            mapM_ (print . value) $ profitableCells $ tripSource contents
 
 ---------------- Tests of Q2 ------------------------------------------------------
 q2processedStream :: Stream Trip -> Stream (Trip, Journey)
