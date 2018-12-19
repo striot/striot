@@ -61,19 +61,18 @@ type PartitionMap = [[Int]]
 
 -- createPartitions returns ([partition map], [inter-graph links])
 -- where inter-graph links are the cut edges due to partitioning
--- XXX: we could probably fold the cut edges and return ([Graph], Graph)
-createPartitions :: Graph StreamVertex -> PartitionMap -> ([Graph StreamVertex], [Graph StreamVertex])
-createPartitions _ [] = ([],[])
-createPartitions g (p:ps) = ((overlay vs es):tailParts, cutEdges ++ tailCuts) where
+createPartitions :: Graph StreamVertex -> PartitionMap -> ([Graph StreamVertex], Graph StreamVertex)
+createPartitions _ [] = ([],empty)
+createPartitions g (p:ps) = ((overlay vs es):tailParts, cutEdges `overlay` tailCuts) where
     vs        = vertices $ filter fv (vertexList g)
     es        = edges $ filter (\(v1,v2) -> (fv v1) && (fv v2)) (edgeList g)
-    cutEdges  = if edgesOut == empty then [] else [edgesOut]
+    cutEdges  = edgesOut
     fv v      = (vertexId v) `elem` p
     edgesOut  = edges $ filter (\(v1,v2) -> (fv v1) && (not(fv v2))) (edgeList g)
     (tailParts, tailCuts) = createPartitions g ps
 
-unPartition :: ([Graph StreamVertex], [Graph StreamVertex]) -> Graph StreamVertex
-unPartition (a,b) = foldl overlay Empty (a ++ b)
+unPartition :: ([Graph StreamVertex], Graph StreamVertex) -> Graph StreamVertex
+unPartition (a,b) = overlay b $ foldl overlay Empty a
 
 type StreamGraph = Graph StreamVertex
 
@@ -98,7 +97,7 @@ type StreamGraph = Graph StreamVertex
 generateCode :: StreamGraph -> PartitionMap -> [String] -> [String]
 generateCode sg pm imports = generateCode' (createPartitions sg pm) imports
 
-generateCode' :: ([StreamGraph], [StreamGraph]) -> [String] -> [String]
+generateCode' :: ([StreamGraph], StreamGraph) -> [String] -> [String]
 generateCode' (sgs,cuts) imports = let
                   enumeratedParts = zip [1..] sgs
                   in map (generateCodeFromStreamGraph imports enumeratedParts cuts) enumeratedParts
@@ -114,7 +113,7 @@ nodeType sg = if operator (head (vertexList sg)) == Source
 
 -- vertexList outputs *sorted*. That corresponds to the Id value for
 -- our StreamVertex type
-generateCodeFromStreamGraph :: [String] -> [(Integer, StreamGraph)] -> [StreamGraph] -> (Integer,StreamGraph) -> String
+generateCodeFromStreamGraph :: [String] -> [(Integer, StreamGraph)] -> StreamGraph -> (Integer,StreamGraph) -> String
 generateCodeFromStreamGraph imports parts cuts (partId,sg) = intercalate "\n" $
     nodeId : -- convenience comment labelling the node/partition ID
     imports' ++
@@ -176,10 +175,9 @@ test_inType = assertEqual "Int" $
 
 -- determine the node(s?) to connect on to from this partition
 -- XXX always 0 or 1? write quickcheck property...
-connectNodeId :: StreamGraph -> [(Integer, StreamGraph)] -> [StreamGraph] -> [Integer]
+connectNodeId :: StreamGraph -> [(Integer, StreamGraph)] -> StreamGraph -> [Integer]
 connectNodeId sg parts cuts = let
-    cut   = overlays cuts
-    edges = edgeList cut
+    edges = edgeList cuts
     outs  = vertexList sg
     outEs = filter (\(f,t) -> f `elem` outs) edges
     destVs= map snd outEs
@@ -237,11 +235,10 @@ generateCodeFromVertex (opid, v)  = let
 
 -- how many incoming edges to this partition?
 -- + how many source nodes
-partValence :: StreamGraph -> [StreamGraph] -> Int
+partValence :: StreamGraph -> StreamGraph -> Int
 partValence g cuts = let
-    cut = foldl overlay empty cuts
     verts = vertexList g
-    inEdges = filter (\e -> (snd e) `elem` verts) (edgeList cut)
+    inEdges = filter (\e -> (snd e) `elem` verts) (edgeList cuts)
     sourceNodes = filter (\v -> Source == operator v) (vertexList g)
     in
         (length sourceNodes) + (length inEdges)
