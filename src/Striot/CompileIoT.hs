@@ -43,10 +43,11 @@ data StreamVertex = StreamVertex
     , operator   :: StreamOperator
     , parameters :: [String] -- XXX strings of code. From CompileIoT. Variable length e.g.FilterAcc takes 3 (?)
     , intype     :: String
+    , outtype    :: String
     } deriving (Eq)
 
 instance Ord StreamVertex where
-    compare (StreamVertex x _ _ _) (StreamVertex y _ _ _) = compare x y
+    compare (StreamVertex x _ _ _ _) (StreamVertex y _ _ _ _) = compare x y
 
 instance Show StreamVertex where
     show v = intercalate " " $ ((show . operator) v) : ((map (\s->"("++s++")")) . parameters) v
@@ -125,7 +126,7 @@ generateCodeFromStreamGraph imports parts cuts (partId,sg) = intercalate "\n" $
     nodeFn sg] where
         nodeId = "-- node"++(show partId)
         padding = "    "
-        sgTypeSignature = "streamGraphFn ::"++(concat $ take valence $ repeat $ " Stream "++inType++" ->")++" Stream "++outType
+        sgTypeSignature = "streamGraphFn ::"++(concat $ take valence $ repeat $ " Stream "++(inType sg)++" ->")++" Stream "++(outType sg)
         sgIntro = "streamGraphFn "++sgArgs++" = let"
         sgArgs = unwords $ map (('n':).show) [1..valence]
         imports' = (map ("import "++) imports) ++ ["\n"]
@@ -140,8 +141,37 @@ generateCodeFromStreamGraph imports parts cuts (partId,sg) = intercalate "\n" $
             NodeSource -> generateSrcFn sg
             NodeLink   -> ""
             NodeSink   -> generateSinkFn sg
-        inType = intype $ head $ vertexList sg
-        outType= intype $ head $ reverse $ vertexList sg -- XXX not strictly true
+
+-- output type of a StreamGraph.
+-- special-case if the terminal node is a Sink node: we want the
+-- "pure" StreamGraph type that feeds into the sink function.
+outType :: StreamGraph -> String
+outType sg = let node = (head . reverse . vertexList) sg
+        in if operator node == Sink
+           then intype node
+           else outtype node
+
+-- input type of a StreamGraph
+-- see outType for rationale
+inType :: StreamGraph -> String
+inType sg = let node = (head  . vertexList) sg
+            in if operator node == Source
+               then outtype node
+               else intype node
+
+t = path [ StreamVertex 0 Source ["return 0"]       "IO Int" "Int"
+         , StreamVertex 1 Map    ["show","s"]       "Int" "String"
+         , StreamVertex 2 Sink   ["mapM_ putStrLn"] "String" "IO ()"
+         ]
+
+test_outType = assertEqual "String" $
+    (outType . head . fst) (createPartitions t [[0,1],[2]])
+
+test_outType_sink = assertEqual "String" $
+    (outType . head . fst) (createPartitions t [[0,1,2]])
+
+test_inType = assertEqual "Int" $
+    (inType . head . fst) (createPartitions t [[0,1],[2]])
 
 -- determine the node(s?) to connect on to from this partition
 -- XXX always 0 or 1? write quickcheck property...
@@ -217,13 +247,13 @@ partValence g cuts = let
 -- tests / test data
 
 -- Source -> Sink
-s0 = connect (Vertex (StreamVertex 0 (Source) [] "String"))
-    (Vertex (StreamVertex 1 (Sink) [] "String"))
+s0 = connect (Vertex (StreamVertex 0 (Source) [] "String" "String"))
+    (Vertex (StreamVertex 1 (Sink) [] "String" "String"))
 
 -- Source -> Filter -> Sink
-s1 = path [ StreamVertex 0 (Source) [] "String"
-          , StreamVertex 1 Filter [] "String"
-          , StreamVertex 2 (Sink) [] "String"
+s1 = path [ StreamVertex 0 (Source) [] "String" "String"
+          , StreamVertex 1 Filter [] "String" "String"
+          , StreamVertex 2 (Sink) [] "String" "String"
           ]
 
 test_reform_s0 = assertEqual s0 (unPartition $ createPartitions s0 [[0],[1]])
@@ -243,8 +273,9 @@ instance Arbitrary StreamVertex where
         operator <- arbitrary
         let parameters = []
             intype = "String"
+            outtype = "String"
             in
-                return $ StreamVertex vertexId operator parameters intype
+                return $ StreamVertex vertexId operator parameters intype outtype
 
 streamgraph :: Gen StreamGraph
 streamgraph = sized streamgraph'
