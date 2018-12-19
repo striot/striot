@@ -30,18 +30,18 @@ escape (x:xs) = if x == '"' then '\\':'"':(escape xs) else x:(escape xs)
 -- test data
 --source x = "do\n    threadDelay (1000*1000)\n    putStrLn \"sending '"++x++"'\"\n    return \""++x++"\""
 source x = "do threadDelay (1000*1000); putStrLn \"sending '"++x++"'\"; return \""++x++"\""
-v1 = StreamVertex 1 Source [source "foo"]  "String"
-v2 = StreamVertex 2 Map    ["Prelude.id"]  "String"
-v3 = StreamVertex 3 Source [source "bar"]  "String"
-v4 = StreamVertex 4 Map    ["Prelude.id"]  "String"
-v5 = StreamVertex 5 Merge  ["[n1,n2]"]     "String"
-v6 = StreamVertex 6 Sink   ["mapM_ print"] "String"
+v1 = StreamVertex 1 Source [source "foo"]  "String" "String"
+v2 = StreamVertex 2 Map    ["Prelude.id"]  "String" "String"
+v3 = StreamVertex 3 Source [source "bar"]  "String" "String"
+v4 = StreamVertex 4 Map    ["Prelude.id"]  "String" "String"
+v5 = StreamVertex 5 Merge  ["[n1,n2]"]     "[String]" "String"
+v6 = StreamVertex 6 Sink   ["mapM_ print"] "String" "IO ()"
 mergeEx :: StreamGraph
 mergeEx = overlay (path [v3, v4, v5]) (path [v1, v2, v5, v6])
 
-v7 = StreamVertex 1 Source ["<source of random tweets>"] "String"
-v8 = StreamVertex 2 Map    ["filter (('#'==).head) . words"] "[String]"
-v9 = StreamVertex 5 Expand [""]                 "[String]"
-v10 = StreamVertex 6 Sink   ["mapM_ print"] "String"
+v7 = StreamVertex 1 Source ["<source of random tweets>"] "String" "String"
+v8 = StreamVertex 2 Map    ["filter (('#'==).head) . words"] "String" "[String]"
+v9 = StreamVertex 5 Expand [""]                 "[String]" "String"
+v10 = StreamVertex 6 Sink   ["mapM_ print"] "String" "IO ()"
 expandEx :: StreamGraph
 expandEx = path [v7, v8, v9, v10]

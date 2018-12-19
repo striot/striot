@@ -14,12 +14,12 @@ source x = "do\n\
 \    return \""++x++"\""
 
 
-v1 = StreamVertex 1 Source [source "foo"]  "String"
-v2 = StreamVertex 2 Map    ["id", "s"]     "String"
-v3 = StreamVertex 3 Source [source "bar"]  "String"
-v4 = StreamVertex 4 Map    ["id", "s"]     "String"
-v5 = StreamVertex 5 Merge  ["[s1,s2]"]     "String"
-v6 = StreamVertex 6 Sink   ["mapM_ print"] "String"
+v1 = StreamVertex 1 Source [source "foo"]  "String" "String"
+v2 = StreamVertex 2 Map    ["id", "s"]     "String" "String"
+v3 = StreamVertex 3 Source [source "bar"]  "String" "String"
+v4 = StreamVertex 4 Map    ["id", "s"]     "String" "String"
+v5 = StreamVertex 5 Merge  ["[s1,s2]"]     "String" "String" -- XXX: we lie about the input type here, because the generated function has split-out arguments
+v6 = StreamVertex 6 Sink   ["mapM_ print"] "String" "IO ()"
 
 mergeEx :: StreamGraph
 mergeEx = overlay (path [v3, v4, v5]) $ path [v1, v2, v5, v6]
