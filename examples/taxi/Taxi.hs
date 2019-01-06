@@ -6,7 +6,8 @@ import Data.Aeson
 import Data.List
 import Data.List.Split
 import qualified Data.Map as Map
-import Data.Time (UTCTime)
+import Data.Maybe (fromJust)
+import Data.Time (UTCTime(..),fromGregorianValid,NominalDiffTime,addUTCTime)
 import GHC.Generics (Generic)
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
@@ -377,3 +378,25 @@ q2TripSourceTest10 :: IO ()
 q2TripSourceTest10 = do
     contents <- readFile "sorteddata.csv"
     putStr $ show $ length $ tripSource contents
+
+-- adapted from PW's work in #53
+-- like slidingTime, but we promote the Timestamp from within the inner Journey
+-- out into a new Event wrapper
+slidingJourneyTime:: Int -> WindowMaker Journey
+slidingJourneyTime tLength s = slidingJourneyTime' (milliToTimeDiff tLength) $ filter timedEvent s
+    where slidingJourneyTime':: NominalDiffTime -> Stream Journey -> [Stream Journey]
+          slidingJourneyTime' tLen [] = []
+          slidingJourneyTime' tLen (x:xs) = let
+            s = x { time = fmap dropoffTime (value x) }
+            t = fromJust (time s)
+            in (takeTime (addUTCTime tLen t) (s:xs)) : slidingJourneyTime' tLen xs
+
+-- adapted from PW's work in #53
+takeTime:: UTCTime -> Stream Journey -> Stream Journey
+takeTime endTime [] = []
+takeTime endTime (e@(Event _ (Just t) _):xs) | t < endTime = e : takeTime endTime xs
+                                             | otherwise = []
+
+-- copied from FunctionalProcessing
+milliToTimeDiff :: Int -> NominalDiffTime
+milliToTimeDiff x = toEnum (x * 10 ^ 9)
