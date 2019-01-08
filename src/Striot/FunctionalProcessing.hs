@@ -78,16 +78,16 @@ sliding wLength s = sliding' wLength $ filter dataEvent s
                  sliding' wLength []      = []
                  sliding' wLength s@(h:t) = (take wLength s) : sliding' wLength t
 
-slidingTime:: Int -> WindowMaker alpha  -- the first argument is the window length in milliseconds
-slidingTime _       []                         = []
+slidingTime:: Int -> WindowMaker alpha -- the first argument is the window length in milliseconds
 slidingTime tLength s = slidingTime' (milliToTimeDiff tLength) $ filter timedEvent s
-    where slidingTime' _    []                        = []
-          slidingTime' tLen s@(Event _ (Just t) _:xs) =
-              let (fstBuffer,_) = timeTake (addUTCTime tLen t) s
-              in  fstBuffer : slidingTime' tLen xs
+                        where slidingTime':: NominalDiffTime -> Stream alpha -> [Stream alpha]
+                              slidingTime' tLen []                        = []
+                              slidingTime' tLen s@(Event _ (Just t) _:xs) = (takeTime (addUTCTime tLen t) s) : slidingTime' tLen xs
 
-timeTake :: UTCTime -> Stream alpha -> (Stream alpha, Stream alpha)
-timeTake endTime s = span (\(Event _ (Just t) _) -> t < endTime) s -- changed from <=
+takeTime:: UTCTime -> Stream alpha -> Stream alpha
+takeTime endTime []                                        = []
+takeTime endTime (e@(Event _ (Just t) _):xs) | t < endTime = e : takeTime endTime xs
+                                             | otherwise   = []
 
 milliToTimeDiff :: Int -> NominalDiffTime
 milliToTimeDiff x = toEnum (x * 10 ^ 9)
@@ -106,6 +106,9 @@ chopTime tLength s@((Event _ (Just t) _):_) = chopTime' (milliToTimeDiff tLength
                                             (fstBuffer, rest) = timeTake endTime s
                                         in  fstBuffer : chopTime' tLen endTime rest
 
+timeTake :: UTCTime -> Stream alpha -> (Stream alpha, Stream alpha)
+timeTake endTime s = span (\(Event _ (Just t) _) -> t < endTime) s
+                                        
 complete :: WindowMaker alpha
 complete s = [s]
 
