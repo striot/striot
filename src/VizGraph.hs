@@ -7,9 +7,13 @@ import Algebra.Graph
 import Algebra.Graph.Export.Dot
 import Data.String
 import Test.Framework
+import Data.List (intercalate)
 
 streamGraphToDot :: StreamGraph -> String
 streamGraphToDot = export myStyle
+
+show' :: StreamVertex -> String
+show' v = intercalate " " $ ((show . operator) v) : ((map (\s->"("++s++")")) . parameters) v
 
 myStyle :: Style StreamVertex String
 myStyle = Style
@@ -19,7 +23,7 @@ myStyle = Style
     , defaultVertexAttributes = ["shape" := "box","fillcolor":="white","style":="filled"]
     , defaultEdgeAttributes   = ["weight":="10","color":="black","fontcolor":="black"]
     , vertexName              = show . vertexId
-    , vertexAttributes        = (\v -> ["label":=(escape . show) v])
+    , vertexAttributes        = (\v -> ["label":=(escape . show') v])
     , edgeAttributes          = (\_ o -> ["label":=intype o])
     }
 

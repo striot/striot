@@ -9,7 +9,7 @@ module Striot.CompileIoT ( StreamGraph(..)
                          , htf_thisModulesTests
                          ) where
 
-import Data.List (intersperse, intercalate)
+import Data.List (intercalate)
 import Algebra.Graph
 import Test.Framework
 
@@ -44,13 +44,10 @@ data StreamVertex = StreamVertex
     , parameters :: [String] -- XXX strings of code. From CompileIoT. Variable length e.g.FilterAcc takes 3 (?)
     , intype     :: String
     , outtype    :: String
-    } deriving (Eq)
+    } deriving (Eq,Show)
 
 instance Ord StreamVertex where
     compare (StreamVertex x _ _ _ _) (StreamVertex y _ _ _ _) = compare x y
-
-instance Show StreamVertex where
-    show v = intercalate " " $ ((show . operator) v) : ((map (\s->"("++s++")")) . parameters) v
 
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
