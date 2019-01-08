@@ -379,22 +379,13 @@ q2TripSourceTest10 = do
     contents <- readFile "sorteddata.csv"
     putStr $ show $ length $ tripSource contents
 
--- adapted from PW's work in #53
--- like slidingTime, but we promote the Timestamp from within the inner Journey
--- out into a new Event wrapper
-slidingJourneyTime:: Int -> WindowMaker Journey
-slidingJourneyTime tLength s = slidingJourneyTime' (milliToTimeDiff tLength) $ filter timedEvent s
-    where slidingJourneyTime':: NominalDiffTime -> Stream Journey -> [Stream Journey]
-          slidingJourneyTime' tLen [] = []
-          slidingJourneyTime' tLen (x@(Event _ _ (Just v)):xs) =
-              takeTime (addUTCTime tLen (dropoffTime v)) (x:xs) : slidingJourneyTime' tLen xs
+-- utility functions ---------------------------------------------------------
 
--- adapted from PW's work in #53
-takeTime:: UTCTime -> Stream Journey -> Stream Journey
-takeTime endTime [] = []
-takeTime endTime (e@(Event _ _ (Just v)):xs) | dropoffTime v < endTime = e : takeTime endTime xs
-                                             | otherwise = []
-
--- copied from FunctionalProcessing
-milliToTimeDiff :: Int -> NominalDiffTime
-milliToTimeDiff x = toEnum (x * 10 ^ 9)
+-- replace the timestamps in the Event wrappers with the value of the
+-- dropoffDatetime field from the inner Trip. This is to work around
+-- "nodeSource" building Events with timestamps at the time of execution.
+-- The intended use is in conjunction with streamExpand, e.g.
+--  streamExpand . streamWindow tripTimes . <source of Event Trip>
+tripTimes :: WindowMaker Trip
+tripTimes [] = []
+tripTimes (e@(Event eid _ v):t) = [Event eid (fmap dropoffDatetime v) v] : tripTimes t
