@@ -386,15 +386,13 @@ slidingJourneyTime:: Int -> WindowMaker Journey
 slidingJourneyTime tLength s = slidingJourneyTime' (milliToTimeDiff tLength) $ filter timedEvent s
     where slidingJourneyTime':: NominalDiffTime -> Stream Journey -> [Stream Journey]
           slidingJourneyTime' tLen [] = []
-          slidingJourneyTime' tLen (x:xs) = let
-            s = x { time = fmap dropoffTime (value x) }
-            t = fromJust (time s)
-            in (takeTime (addUTCTime tLen t) (s:xs)) : slidingJourneyTime' tLen xs
+          slidingJourneyTime' tLen (x@(Event _ _ (Just v)):xs) =
+              takeTime (addUTCTime tLen (dropoffTime v)) (x:xs) : slidingJourneyTime' tLen xs
 
 -- adapted from PW's work in #53
 takeTime:: UTCTime -> Stream Journey -> Stream Journey
 takeTime endTime [] = []
-takeTime endTime (e@(Event _ (Just t) _):xs) | t < endTime = e : takeTime endTime xs
+takeTime endTime (e@(Event _ _ (Just v)):xs) | dropoffTime v < endTime = e : takeTime endTime xs
                                              | otherwise = []
 
 -- copied from FunctionalProcessing
