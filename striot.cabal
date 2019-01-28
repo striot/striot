@@ -19,7 +19,7 @@ library
   exposed-modules:     Striot.FunctionalIoTtypes, Striot.FunctionalProcessing, Striot.Nodes, Striot.CompileIoT
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.9, containers >=0.5, split >=0.2, time >=1.6, network >=2.7.0.0, HTF, aeson, bytestring >=0.9.2, unagi-chan >=0.4.1.0, algebraic-graphs >=0.1
+  build-depends:       base >=4.9, containers >=0.5, split >=0.2, time >=1.6, network >=2.7.0.0, HTF, aeson, bytestring >=0.9.2, unagi-chan >=0.4.1.0, algebraic-graphs >=0.1, conduit, conduit-extra, async
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -27,6 +27,6 @@ test-suite test-striot
   hs-source-dirs:      src
   type:                exitcode-stdio-1.0
   Main-is:             TestMain.hs
-  build-depends:       base >=4.9, containers >=0.5, split >=0.2, time >=1.6, network >=2.7.0.0, HTF, aeson, bytestring >=0.9.2, unagi-chan >=0.4.1.0, algebraic-graphs >=0.1
+  build-depends:       base >=4.9, containers >=0.5, split >=0.2, time >=1.6, network >=2.7.0.0, HTF, aeson, bytestring >=0.9.2, unagi-chan >=0.4.1.0, algebraic-graphs >=0.1, conduit, conduit-extra, async
   other-modules:       Striot.CompileIoT, Striot.FunctionalIoTtypes, Striot.FunctionalProcessing, Striot.Nodes, VizGraph
   Default-language:    Haskell2010

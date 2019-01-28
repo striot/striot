@@ -108,7 +108,7 @@ chopTime tLength s@((Event _ (Just t) _):_) = chopTime' (milliToTimeDiff tLength
 
 timeTake :: UTCTime -> Stream alpha -> (Stream alpha, Stream alpha)
 timeTake endTime s = span (\(Event _ (Just t) _) -> t < endTime) s
-                                        
+
 complete :: WindowMaker alpha
 complete s = [s]
 

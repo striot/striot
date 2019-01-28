@@ -1,17 +1,23 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Striot.Nodes ( nodeSink
                     , nodeSink2
                     , nodeLink
+                    , nodeLinkC
                     , nodeLink2
                     , nodeSource
                     ) where
 
-import           Control.Concurrent
+import           Control.Concurrent hiding (yield)
 import           Control.Concurrent.Chan.Unagi as U
-import           Control.Monad                 (forever, when)
+import           Control.Concurrent.Async (concurrently)
+import           Control.Monad            (void)
+import           Control.Monad                 (forever, when, void)
+import           Conduit                hiding (connect)
+import           Data.Conduit.Network
 import           Data.Aeson
 import qualified Data.ByteString                as B
-import qualified Data.ByteString.Char8          as BC (putStrLn)
-import qualified Data.ByteString.Lazy.Char8     as BLC (hPutStrLn, putStrLn)
+import qualified Data.ByteString.Char8          as BC
+import qualified Data.ByteString.Lazy.Char8     as BLC
 import           Data.Maybe
 import           Data.Time                      (getCurrentTime)
 import           Network.Socket
@@ -72,6 +78,28 @@ nodeLink' sock streamOps host port = do
     sendStream result host port
 
 
+nodeLinkC :: (FromJSON alpha, ToJSON beta) => (alpha -> beta) -> ServiceName -> HostName -> ServiceName -> IO ()
+nodeLinkC streamOp inputPort outputHost outputPort =
+    runTCPServer (serverSettings (read inputPort) "*")                   $ \source ->
+    runTCPClient (clientSettings (read outputPort) (BC.pack outputHost)) $ \sink ->
+        runConduit
+            $ appSource source
+           -- .| deserialise
+           -- .| streamOp
+           -- .| serialise
+           .| appSink sink
+
+
+serialise :: (Monad m, ToJSON a) => ConduitT a BC.ByteString m ()
+serialise = awaitForever $ yield . BLC.toStrict . encode
+
+
+deserialise :: (Monad m, FromJSON b) => ConduitT BC.ByteString b m ()
+deserialise = awaitForever $ (\x -> case decodeStrict x of
+                                        Just v  -> yield v
+                                        Nothing -> return ())
+
+
 -- A Link with 2 inputs
 nodeLink2 :: (FromJSON alpha, FromJSON beta, ToJSON gamma) => (Stream alpha -> Stream beta -> Stream gamma) -> ServiceName -> ServiceName -> HostName -> ServiceName -> IO ()
 nodeLink2 streamGraph portNumInput1 portNumInput2 hostName portNumOutput = withSocketsDo $ do
@@ -112,8 +140,7 @@ readListFromSource = go 0
       where
         msg x = do
             now     <- getCurrentTime
-            payload <- pay
-            return (Event x (Just now) (Just payload))
+            Event x (Just now) . Just <$> pay
 
 
 {- processSocket is a wrapper function that handles concurrently
@@ -227,7 +254,7 @@ hPutLines' handle (x:xs) = do
     open      <- hIsOpen handle
     when (open && writeable) $ do
         -- BLC.putStrLn (encode x)
-        BLC.hPutStrLn    handle (encode x)
+        BLC.hPutStrLn handle (encode x)
         hPutLines' handle xs
 
 
