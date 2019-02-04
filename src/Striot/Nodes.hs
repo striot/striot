@@ -7,18 +7,18 @@ module Striot.Nodes ( nodeSink
                     , nodeSource
                     ) where
 
-import           Conduit                          hiding (connect)
-import           Control.Concurrent               hiding (yield)
-import           Control.Concurrent.Async         (async)
-import           Control.Concurrent.Chan.Unagi    as U
+import           Conduit                               hiding (connect)
+import           Control.Concurrent                    hiding (yield)
+import           Control.Concurrent.Async              (async)
+import           Control.Concurrent.Chan.Unagi.Bounded as U
 import           Data.Aeson
-import qualified Data.Attoparsec.ByteString.Char8 as A
-import qualified Data.ByteString.Char8            as BC
-import qualified Data.ByteString.Lazy.Char8       as BLC
+import qualified Data.Attoparsec.ByteString.Char8      as A
+import qualified Data.ByteString.Char8                 as BC
+import qualified Data.ByteString.Lazy.Char8            as BLC
 import           Data.Conduit.Network
-import           Data.Time                        (getCurrentTime)
+import           Data.Time                             (getCurrentTime)
 import           Striot.FunctionalIoTtypes
-import           System.IO.Unsafe                 (unsafeInterleaveIO)
+import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
 type HostName   = String
 type PortNumber = Int
@@ -97,7 +97,7 @@ processSocketC inputPort = U.getChanContents =<< acceptConnectionsC inputPort
 without introducing laziness -}
 acceptConnectionsC :: FromJSON alpha => PortNumber -> IO (U.OutChan (Event alpha))
 acceptConnectionsC port = do
-    (inChan, outChan) <- U.newChan
+    (inChan, outChan) <- U.newChan chanSize
     async $
         runTCPServer (serverSettings port "*") $ \source ->
           runConduit
@@ -118,6 +118,18 @@ sendStreamC stream host port =
      .| serialise
      .| mapC (`BC.snoc` eventTerminationChar)
      .| appSink sink
+
+
+{- Conduit to serialise with aeson -}
+serialise :: (Monad m, ToJSON a) => ConduitT a BC.ByteString m ()
+serialise = awaitForever $ yield . BLC.toStrict . encode
+
+
+{- Conduit to deserialise with aeson -}
+deserialise :: (Monad m, FromJSON b) => ConduitT BC.ByteString b m ()
+deserialise = awaitForever (\x -> case decodeStrict x of
+                                        Just v  -> yield v
+                                        Nothing -> return ())
 
 
 {- Keep reading from upstream conduit and parsing for end of event character.
@@ -147,13 +159,8 @@ eventTerminationChar :: Char
 eventTerminationChar = '\NUL'
 
 
-{- Conduit to serialise with aeson -}
-serialise :: (Monad m, ToJSON a) => ConduitT a BC.ByteString m ()
-serialise = awaitForever $ yield . BLC.toStrict . encode
-
-
-{- Conduit to deserialise with aeson -}
-deserialise :: (Monad m, FromJSON b) => ConduitT BC.ByteString b m ()
-deserialise = awaitForever (\x -> case decodeStrict x of
-                                        Just v  -> yield v
-                                        Nothing -> return ())
+{- We are using a bounded queue to prevent extreme memory usage when
+input rate > consumption rate. This value may need to be increased to achieve
+higher throughput when computation costs are low -}
+chanSize :: Int
+chanSize = 10
