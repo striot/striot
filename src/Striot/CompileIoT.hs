@@ -191,7 +191,7 @@ generateSinkFn sg = "sink1 :: Show a => Stream a -> IO ()\nsink1 = " ++
     (intercalate "\n" $ parameters $ head $ reverse $ vertexList sg) ++ "\n"
 
 generateNodeLink :: Integer -> String
-generateNodeLink n = "main = nodeLink streamGraphFn \"9001\" \"node"++(show n)++"\" \"9001\""
+generateNodeLink n = "main = nodeLink streamGraphFn 9001 \"node"++(show n)++"\" 9001"
 
 -- warts:
 --  we accept a list of onward nodes but nodeSource only accepts one anyway
@@ -200,12 +200,12 @@ generateNodeSrc partId nodes = let
     node = head nodes
     host = "node" ++ (show node)
     port = 9001 + partId -1 -- XXX Unlikely to always be correct
-    in "main = nodeSource src1 streamGraphFn \""++host++"\" \""++(show port)++"\""
+    in "main = nodeSource src1 streamGraphFn \""++host++"\" "++(show port)
 
 generateNodeSink :: Int -> String
 generateNodeSink v = case v of
-    1 -> "main = nodeSink streamGraphFn sink1 \"9001\""
-    2 -> "main = nodeSink2 streamGraphFn sink1 \"9001\" \"9002\""
+    1 -> "main = nodeSink streamGraphFn sink1 9001"
+    2 -> "main = nodeSink2 streamGraphFn sink1 9001 9002"
     v -> error "generateNodeSink: unhandled valence " ++ (show v)
 
 -- generateCodeFromVertex:  generates Haskell code to be included in a
