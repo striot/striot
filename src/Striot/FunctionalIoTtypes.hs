@@ -3,6 +3,7 @@ module Striot.FunctionalIoTtypes where
 import Data.Time (UTCTime) -- http://two-wrongs.com/haskell-time-library-tutorial
 import GHC.Generics (Generic)
 import Data.Aeson
+import Data.Store
 
 data Event alpha = Event { eventId :: Int
                          , time    :: Maybe Timestamp
@@ -16,6 +17,8 @@ instance (FromJSON alpha) => FromJSON (Event alpha)
 
 instance (ToJSON alpha) => ToJSON (Event alpha) where
     toEncoding = genericToEncoding defaultOptions
+
+instance (Store alpha) => Store (Event alpha)
 
 dataEvent :: Event alpha -> Bool
 dataEvent (Event eid t (Just v)) = True
