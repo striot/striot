@@ -10,6 +10,7 @@ module Striot.CompileIoT ( StreamGraph(..)
                          , writePart
                          , writePart'
                          , genDockerfile
+                         , partitionGraph
 
                          , htf_thisModulesTests
                          ) where
@@ -324,3 +325,8 @@ writePart' dockerfile (x,y) = let
         createDirectoryIfMissing True bn
         writeFile (bn </> "Dockerfile") dockerfile
         writeFile fn y
+
+-- a very high level function for using the Partitioner
+partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
+partitionGraph graph partitions opts =
+    mapM_ writePart $ zip [1..] $ generateCode graph partitions opts

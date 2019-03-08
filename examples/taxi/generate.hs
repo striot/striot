@@ -46,9 +46,6 @@ taxiQ1 = path
     ]
 
 parts = [[1..7],[8],[9..10]]
-partEx = generateCode taxiQ1 parts opts
 
 main = do
-    mapM_ writePart (zip [1..] partEx)
-
-
+    partitionGraph taxiQ1 parts opts
