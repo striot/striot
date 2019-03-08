@@ -7,7 +7,7 @@ shopt -s nullglob
 # for every applicable example under examples/:
 #
 #   • build and run "generate" (clean first to ensure it's regenerated)
-#   • build any node?/node?.hs files output by "generate"
+#   • build any node?/node.hs files output by "generate"
 #
 # This can be used as a brute-force method of ensuring that the above all
 # typecheck and compile properly when making structural changes to the Striot
@@ -27,7 +27,7 @@ gen()
         echo -e "\tmake -C $d generate"
         echo -e "\tcd \"$d\" && ./generate"
 
-        for n in "$d"/node?/node?.hs
+        for n in "$d"/node?/node.hs
             do echo -e "\tghc -i. $n"
         done
         echo
