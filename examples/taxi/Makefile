@@ -12,7 +12,7 @@ node2/Taxi.hs: Taxi.hs
 node3/Taxi.hs: Taxi.hs
 	cp Taxi.hs node3
 
-node1 node2 node3 node1/node.hs node2/node.hs node3/node.hs: generate
+node2 node3 node1/node.hs node2/node.hs node3/node.hs: generate
 	./generate
 
 generate: generate.hs
@@ -23,6 +23,6 @@ clean:
 	    node1/node.hs node2/node.hs node3/node.hs \
 	    node1/Taxi.hs node2/Taxi.hs node3/Taxi.hs \
 	    node1/Dockerfile node2/Dockerfile node3/Dockerfile
-	-rmdir node1 node2 node3
+	-rmdir node2 node3
 
 .PHONY: clean nodes
