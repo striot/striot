@@ -5,7 +5,9 @@
 import Striot.CompileIoT
 import Algebra.Graph
 
-opts = GenerateOpts { imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"] }
+opts = GenerateOpts { imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"]
+                    , preSource = Nothing
+                    }
 
 pipeEx :: StreamGraph
 pipeEx = path

@@ -2,11 +2,14 @@ import Striot.CompileIoT
 import Algebra.Graph
 
 opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
-          , "Striot.FunctionalProcessing"
-          , "Striot.Nodes"
-          , "Control.Concurrent"
-          , "System.Random (getStdRandom, randomR)"
-          , "Control.Monad (replicateM)"] }
+                                , "Striot.FunctionalProcessing"
+                                , "Striot.Nodes"
+                                , "Control.Concurrent"
+                                , "System.Random (getStdRandom, randomR)"
+                                , "Control.Monad (replicateM)"
+                                ]
+                    , preSource = Nothing
+                    }
 
 -- 40 words picked randomly from the dictionary, 20 of which are prefixed
 -- with # to simulate hashtags

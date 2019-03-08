@@ -99,7 +99,8 @@ type StreamGraph = Graph StreamVertex
 -}
 
 data GenerateOpts = GenerateOpts
-    { imports :: [String] -- list of import statements to add to generated files
+    { imports   :: [String]     -- list of import statements to add to generated files
+    , preSource :: Maybe String -- code to run prior to starting nodeSource
     }
 
 generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
@@ -142,7 +143,7 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
         intVerts= filter (\x-> not $ operator x `elem` [Source,Sink]) $ vertexList sg
         valence = partValence sg cuts
         nodeFn sg = case (nodeType sg) of
-            NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts)
+            NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts
             NodeLink   -> generateNodeLink (partId + 1)
             NodeSink   -> generateNodeSink valence
         possibleSrcSinkFn sg = case (nodeType sg) of
@@ -206,12 +207,18 @@ generateNodeLink n = "main = nodeLink streamGraphFn \"9001\" \"node"++(show n)++
 
 -- warts:
 --  we accept a list of onward nodes but nodeSource only accepts one anyway
-generateNodeSrc :: Integer -> [Integer] -> String
-generateNodeSrc partId nodes = let
+generateNodeSrc :: Integer -> [Integer] -> GenerateOpts -> String
+generateNodeSrc partId nodes opts = let
     node = head nodes
     host = "node" ++ (show node)
     port = 9001 + partId -1 -- XXX Unlikely to always be correct
-    in "main = nodeSource src1 streamGraphFn \""++host++"\" \""++(show port)++"\""
+    pref = case preSource opts of
+       Nothing -> ""
+       Just f  -> f
+
+    in "main = do\n\
+\       "++pref++"\n\
+\       nodeSource src1 streamGraphFn \""++host++"\" \""++(show port)++"\""
 
 generateNodeSink :: Int -> String
 generateNodeSink v = case v of

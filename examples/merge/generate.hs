@@ -5,7 +5,9 @@
 import Striot.CompileIoT
 import Algebra.Graph
 
-opts = GenerateOpts { imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"] }
+opts = GenerateOpts { imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"]
+                    , preSource = Nothing
+                    }
 
 source x = "do\n\
 \    threadDelay (1000*1000)\n\

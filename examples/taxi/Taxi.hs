@@ -11,6 +11,7 @@ import Data.Time (UTCTime(..),fromGregorianValid,NominalDiffTime,addUTCTime)
 import GHC.Generics (Generic)
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
+import System.Posix.IO
 
 -- A solution to: http://www.debs2015.org/call-grand-challenge.html
 -- The winner was: https://vgulisano.files.wordpress.com/2015/06/debs2015gc_tr.pdf
@@ -389,3 +390,12 @@ q2TripSourceTest10 = do
 tripTimes :: WindowMaker Trip
 tripTimes [] = []
 tripTimes (e@(Event eid _ v):t) = [Event eid (fmap dropoffDatetime v) v] : tripTimes t
+
+-- a function to run on the source node prior to setting up the stream
+-- the nodeSource function will call "getLine" which operates on the "stdin" file handle
+-- which (on POSIX systems) maps to file descriptor 0.
+-- The below code re-assigns FD 0 to a file handle for sorteddata.csv, so "getLine" pulls
+-- from that instead.
+preSource = do
+    fd <- openFd "sorteddata.csv" ReadOnly Nothing (OpenFileFlags False False False False False)
+    dupTo fd stdInput
