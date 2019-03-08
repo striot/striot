@@ -8,7 +8,6 @@ module Striot.CompileIoT ( StreamGraph(..)
                          , GenerateOpts(..)
                          , PartitionMap
                          , writePart
-                         , writePart'
                          , genDockerfile
                          , partitionGraph
 
@@ -101,6 +100,7 @@ type StreamGraph = Graph StreamVertex
 
 data GenerateOpts = GenerateOpts
     { imports   :: [String]     -- list of import statements to add to generated files
+    , packages  :: [String]     -- list of Cabal packages to install within containers
     , preSource :: Maybe String -- code to run prior to starting nodeSource
     }
 
@@ -301,7 +301,8 @@ streamgraph' n | n>0 = do
     t <- streamgraph' (n-1)
     return $ connect (vertex v) t
 
-genDockerfile listen pkgs = concat
+genDockerfile listen opts = 
+    let pkgs = packages opts in concat
     [ "FROM striot/striot-base:latest\n"
     , "WORKDIR /opt/node\n"
     , "COPY . /opt/node\n"
@@ -312,13 +313,10 @@ genDockerfile listen pkgs = concat
     , "CMD /opt/node/node\n"
     ]
 
-defaultDockerfile = genDockerfile True []
-
 -- XXX rename
-writePart :: (Int, String) -> IO ()
-writePart parts = writePart' defaultDockerfile parts
-
-writePart' dockerfile (x,y) = let
+writePart :: GenerateOpts -> (Int, String) -> IO ()
+writePart opts (x,y) = let
+    dockerfile = genDockerfile True opts
     bn = "node" ++ (show x)
     fn = bn </> "node.hs"
     in do
@@ -329,4 +327,4 @@ writePart' dockerfile (x,y) = let
 -- a very high level function for using the Partitioner
 partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
 partitionGraph graph partitions opts =
-    mapM_ writePart $ zip [1..] $ generateCode graph partitions opts
+    mapM_ (writePart opts) $ zip [1..] $ generateCode graph partitions opts

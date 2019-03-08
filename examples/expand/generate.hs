@@ -8,6 +8,7 @@ opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
                                 , "System.Random (getStdRandom, randomR)"
                                 , "Control.Monad (replicateM)"
                                 ]
+                    , packages  = ["random"]
                     , preSource = Nothing
                     }
 
@@ -41,6 +42,4 @@ mergeEx = path [v1, v2, v5, v6]
 parts = [[1,2],[5,6]]
 partEx = generateCode mergeEx parts opts
 
-dockerfile = genDockerfile True ["random"]
-
-main = mapM_ (writePart' dockerfile) (zip [1..] partEx)
+main = mapM_ (writePart opts) (zip [1..] partEx)

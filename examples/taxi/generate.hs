@@ -16,6 +16,7 @@ opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
                                    , "Data.List.Split" -- splitOn
                                    , "Control.Concurrent"
                                    ] -- threadDelay
+                    , packages = []
                     , preSource = Just "preSource"
                     }
 source = "do\n\

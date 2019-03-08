@@ -6,6 +6,7 @@ import Striot.CompileIoT
 import Algebra.Graph
 
 opts = GenerateOpts { imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"]
+                    , packages = []
                     , preSource = Nothing
                     }
 
@@ -21,4 +22,4 @@ pipeEx = path
 
 partEx = generateCode pipeEx [[1,2],[3],[4,5,6]] opts
 
-main = mapM_ writePart (zip [1..] partEx)
+main = mapM_ (writePart opts) (zip [1..] partEx)

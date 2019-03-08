@@ -5,7 +5,8 @@
 import Striot.CompileIoT
 import Algebra.Graph
 
-opts = GenerateOpts { imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent", "System.Random"]
+opts = GenerateOpts { imports   = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent", "System.Random"]
+                    , packages  = ["random"]
                     , preSource = Nothing
                     }
 
@@ -28,6 +29,4 @@ mergeEx = path [v1, v2, v3, v4, v5]
 parts = [[1,2],[3,4,5]]
 partEx = generateCode mergeEx parts opts
 
-dockerfile = genDockerfile True ["random"]
-
-main = mapM_ (writePart' dockerfile) (zip [1..] partEx)
+main = mapM_ (writePart opts) (zip [1..] partEx)
