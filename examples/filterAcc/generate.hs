@@ -5,10 +5,9 @@
 import Striot.CompileIoT
 import Algebra.Graph
 
-opts = GenerateOpts { imports   = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent", "System.Random"]
-                    , packages  = ["random"]
-                    , preSource = Nothing
-                    }
+opts = defaultOpts { imports  = imports defaultOpts ++ ["System.Random"]
+                   , packages = ["random"]
+                   }
 
 source = "do\n\
 \    i <- getStdRandom (randomR (1,10)) :: IO Int\n\

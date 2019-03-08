@@ -6,6 +6,7 @@ module Striot.CompileIoT ( StreamGraph(..)
                          , createPartitions
                          , generateCode
                          , GenerateOpts(..)
+                         , defaultOpts
                          , PartitionMap
                          , writePart
                          , genDockerfile
@@ -102,6 +103,12 @@ data GenerateOpts = GenerateOpts
     { imports   :: [String]     -- list of import statements to add to generated files
     , packages  :: [String]     -- list of Cabal packages to install within containers
     , preSource :: Maybe String -- code to run prior to starting nodeSource
+    }
+
+defaultOpts = GenerateOpts
+    { imports   = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"]
+    , packages  = []
+    , preSource = Nothing
     }
 
 generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]

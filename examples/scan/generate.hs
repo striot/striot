@@ -1,15 +1,6 @@
 import Striot.CompileIoT
 import Algebra.Graph
 
-opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
-                                , "Striot.FunctionalProcessing"
-                                , "Striot.Nodes"
-                                , "Control.Concurrent"
-                                ]
-                    , packages = []
-                    , preSource = Nothing
-                    }
-
 source x = "do\n\
 \    threadDelay (1000*1000)\n\
 \    putStrLn \"sending '"++x++"'\"\n\
@@ -25,4 +16,4 @@ graph = path [v1, v2, v5, v6]
 
 parts = [[1,2],[5,6]]
 
-main = partitionGraph graph parts opts
+main = partitionGraph graph parts defaultOpts
