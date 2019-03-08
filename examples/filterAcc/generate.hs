@@ -26,4 +26,6 @@ mergeEx = path [v1, v2, v3, v4, v5]
 parts = [[1,2],[3,4,5]]
 partEx = generateCode mergeEx parts imports
 
-main = mapM_ writePart (zip [1..] partEx)
+dockerfile = genDockerfile True ["random"]
+
+main = mapM_ (writePart' dockerfile) (zip [1..] partEx)
