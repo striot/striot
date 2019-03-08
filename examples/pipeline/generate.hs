@@ -5,7 +5,7 @@
 import Striot.CompileIoT
 import Algebra.Graph
 
-imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"]
+opts = GenerateOpts { imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"] }
 
 pipeEx :: StreamGraph
 pipeEx = path
@@ -17,6 +17,6 @@ pipeEx = path
     , StreamVertex 6 Sink   ["mapM_ print"]                                                        "[String]" "IO ()"
     ]
 
-partEx = generateCode pipeEx [[1,2],[3],[4,5,6]] imports
+partEx = generateCode pipeEx [[1,2],[3],[4,5,6]] opts
 
 main = mapM_ writePart (zip [1..] partEx)

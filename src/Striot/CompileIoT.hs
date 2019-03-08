@@ -5,6 +5,7 @@ module Striot.CompileIoT ( StreamGraph(..)
                          , StreamOperator(..)
                          , createPartitions
                          , generateCode
+                         , GenerateOpts(..)
                          , PartitionMap
                          , writePart
                          , writePart'
@@ -97,13 +98,17 @@ type StreamGraph = Graph StreamVertex
         passes some kind of connectedness test?
 -}
 
-generateCode :: StreamGraph -> PartitionMap -> [String] -> [String]
-generateCode sg pm imports = generateCode' (createPartitions sg pm) imports
+data GenerateOpts = GenerateOpts
+    { imports :: [String] -- list of import statements to add to generated files
+    }
 
-generateCode' :: ([StreamGraph], StreamGraph) -> [String] -> [String]
-generateCode' (sgs,cuts) imports = let
+generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
+generateCode sg pm opts = generateCode' (createPartitions sg pm) opts
+
+generateCode' :: ([StreamGraph], StreamGraph) -> GenerateOpts -> [String]
+generateCode' (sgs,cuts) opts = let
                   enumeratedParts = zip [1..] sgs
-                  in map (generateCodeFromStreamGraph imports enumeratedParts cuts) enumeratedParts
+                  in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
 
 data NodeType = NodeSource | NodeSink | NodeLink deriving (Show)
 
@@ -116,8 +121,8 @@ nodeType sg = if operator (head (vertexList sg)) == Source
 
 -- vertexList outputs *sorted*. That corresponds to the Id value for
 -- our StreamVertex type
-generateCodeFromStreamGraph :: [String] -> [(Integer, StreamGraph)] -> StreamGraph -> (Integer,StreamGraph) -> String
-generateCodeFromStreamGraph imports parts cuts (partId,sg) = intercalate "\n" $
+generateCodeFromStreamGraph :: GenerateOpts -> [(Integer, StreamGraph)] -> StreamGraph -> (Integer,StreamGraph) -> String
+generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
     nodeId : -- convenience comment labelling the node/partition ID
     imports' ++
     (possibleSrcSinkFn sg) :
@@ -132,7 +137,7 @@ generateCodeFromStreamGraph imports parts cuts (partId,sg) = intercalate "\n" $
         sgTypeSignature = "streamGraphFn ::"++(concat $ take valence $ repeat $ " Stream "++(inType sg)++" ->")++" Stream "++(outType sg)
         sgIntro = "streamGraphFn "++sgArgs++" = let"
         sgArgs = unwords $ map (('n':).show) [1..valence]
-        imports' = (map ("import "++) imports) ++ ["\n"]
+        imports' = (map ("import "++) (imports opts)) ++ ["\n"]
         lastIdentifier = 'n':(show $ (length intVerts) + valence)
         intVerts= filter (\x-> not $ operator x `elem` [Source,Sink]) $ vertexList sg
         valence = partValence sg cuts

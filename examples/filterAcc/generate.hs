@@ -5,7 +5,7 @@
 import Striot.CompileIoT
 import Algebra.Graph
 
-imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent", "System.Random"]
+opts = GenerateOpts { imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent", "System.Random"] }
 
 source = "do\n\
 \    i <- getStdRandom (randomR (1,10)) :: IO Int\n\
@@ -24,7 +24,7 @@ mergeEx :: StreamGraph
 mergeEx = path [v1, v2, v3, v4, v5]
 
 parts = [[1,2],[3,4,5]]
-partEx = generateCode mergeEx parts imports
+partEx = generateCode mergeEx parts opts
 
 dockerfile = genDockerfile True ["random"]
 

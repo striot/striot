@@ -1,7 +1,7 @@
 import Striot.CompileIoT
 import Algebra.Graph
 
-imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"]
+opts = GenerateOpts { imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"] }
 
 source x = "do\n\
 \    threadDelay (1000*1000)\n\
@@ -19,6 +19,6 @@ joinEx :: StreamGraph
 joinEx = overlay (path [v3, v4, v5]) $ path [v1, v2, v5, v6]
 
 parts = [[1,2],[3,4],[5,6]]
-partEx = generateCode joinEx parts imports
+partEx = generateCode joinEx parts opts
 
 main = mapM_ writePart (zip [1..] partEx)

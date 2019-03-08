@@ -1,12 +1,12 @@
 import Striot.CompileIoT
 import Algebra.Graph
 
-imports = [ "Striot.FunctionalIoTtypes"
+opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
           , "Striot.FunctionalProcessing"
           , "Striot.Nodes"
           , "Control.Concurrent"
           , "System.Random (getStdRandom, randomR)"
-          , "Control.Monad (replicateM)"]
+          , "Control.Monad (replicateM)"] }
 
 -- 40 words picked randomly from the dictionary, 20 of which are prefixed
 -- with # to simulate hashtags
@@ -36,7 +36,7 @@ mergeEx :: StreamGraph
 mergeEx = path [v1, v2, v5, v6]
 
 parts = [[1,2],[5,6]]
-partEx = generateCode mergeEx parts imports
+partEx = generateCode mergeEx parts opts
 
 dockerfile = genDockerfile True ["random"]
 
