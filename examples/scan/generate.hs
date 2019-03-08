@@ -1,6 +1,5 @@
 import Striot.CompileIoT
 import Algebra.Graph
-import System.FilePath --(</>)
 
 imports = [ "Striot.FunctionalIoTtypes"
           , "Striot.FunctionalProcessing"
@@ -24,11 +23,4 @@ scanEx = path [v1, v2, v5, v6]
 parts = [[1,2],[5,6]]
 partEx = generateCode scanEx parts imports
 
-writePart :: (Char, String) -> IO ()
-writePart (x,y) = let
-    bn = "node" ++ (x:[])
-    fn = bn </> bn ++ ".hs"
-    in
-        writeFile fn y
-
-main = mapM_ writePart (zip ['1'..] partEx)
+main = mapM_ writePart (zip [1..] partEx)

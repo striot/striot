@@ -4,7 +4,6 @@
 
 import Striot.CompileIoT
 import Algebra.Graph
-import System.FilePath --(</>)
 
 imports = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"]
 
@@ -20,11 +19,4 @@ pipeEx = path
 
 partEx = generateCode pipeEx [[1,2],[3],[4,5,6]] imports
 
-writePart :: (Char, String) -> IO ()
-writePart (x,y) = let
-    bn = "node" ++ (x:[])
-    fn = bn </> bn ++ ".hs"
-    in
-        writeFile fn y
-
-main = mapM_ writePart (zip ['1'..] partEx)
+main = mapM_ writePart (zip [1..] partEx)
