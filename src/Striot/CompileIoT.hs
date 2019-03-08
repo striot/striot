@@ -44,17 +44,17 @@ instance Show StreamOperator where
     show Source          = "streamSource"
     show Sink            = "streamSink"
 
--- Id needed for uniquely identifying a vertex. (Is there a nicer way?)
+
 data StreamVertex = StreamVertex
-    { vertexId   :: Int
+    { vertexId   :: Int            -- Id needed for uniquely identifying a vertex. (Is there a nicer way?)
     , operator   :: StreamOperator
-    , parameters :: [String] -- XXX strings of code. From CompileIoT. Variable length e.g.FilterAcc takes 3 (?)
+    , parameters :: [String]       -- operator arguments (excluding the input stream)
     , intype     :: String
     , outtype    :: String
     } deriving (Eq,Show)
 
 instance Ord StreamVertex where
-    compare (StreamVertex x _ _ _ _) (StreamVertex y _ _ _ _) = compare x y
+    compare x y = compare (vertexId x) (vertexId y)
 
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
