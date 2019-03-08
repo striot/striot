@@ -10,8 +10,7 @@ opts = GenerateOpts { imports = ["Striot.FunctionalIoTtypes", "Striot.Functional
                     , preSource = Nothing
                     }
 
-pipeEx :: StreamGraph
-pipeEx = path
+graph = path
     [ StreamVertex 1 Source ["do\n    threadDelay (1000*1000)\n    return \"Hello from Client!\""] "String" "String"
     , StreamVertex 2 Map    ["(\\st->st++st)", "s"]                                                "String" "String"
     , StreamVertex 3 Map    ["reverse", "s"]                                                       "String" "String"
@@ -20,6 +19,4 @@ pipeEx = path
     , StreamVertex 6 Sink   ["mapM_ print"]                                                        "[String]" "IO ()"
     ]
 
-partEx = generateCode pipeEx [[1,2],[3],[4,5,6]] opts
-
-main = mapM_ (writePart opts) (zip [1..] partEx)
+main = partitionGraph graph [[1,2],[3],[4,5,6]] opts

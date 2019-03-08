@@ -23,10 +23,8 @@ v3 = StreamVertex 3 Filter ["(\\i -> (read i :: Int) > 5)", "s"] "String" "Strin
 v4 = StreamVertex 4 Window ["(chop 1)", "s"] "String" "[String]"
 v5 = StreamVertex 5 Sink   ["mapM_ $ putStrLn . (\"receiving \"++) . show . value"] "[String]" "IO ()"
 
-mergeEx :: StreamGraph
-mergeEx = path [v1, v2, v3, v4, v5]
+graph = path [v1, v2, v3, v4, v5]
 
 parts = [[1,2],[3,4,5]]
-partEx = generateCode mergeEx parts opts
 
-main = mapM_ (writePart opts) (zip [1..] partEx)
+main = partitionGraph graph parts opts

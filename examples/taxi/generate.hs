@@ -48,5 +48,4 @@ taxiQ1 = path
 
 parts = [[1..7],[8],[9..10]]
 
-main = do
-    partitionGraph taxiQ1 parts opts
+main = partitionGraph taxiQ1 parts opts

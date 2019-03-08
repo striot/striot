@@ -36,10 +36,8 @@ v2 = StreamVertex 2 Map    ["(filter (('#'==).head) . words)","s"] "String" "[St
 v5 = StreamVertex 5 Expand ["s"]                                   "[String]" "String"
 v6 = StreamVertex 6 Sink   ["mapM_ print"]                         "String" "String"
 
-mergeEx :: StreamGraph
-mergeEx = path [v1, v2, v5, v6]
+graph = path [v1, v2, v5, v6]
 
 parts = [[1,2],[5,6]]
-partEx = generateCode mergeEx parts opts
 
-main = mapM_ (writePart opts) (zip [1..] partEx)
+main = partitionGraph graph parts opts

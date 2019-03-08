@@ -21,10 +21,8 @@ v2 = StreamVertex 2 Map    ["id", "s"] "String" "String"
 v5 = StreamVertex 5 Scan   ["(\\old _ -> old + 1)", "0", "s"] "String" "Int"
 v6 = StreamVertex 6 Sink   ["mapM_ print"] "Int" "IO ()"
 
-scanEx :: StreamGraph
-scanEx = path [v1, v2, v5, v6]
+graph = path [v1, v2, v5, v6]
 
 parts = [[1,2],[5,6]]
-partEx = generateCode scanEx parts opts
 
-main = mapM_ (writePart opts) (zip [1..] partEx)
+main = partitionGraph graph parts opts
