@@ -6,12 +6,16 @@ module Striot.CompileIoT ( StreamGraph(..)
                          , createPartitions
                          , generateCode
                          , PartitionMap
+                         , writePart
+
                          , htf_thisModulesTests
                          ) where
 
 import Data.List (intercalate)
 import Algebra.Graph
 import Test.Framework
+import System.FilePath ((</>))
+import System.Directory (createDirectoryIfMissing)
 
 data StreamOperator = Map
                     | Filter
@@ -281,3 +285,24 @@ streamgraph' n | n>0 = do
     v <- arbitrary
     t <- streamgraph' (n-1)
     return $ connect (vertex v) t
+
+-- XXX we need a way of injecting additional instructions e.g. (for expand)
+-- RUN cabal install random
+-- for now just install it in *every* container
+dockerfile listen = concat [ "FROM striot/striot-base:latest\n"
+                           , "WORKDIR /opt/node\n"
+                           , "COPY . /opt/node\n"
+                           , "RUN cabal install random\n"
+                           , "RUN ghc node.hs\n"
+                           , if listen then "EXPOSE 9001\n" else ""
+                           , "CMD /opt/node/node\n" ]
+
+-- XXX rename
+writePart :: (Int, String) -> IO ()
+writePart (x,y) = let
+    bn = "node" ++ (show x)
+    fn = bn </> "node.hs"
+    in do
+        createDirectoryIfMissing True bn
+        writeFile (bn </> "Dockerfile") (dockerfile True)
+        writeFile fn y
