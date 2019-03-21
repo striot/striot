@@ -5,13 +5,21 @@ module Striot.CompileIoT ( StreamGraph(..)
                          , StreamOperator(..)
                          , createPartitions
                          , generateCode
+                         , GenerateOpts(..)
+                         , defaultOpts
                          , PartitionMap
+                         , writePart
+                         , genDockerfile
+                         , partitionGraph
+
                          , htf_thisModulesTests
                          ) where
 
 import Data.List (intercalate)
 import Algebra.Graph
 import Test.Framework
+import System.FilePath ((</>))
+import System.Directory (createDirectoryIfMissing)
 
 data StreamOperator = Map
                     | Filter
@@ -37,17 +45,17 @@ instance Show StreamOperator where
     show Source          = "streamSource"
     show Sink            = "streamSink"
 
--- Id needed for uniquely identifying a vertex. (Is there a nicer way?)
+
 data StreamVertex = StreamVertex
-    { vertexId   :: Int
+    { vertexId   :: Int            -- Id needed for uniquely identifying a vertex. (Is there a nicer way?)
     , operator   :: StreamOperator
-    , parameters :: [String] -- XXX strings of code. From CompileIoT. Variable length e.g.FilterAcc takes 3 (?)
+    , parameters :: [String]       -- operator arguments (excluding the input stream)
     , intype     :: String
     , outtype    :: String
     } deriving (Eq,Show)
 
 instance Ord StreamVertex where
-    compare (StreamVertex x _ _ _ _) (StreamVertex y _ _ _ _) = compare x y
+    compare x y = compare (vertexId x) (vertexId y)
 
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
@@ -91,13 +99,25 @@ type StreamGraph = Graph StreamVertex
         passes some kind of connectedness test?
 -}
 
-generateCode :: StreamGraph -> PartitionMap -> [String] -> [String]
-generateCode sg pm imports = generateCode' (createPartitions sg pm) imports
+data GenerateOpts = GenerateOpts
+    { imports   :: [String]     -- list of import statements to add to generated files
+    , packages  :: [String]     -- list of Cabal packages to install within containers
+    , preSource :: Maybe String -- code to run prior to starting nodeSource
+    }
 
-generateCode' :: ([StreamGraph], StreamGraph) -> [String] -> [String]
-generateCode' (sgs,cuts) imports = let
+defaultOpts = GenerateOpts
+    { imports   = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"]
+    , packages  = []
+    , preSource = Nothing
+    }
+
+generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
+generateCode sg pm opts = generateCode' (createPartitions sg pm) opts
+
+generateCode' :: ([StreamGraph], StreamGraph) -> GenerateOpts -> [String]
+generateCode' (sgs,cuts) opts = let
                   enumeratedParts = zip [1..] sgs
-                  in map (generateCodeFromStreamGraph imports enumeratedParts cuts) enumeratedParts
+                  in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
 
 data NodeType = NodeSource | NodeSink | NodeLink deriving (Show)
 
@@ -110,8 +130,8 @@ nodeType sg = if operator (head (vertexList sg)) == Source
 
 -- vertexList outputs *sorted*. That corresponds to the Id value for
 -- our StreamVertex type
-generateCodeFromStreamGraph :: [String] -> [(Integer, StreamGraph)] -> StreamGraph -> (Integer,StreamGraph) -> String
-generateCodeFromStreamGraph imports parts cuts (partId,sg) = intercalate "\n" $
+generateCodeFromStreamGraph :: GenerateOpts -> [(Integer, StreamGraph)] -> StreamGraph -> (Integer,StreamGraph) -> String
+generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
     nodeId : -- convenience comment labelling the node/partition ID
     imports' ++
     (possibleSrcSinkFn sg) :
@@ -126,12 +146,12 @@ generateCodeFromStreamGraph imports parts cuts (partId,sg) = intercalate "\n" $
         sgTypeSignature = "streamGraphFn ::"++(concat $ take valence $ repeat $ " Stream "++(inType sg)++" ->")++" Stream "++(outType sg)
         sgIntro = "streamGraphFn "++sgArgs++" = let"
         sgArgs = unwords $ map (('n':).show) [1..valence]
-        imports' = (map ("import "++) imports) ++ ["\n"]
+        imports' = (map ("import "++) (imports opts)) ++ ["\n"]
         lastIdentifier = 'n':(show $ (length intVerts) + valence)
         intVerts= filter (\x-> not $ operator x `elem` [Source,Sink]) $ vertexList sg
         valence = partValence sg cuts
         nodeFn sg = case (nodeType sg) of
-            NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts)
+            NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts
             NodeLink   -> generateNodeLink (partId + 1)
             NodeSink   -> generateNodeSink valence
         possibleSrcSinkFn sg = case (nodeType sg) of
@@ -195,12 +215,18 @@ generateNodeLink n = "main = nodeLink streamGraphFn \"9001\" \"node"++(show n)++
 
 -- warts:
 --  we accept a list of onward nodes but nodeSource only accepts one anyway
-generateNodeSrc :: Integer -> [Integer] -> String
-generateNodeSrc partId nodes = let
+generateNodeSrc :: Integer -> [Integer] -> GenerateOpts -> String
+generateNodeSrc partId nodes opts = let
     node = head nodes
     host = "node" ++ (show node)
     port = 9001 + partId -1 -- XXX Unlikely to always be correct
-    in "main = nodeSource src1 streamGraphFn \""++host++"\" \""++(show port)++"\""
+    pref = case preSource opts of
+       Nothing -> ""
+       Just f  -> f
+
+    in "main = do\n\
+\       "++pref++"\n\
+\       nodeSource src1 streamGraphFn \""++host++"\" \""++(show port)++"\""
 
 generateNodeSink :: Int -> String
 generateNodeSink v = case v of
@@ -281,3 +307,31 @@ streamgraph' n | n>0 = do
     v <- arbitrary
     t <- streamgraph' (n-1)
     return $ connect (vertex v) t
+
+genDockerfile listen opts = 
+    let pkgs = packages opts in concat
+    [ "FROM striot/striot-base:latest\n"
+    , "WORKDIR /opt/node\n"
+    , "COPY . /opt/node\n"
+    , if pkgs /= [] then "RUN cabal install " ++ (intercalate " " pkgs) else ""
+    , "\n"
+    , "RUN ghc node.hs\n"
+    , if listen then "EXPOSE 9001\n" else ""
+    , "CMD /opt/node/node\n"
+    ]
+
+-- XXX rename
+writePart :: GenerateOpts -> (Int, String) -> IO ()
+writePart opts (x,y) = let
+    dockerfile = genDockerfile True opts
+    bn = "node" ++ (show x)
+    fn = bn </> "node.hs"
+    in do
+        createDirectoryIfMissing True bn
+        writeFile (bn </> "Dockerfile") dockerfile
+        writeFile fn y
+
+-- a very high level function for using the Partitioner
+partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
+partitionGraph graph partitions opts =
+    mapM_ (writePart opts) $ zip [1..] $ generateCode graph partitions opts

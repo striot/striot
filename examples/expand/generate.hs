@@ -1,13 +1,16 @@
 import Striot.CompileIoT
 import Algebra.Graph
-import System.FilePath --(</>)
 
-imports = [ "Striot.FunctionalIoTtypes"
-          , "Striot.FunctionalProcessing"
-          , "Striot.Nodes"
-          , "Control.Concurrent"
-          , "System.Random (getStdRandom, randomR)"
-          , "Control.Monad (replicateM)"]
+opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
+                                , "Striot.FunctionalProcessing"
+                                , "Striot.Nodes"
+                                , "Control.Concurrent"
+                                , "System.Random (getStdRandom, randomR)"
+                                , "Control.Monad (replicateM)"
+                                ]
+                    , packages  = ["random"]
+                    , preSource = Nothing
+                    }
 
 -- 40 words picked randomly from the dictionary, 20 of which are prefixed
 -- with # to simulate hashtags
@@ -33,17 +36,8 @@ v2 = StreamVertex 2 Map    ["(filter (('#'==).head) . words)","s"] "String" "[St
 v5 = StreamVertex 5 Expand ["s"]                                   "[String]" "String"
 v6 = StreamVertex 6 Sink   ["mapM_ print"]                         "String" "String"
 
-mergeEx :: StreamGraph
-mergeEx = path [v1, v2, v5, v6]
+graph = path [v1, v2, v5, v6]
 
 parts = [[1,2],[5,6]]
-partEx = generateCode mergeEx parts imports
 
-writePart :: (Char, String) -> IO ()
-writePart (x,y) = let
-    bn = "node" ++ (x:[])
-    fn = bn </> bn ++ ".hs"
-    in
-        writeFile fn y
-
-main = mapM_ writePart (zip ['1'..] partEx)
+main = partitionGraph graph parts opts
