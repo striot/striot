@@ -11,6 +11,7 @@ module Striot.CompileIoT ( StreamGraph(..)
                          , writePart
                          , genDockerfile
                          , partitionGraph
+                         , simpleStream
 
                          , htf_thisModulesTests
                          ) where
@@ -335,3 +336,12 @@ writePart opts (x,y) = let
 partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
 partitionGraph graph partitions opts =
     mapM_ (writePart opts) $ zip [1..] $ generateCode graph partitions opts
+
+simpleStream :: [(StreamOperator, [String], String)] -> Graph StreamVertex
+simpleStream tupes = path lst
+
+    where
+        intypes = "IO ()" : (map (\(_,_,ty) -> ty) (init tupes))
+        tupes3 = zip3 [1..] intypes tupes
+        lst = map (\ (i,intype,(op,params,outtype)) ->
+            StreamVertex i op params intype outtype) tupes3

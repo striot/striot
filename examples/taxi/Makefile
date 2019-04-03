@@ -1,6 +1,9 @@
 run: nodes
 	docker-compose up --build
 
+gen: generate
+	./generate
+
 nodes: node1/node.hs node2/node.hs node3/node.hs node1/Taxi.hs node2/Taxi.hs node3/Taxi.hs
 
 node1/Taxi.hs: Taxi.hs
@@ -24,6 +27,7 @@ clean:
 	    node1/node.hs node2/node.hs node3/node.hs \
 	    node1/Taxi.hs node2/Taxi.hs node3/Taxi.hs \
 	    node1/Dockerfile node2/Dockerfile node3/Dockerfile
-	-rmdir node2 node3
+	-test ! -d node2 || rmdir node2
+	-test ! -d node3 || rmdir node3
 
-.PHONY: clean nodes
+.PHONY: clean nodes gen
