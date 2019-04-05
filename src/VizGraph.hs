@@ -57,8 +57,9 @@ expandEx = path [v7, v8, v9, v10]
 
 displayGraph :: StreamGraph -> IO ()
 displayGraph g = do
-    (srcPath, srcHandle) <- openTempFile "/tmp" "graph.dot"
-    hPutStr srcHandle (streamGraphToDot g)
-    hClose srcHandle
-    rawSystem "/bin/sh" ["-c", "dot -Tpng "++srcPath++"| display - &"]
-    return ()
+    (Just hin,Just hout,_, _) <- createProcess (proc "dot" ["-Tpng"])
+      { std_out = CreatePipe, std_in = CreatePipe }
+    _ <- createProcess (proc "display" []){ std_in = UseHandle hout }
+
+    hPutStr hin (streamGraphToDot g)
+    hClose hin
