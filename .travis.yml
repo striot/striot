@@ -1,0 +1,30 @@
+language: haskell
+
+ghc:
+  - "8.4.3"
+
+services:
+  - docker
+
+stages:
+  - install
+  - build
+  - name: image
+    if: branch = master AND type = push
+
+install:
+  - cabal install happy
+  - cabal install --only-dependencies --enable-tests
+
+jobs:
+  include:
+    - stage: build
+      name: Build and test striot
+    - stage: image
+      install: true
+      name: Build striot-base docker image 
+      script:
+        - make -C containers/
+        - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        - docker push striot/striot-base:latest
+
