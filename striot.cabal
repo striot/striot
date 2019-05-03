@@ -23,7 +23,7 @@ library
   -- other-modules:
   -- other-extensions:
   build-depends:      base              >= 4.9
-                    , network           >= 2.6.0.0
+                    , network           >= 3.0.0.0
                     , containers        >= 0.5
                     , split             >= 0.2
                     , time              >= 1.6
@@ -46,7 +46,7 @@ test-suite test-striot
   type:               exitcode-stdio-1.0
   Main-is:            TestMain.hs
   build-depends:      base              >= 4.9
-                    , network           >= 2.6.0.0
+                    , network           >= 3.0.0.0
                     , containers        >= 0.5
                     , split             >= 0.2
                     , time              >= 1.6
