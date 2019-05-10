@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Striot.Nodes ( nodeSink
                     , nodeSink2
                     , nodeLink
@@ -5,22 +6,43 @@ module Striot.Nodes ( nodeSink
                     , nodeSource
                     ) where
 
-import           Control.Concurrent                    (forkFinally)
-import           Control.Concurrent.Async              (async)
-import           Control.Concurrent.Chan.Unagi.Bounded as U
-import qualified Control.Exception                     as E (bracket)
-import           Control.Monad                         (forever, unless, when)
-import qualified Data.ByteString                       as B (ByteString, null)
+import           Control.Concurrent                            (forkFinally)
+import           Control.Concurrent.Async                      (async)
+import           Control.Concurrent.Chan.Unagi.Bounded         as U
+import qualified Control.Exception                             as E (bracket)
+import           Control.Monad                                 (forever, unless,
+                                                                when)
+import qualified Data.ByteString                               as B (ByteString,
+                                                                     length,
+                                                                     null)
 import           Data.Maybe
-import           Data.Store                            (Store)
-import qualified Data.Store.Streaming                  as SS
-import           Data.Time                             (getCurrentTime)
+import           Data.Store                                    (Store)
+import qualified Data.Store.Streaming                          as SS
+import           Data.Text                                     as T (pack)
+import           Data.Time                                     (getCurrentTime)
 import           Network.Socket
 import           Network.Socket.ByteString
 import           Striot.FunctionalIoTtypes
 import           System.IO
-import           System.IO.ByteBuffer                  as BB
+import           System.IO.ByteBuffer                          as BB
 import           System.IO.Unsafe
+import           System.Metrics.Prometheus.Concurrent.Registry as PR (new, registerCounter,
+                                                                      registerGauge,
+                                                                      sample)
+import           System.Metrics.Prometheus.Http.Scrape         (serveHttpTextMetrics)
+import           System.Metrics.Prometheus.Metric.Counter      as PC (Counter,
+                                                                      add, inc)
+import           System.Metrics.Prometheus.Metric.Gauge        as PG (Gauge,
+                                                                      dec, inc)
+import           System.Metrics.Prometheus.MetricId            (addLabel)
+
+
+data Metrics = Metrics { _ingressConn   :: Gauge
+                       , _ingressBytes  :: Counter
+                       , _ingressEvents :: Counter
+                       , _egressConn    :: Gauge
+                       , _egressBytes   :: Counter
+                       , _egressEvents  :: Counter }
 
 
 --- SINK FUNCTIONS ---
@@ -32,8 +54,9 @@ nodeSink :: (Store alpha, Store beta)
          -> IO ()
 nodeSink streamOp iofn inputPort = do
     sock <- listenSocket inputPort
+    metrics <- startPrometheus "node-sink"
     putStrLn "Starting server ..."
-    stream <- processSocket sock
+    stream <- processSocket metrics sock
     let result = streamOp stream
     iofn result
 
@@ -48,9 +71,10 @@ nodeSink2 :: (Store alpha, Store beta, Store gamma)
 nodeSink2 streamOp iofn inputPort1 inputPort2 = do
     sock1 <- listenSocket inputPort1
     sock2 <- listenSocket inputPort2
+    metrics <- startPrometheus "node-sink"
     putStrLn "Starting server ..."
-    stream1 <- processSocket sock1
-    stream2 <- processSocket sock2
+    stream1 <- processSocket metrics sock1
+    stream2 <- processSocket metrics sock2
     let result = streamOp stream1 stream2
     iofn result
 
@@ -65,10 +89,11 @@ nodeLink :: (Store alpha, Store beta)
          -> IO ()
 nodeLink streamOp inputPort outputHost outputPort = do
     sock <- listenSocket inputPort
+    metrics <- startPrometheus "node-link"
     putStrLn "Starting link ..."
-    stream <- processSocket sock
+    stream <- processSocket metrics sock
     let result = streamOp stream
-    sendStream result outputHost outputPort
+    sendStream result metrics outputHost outputPort
 
 
 -- A Link with 2 inputs
@@ -82,11 +107,12 @@ nodeLink2 :: (Store alpha, Store beta, Store gamma)
 nodeLink2 streamOp inputPort1 inputPort2 outputHost outputPort = do
     sock1 <- listenSocket inputPort1
     sock2 <- listenSocket inputPort2
+    metrics <- startPrometheus "node-link"
     putStrLn "Starting link ..."
-    stream1 <- processSocket sock1
-    stream2 <- processSocket sock2
+    stream1 <- processSocket metrics sock1
+    stream2 <- processSocket metrics sock2
     let result = streamOp stream1 stream2
-    sendStream result outputHost outputPort
+    sendStream result metrics outputHost outputPort
 
 
 --- SOURCE FUNCTIONS ---
@@ -98,20 +124,22 @@ nodeSource :: Store beta
            -> ServiceName
            -> IO ()
 nodeSource pay streamGraph host port = do
+    metrics <- startPrometheus "node-source"
     putStrLn "Starting source ..."
-    stream <- readListFromSource pay
+    stream <- readListFromSource pay metrics
     let result = streamGraph stream
-    sendStream result host port -- or printStream if it's a completely self contained streamGraph
+    sendStream result metrics host port -- or printStream if it's a completely self contained streamGraph
 
 
 --- UTILITY FUNCTIONS ---
 
-readListFromSource :: IO alpha -> IO (Stream alpha)
+readListFromSource :: IO alpha -> Metrics -> IO (Stream alpha)
 readListFromSource = go 0
   where
-    go i pay = System.IO.Unsafe.unsafeInterleaveIO $ do
+    go i pay met = unsafeInterleaveIO $ do
         x  <- msg i
-        xs <- go (i + 1) pay    -- This will overflow eventually
+        PC.inc (_ingressEvents met)
+        xs <- go (i + 1) pay met    -- This will overflow eventually
         return (x : xs)
       where
         msg x = do
@@ -122,17 +150,17 @@ readListFromSource = go 0
 {- processSocket is a wrapper function that handles concurrently
 accepting and handling connections on the socket and reading all of the strings
 into an event Stream -}
-processSocket :: Store alpha => Socket -> IO (Stream alpha)
-processSocket sock = U.getChanContents =<< acceptConnections sock
+processSocket :: Store alpha => Metrics -> Socket -> IO (Stream alpha)
+processSocket met sock = U.getChanContents =<< acceptConnections met sock
 
 
 {- acceptConnections takes a socket as an argument and spins up a new thread to
 process the data received. The returned TChan object contains the data from
 the socket -}
-acceptConnections :: Store alpha => Socket -> IO (U.OutChan (Event alpha))
-acceptConnections sock = do
+acceptConnections :: Store alpha => Metrics -> Socket -> IO (U.OutChan (Event alpha))
+acceptConnections met sock = do
     (inChan, outChan) <- U.newChan chanSize
-    async $ connectionHandler sock inChan
+    async $ connectionHandler met sock inChan
     return outChan
 
 
@@ -146,23 +174,37 @@ chanSize = 10
 {- connectionHandler sits accepting any new connections. Once accepted, a new
 thread is forked to read from the socket. The function then loops to accept any
 subsequent connections -}
-connectionHandler :: Store alpha => Socket -> U.InChan (Event alpha) -> IO ()
-connectionHandler sockIn eventChan = forever $ do
+connectionHandler :: Store alpha => Metrics -> Socket -> U.InChan (Event alpha) -> IO ()
+connectionHandler met sockIn eventChan = forever $ do
     (conn, _) <- accept sockIn
-    forkFinally (processData conn eventChan) (\_ -> close conn)
+    forkFinally (PG.inc (_ingressConn met)
+                 >> processData met conn eventChan)
+                (\_ -> PG.dec (_ingressConn met)
+                       >> close conn)
 
 
 {- processData takes a Socket and UChan. All of the events are read through
 use of a ByteBuffer and recv. The events are decoded by using store-streaming
 and added to the chan  -}
-processData :: Store alpha => Socket -> U.InChan (Event alpha) -> IO ()
-processData conn eventChan =
+processData :: Store alpha => Metrics -> Socket -> U.InChan (Event alpha) -> IO ()
+processData met conn eventChan =
     BB.with Nothing $ \buffer -> forever $ do
-        event <- SS.decodeMessageBS buffer (readFromSocket conn)
+        event <- decodeMessageBS' met buffer (readFromSocket conn)
         case event of
-            Just m  -> U.writeChan eventChan $ SS.fromMessage m
+            Just m  -> do
+                        PC.inc (_ingressEvents met)
+                        U.writeChan eventChan $ SS.fromMessage m
             Nothing -> print "decode failed"
 
+
+{- This is a rewrite of Data.Store.Streaming decodeMessageBS, passing in
+Metrics so that we can calculate ingressBytes while decoding -}
+decodeMessageBS' :: Store a
+                 => Metrics -> BB.ByteBuffer
+                 -> IO (Maybe B.ByteString) -> IO (Maybe (SS.Message a))
+decodeMessageBS' met = SS.decodeMessage (\bb _ bs -> PC.add (B.length bs)
+                                                            (_ingressBytes met)
+                                                     >> BB.copyByteString bb bs)
 
 {- Read up to 4096 bytes from the socket at a time, packing into a Maybe
 structure. As we use TCP sockets recv should block, and so if msg is empty
@@ -177,18 +219,46 @@ readFromSocket conn = do
 
 {- Connects to socket within a bracket to ensure the socket is closed if an
 exception occurs -}
-sendStream :: Store alpha => Stream alpha -> HostName -> ServiceName -> IO ()
-sendStream []     _    _    = return ()
-sendStream stream host port =
-    E.bracket (connectSocket host port)
-              close
-              (`writeSocket` stream)
+sendStream :: Store alpha => Stream alpha -> Metrics -> HostName -> ServiceName -> IO ()
+sendStream []     _   _    _    = return ()
+sendStream stream met host port =
+    E.bracket (PG.inc (_egressConn met)
+               >> connectSocket host port)
+              (\conn -> PG.dec (_egressConn met)
+                        >> close conn)
+              (\conn -> writeSocket conn met stream)
 
 
 {- Encode messages and send over the socket -}
-writeSocket :: Store alpha => Socket -> Stream alpha -> IO ()
-writeSocket conn =
-    mapM_ (sendAll conn . SS.encodeMessage . SS.Message)
+writeSocket :: Store alpha => Socket -> Metrics -> Stream alpha -> IO ()
+writeSocket conn met =
+    mapM_ (\event ->
+            let val = SS.encodeMessage . SS.Message $ event
+            in  PC.inc (_egressEvents met)
+                >> PC.add (B.length val) (_egressBytes met)
+                >> sendAll conn val)
+
+
+--- PROMETHEUS ---
+
+startPrometheus :: String -> IO Metrics
+startPrometheus nodeName = do
+    reg <- PR.new
+    let lbl = addLabel "node" (T.pack nodeName) mempty
+        registerFn fn name = fn name lbl reg
+    ingressConn   <- registerFn registerGauge   "striot_ingress_connection"
+    ingressBytes  <- registerFn registerCounter "striot_ingress_bytes_total"
+    ingressEvents <- registerFn registerCounter "striot_ingress_events_total"
+    egressConn    <- registerFn registerGauge   "striot_egress_connection"
+    egressBytes   <- registerFn registerCounter "striot_egress_bytes_total"
+    egressEvents  <- registerFn registerCounter "striot_egress_events_total"
+    async $ serveHttpTextMetrics 8080 ["metrics"] (PR.sample reg)
+    return Metrics { _ingressConn   = ingressConn
+                   , _ingressBytes  = ingressBytes
+                   , _ingressEvents = ingressEvents
+                   , _egressConn    = egressConn
+                   , _egressBytes   = egressBytes
+                   , _egressEvents  = egressEvents }
 
 
 --- SOCKETS ---
