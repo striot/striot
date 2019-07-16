@@ -1,6 +1,8 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 
-module VizGraph(streamGraphToDot, htf_thisModulesTests) where
+module VizGraph ( streamGraphToDot
+                , displayGraph
+                , htf_thisModulesTests) where
 
 import Striot.CompileIoT
 import Algebra.Graph
@@ -8,6 +10,9 @@ import Algebra.Graph.Export.Dot
 import Data.String
 import Test.Framework
 import Data.List (intercalate)
+
+import System.Process
+import System.IO (openTempFile, hPutStr, hClose)
 
 streamGraphToDot :: StreamGraph -> String
 streamGraphToDot = export myStyle
@@ -49,3 +54,12 @@ v9 = StreamVertex 5 Expand [""]                 "[String]" "String"
 v10 = StreamVertex 6 Sink   ["mapM_ print"] "String" "IO ()"
 expandEx :: StreamGraph
 expandEx = path [v7, v8, v9, v10]
+
+displayGraph :: StreamGraph -> IO ()
+displayGraph g = do
+    (Just hin,Just hout,_, _) <- createProcess (proc "dot" ["-Tpng"])
+      { std_out = CreatePipe, std_in = CreatePipe }
+    _ <- createProcess (proc "display" []){ std_in = UseHandle hout }
+
+    hPutStr hin (streamGraphToDot g)
+    hClose hin
