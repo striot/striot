@@ -1,7 +1,7 @@
 language: haskell
 
 ghc:
-  - "8.4.3"
+  - "8.6"
 
 services:
   - docker
@@ -22,9 +22,8 @@ jobs:
       name: Build and test striot
     - stage: image
       install: true
-      name: Build striot-base docker image 
+      name: Build striot-base docker image
       script:
         - make -C containers/
         - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         - docker push striot/striot-base:latest
-
