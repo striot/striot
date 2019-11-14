@@ -10,4 +10,6 @@ import Striot.FunctionalIoTtypes
 import {-@ HTF_TESTS @-} Striot.FunctionalProcessing
 import Striot.Nodes
 
+import {-@ HTF_TESTS @-} Striot.LogicalOptimiser
+
 main = htfMain htf_importedTests
