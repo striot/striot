@@ -4,7 +4,7 @@ module VizGraph ( streamGraphToDot
                 , displayGraph
                 , htf_thisModulesTests) where
 
-import Striot.CompileIoT
+import Striot.StreamGraph
 import Algebra.Graph
 import Algebra.Graph.Export.Dot
 import Data.String

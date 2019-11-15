@@ -3,9 +3,8 @@
 -}
 
 import Striot.CompileIoT
+import Striot.StreamGraph
 import Algebra.Graph
-
-import VizGraph
 
 opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
                                 , "Striot.FunctionalProcessing"
