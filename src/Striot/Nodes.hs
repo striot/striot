@@ -1,28 +1,40 @@
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Striot.Nodes ( nodeSink
                     , nodeSink2
                     , nodeLink
                     , nodeLink2
                     , nodeSource
+                    , nodeSourceMqtt
+                    , nodeLinkMqtt
                     ) where
 
 import           Control.Concurrent                            (forkFinally)
 import           Control.Concurrent.Async                      (async)
 import           Control.Concurrent.Chan.Unagi.Bounded         as U
-import qualified Control.Exception                             as E (bracket)
+import           Control.Concurrent.STM
+import qualified Control.Exception                             as E (bracket,
+                                                                     catch,
+                                                                     evaluate)
 import           Control.Monad                                 (forever, unless,
                                                                 when)
+import           Control.DeepSeq                               (force)
 import qualified Data.ByteString                               as B (ByteString,
                                                                      length,
                                                                      null)
+import qualified Data.ByteString.Lazy.Char8                    as BLC
 import           Data.Maybe
-import           Data.Store                                    (Store)
+import           Data.Store                                    (Store, encode, decode)
 import qualified Data.Store.Streaming                          as SS
 import           Data.Text                                     as T (pack)
 import           Data.Time                                     (getCurrentTime)
+import           Network.MQTT.Client
+import           Network.MQTT.Types                            (RetainHandling(..))
 import           Network.Socket
 import           Network.Socket.ByteString
+import           Network.URI                                   (parseURI)
 import           Striot.FunctionalIoTtypes
+import           System.Exit                                   (exitFailure)
 import           System.IO
 import           System.IO.ByteBuffer                          as BB
 import           System.IO.Unsafe
@@ -128,7 +140,41 @@ nodeSource pay streamGraph host port = do
     putStrLn "Starting source ..."
     stream <- readListFromSource pay metrics
     let result = streamGraph stream
-    sendStream result metrics host port -- or printStream if it's a completely self contained streamGraph
+    sendStream result metrics host port
+    -- or printStream if it's a completely self contained streamGraph
+
+
+--- MQTT FUNCTIONS ---
+
+nodeSourceMqtt :: Store beta
+               => IO alpha
+               -> (Stream alpha -> Stream beta)
+               -> String
+               -> HostName
+               -> ServiceName
+               -> IO ()
+nodeSourceMqtt pay streamOp nodeName host port = do
+    metrics <- startPrometheus nodeName
+    putStrLn "Starting source ..."
+    stream <- readListFromSource pay metrics
+    let result = streamOp stream
+    sendStreamMqtt result metrics nodeName host port
+
+
+nodeLinkMqtt :: (Store alpha, Store beta)
+             => (Stream alpha -> Stream beta)
+             -> String
+             -> HostName
+             -> ServiceName
+             -> HostName
+             -> ServiceName
+             -> IO ()
+nodeLinkMqtt streamOp nodeName inputHost inputPort outputHost outputPort = do
+    metrics <- startPrometheus nodeName
+    putStrLn "Starting link ..."
+    stream <- processSocketMqtt metrics nodeName inputHost inputPort
+    let result = streamOp stream
+    sendStream result metrics outputHost outputPort
 
 
 --- UTILITY FUNCTIONS ---
@@ -300,3 +346,71 @@ createSocket host port hints = do
     isHost h
         | null h    = Nothing
         | otherwise = Just h
+
+
+--- MQTT ---
+
+processSocketMqtt :: Store alpha => Metrics -> String -> HostName -> ServiceName -> IO (Stream alpha)
+processSocketMqtt met nodeName host port = U.getChanContents =<< acceptConnectionsMqtt met nodeName host port
+
+
+acceptConnectionsMqtt :: Store alpha => Metrics -> String -> HostName -> ServiceName -> IO (U.OutChan (Event alpha))
+acceptConnectionsMqtt met nodeName host port = do
+    (inChan, outChan) <- U.newChan chanSize
+    async $ runMqttSub met nodeName mqttTopics host port inChan
+    -- async $ runMqttSub nodeName host port inChan
+    return outChan
+
+
+sendStreamMqtt :: Store alpha => Stream alpha -> Metrics -> String -> HostName -> ServiceName -> IO ()
+sendStreamMqtt stream met nodeName host port = do
+    mc <- runMqttPub nodeName host port
+    mapM_ (\x -> do
+                    val <- E.evaluate . force . encode $ x
+                    PC.inc (_egressEvents met)
+                        >> PC.add (B.length val) (_egressBytes met)
+                        >> publishq mc (head mqttTopics) (BLC.fromStrict val) False QoS0 []) stream
+
+
+runMqttPub :: String -> HostName -> ServiceName -> IO MQTTClient
+runMqttPub nodeName host port =
+    let (Just uri) = parseURI $ "mqtt://" ++ host ++ ":" ++ port
+    in  connectURI (netmqttConf nodeName host port NoCallback) uri
+
+
+runMqttSub :: Store alpha => Metrics -> String -> [Topic] -> HostName -> ServiceName -> U.InChan (Event alpha) -> IO ()
+runMqttSub met nodeName topics host port chan = do
+    let (Just uri) = parseURI $ "mqtt://" ++ host ++ ":" ++ port
+    mc <- connectURI (netmqttConf nodeName host port (SimpleCallback $ mqttMessageCallback met chan)) uri
+    print =<< subscribe mc (map (\x -> (x, subOptions)) topics) []
+    waitForClient mc
+
+
+mqttMessageCallback :: Store alpha => Metrics -> U.InChan (Event alpha) -> MQTTClient -> Topic -> BLC.ByteString -> [Property] -> IO ()
+mqttMessageCallback met chan mc topic msg _ =
+    let bmsg = BLC.toStrict msg
+    in  PC.inc (_ingressEvents met)
+            >> PC.add (B.length bmsg) (_ingressBytes met)
+            >> case decode bmsg of
+                    Right event -> U.writeChan chan event
+                    Left  _     -> return ()
+
+
+mqttTopics :: [Topic]
+mqttTopics = ["StriotQueue"]
+
+
+netmqttConf :: String -> HostName -> ServiceName -> MessageCallback -> MQTTConfig
+netmqttConf nodeName host port msgCB = mqttConfig{_hostname = host
+                                                 ,_port     = read port
+                                                 ,_connID   = nodeName
+                                                 ,_username = Just "striot"
+                                                 ,_password = Just "striot"
+                                                 ,_msgCB    = msgCB}
+
+
+mqttSubOptions :: SubOptions
+mqttSubOptions = subOptions{_retainHandling = SendOnSubscribeNew
+                           ,_retainAsPublished = True
+                           ,_noLocal = True
+                           ,_subQoS = QoS0}
