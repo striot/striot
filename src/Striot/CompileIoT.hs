@@ -13,13 +13,14 @@ module Striot.CompileIoT ( createPartitions
                          , htf_thisModulesTests
                          ) where
 
-import Data.List (intercalate)
+import Data.List (intercalate, sort)
 import Algebra.Graph
 import Test.Framework
 import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
 
 import Striot.StreamGraph
+import Striot.LogicalOptimiser
 
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
@@ -66,12 +67,14 @@ data GenerateOpts = GenerateOpts
     { imports   :: [String]     -- list of import statements to add to generated files
     , packages  :: [String]     -- list of Cabal packages to install within containers
     , preSource :: Maybe String -- code to run prior to starting nodeSource
+    , rewrite   :: Bool         -- should each partition be logically optimised?
     }
 
 defaultOpts = GenerateOpts
     { imports   = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"]
     , packages  = []
     , preSource = Nothing
+    , rewrite   = True
     }
 
 generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
@@ -79,7 +82,10 @@ generateCode sg pm opts = generateCode' (createPartitions sg pm) opts
 
 generateCode' :: ([StreamGraph], StreamGraph) -> GenerateOpts -> [String]
 generateCode' (sgs,cuts) opts = let
-                  enumeratedParts = zip [1..] sgs
+                  sgs' = if   rewrite opts
+                         then map optimise sgs
+                         else sgs
+                  enumeratedParts = zip [1..] sgs'
                   in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
 
 data NodeType = NodeSource | NodeSink | NodeLink deriving (Show)
@@ -282,3 +288,12 @@ simpleStream tupes = path lst
         tupes3 = zip3 [1..] intypes tupes
         lst = map (\ (i,intype,(op,params,outtype)) ->
             StreamVertex i op params intype outtype) tupes3
+
+------------------------------------------------------------------------------
+-- logical optimisation
+
+optimise :: StreamGraph -> StreamGraph
+optimise sg = let
+    sgs  = applyRules 5 sg
+    best = snd $ last $ sort $ map (\g -> (costModel g, g) ) sgs
+    in best

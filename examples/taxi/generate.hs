@@ -17,6 +17,7 @@ opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
                                 ] -- threadDelay
                     , packages = []
                     , preSource = Just "preSource"
+                    , rewrite = True
                     }
 source = "do\n\
 \   line <- getLine;\n\
