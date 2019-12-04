@@ -9,7 +9,7 @@ module Striot.LogicalOptimiser ( applyRules
 import Striot.StreamGraph
 import Algebra.Graph
 import Test.Framework hiding ((===))
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Function ((&))
 import Data.List (nub)
 
