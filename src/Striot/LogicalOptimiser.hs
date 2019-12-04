@@ -25,7 +25,7 @@ applyRule f g = g & fromMaybe id (firstMatch g f)
 firstMatch :: StreamGraph -> RewriteRule -> Maybe (StreamGraph -> StreamGraph)
 firstMatch g f = case f g of
         Just f -> Just f
-        otherwise -> case g of
+        _      -> case g of
             Empty       -> Nothing
             Vertex v    -> Nothing
             Overlay a b -> case firstMatch a f of
