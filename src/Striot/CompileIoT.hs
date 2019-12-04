@@ -295,5 +295,5 @@ simpleStream tupes = path lst
 optimise :: StreamGraph -> StreamGraph
 optimise sg = let
     sgs  = applyRules 5 sg
-    best = snd $ last $ sort $ map (\g -> (costModel g, g) ) sgs
+    best = snd $ maximum $ map (\g -> (costModel g, g) ) sgs
     in best
