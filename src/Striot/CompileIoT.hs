@@ -1,9 +1,6 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 
-module Striot.CompileIoT ( StreamGraph(..)
-                         , StreamVertex(..)
-                         , StreamOperator(..)
-                         , createPartitions
+module Striot.CompileIoT ( createPartitions
                          , generateCode
                          , GenerateOpts(..)
                          , defaultOpts
@@ -22,41 +19,8 @@ import Test.Framework
 import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
 
-data StreamOperator = Map
-                    | Filter
-                    | Expand
-                    | Window
-                    | Merge
-                    | Join
-                    | Scan
-                    | FilterAcc
-                    | Source
-                    | Sink
-                    deriving (Ord,Eq)
-
-instance Show StreamOperator where
-    show Map             = "streamMap"
-    show Filter          = "streamFilter"
-    show Window          = "streamWindow"
-    show Merge           = "streamMerge"
-    show Join            = "streamJoin"
-    show Scan            = "streamScan"
-    show FilterAcc       = "streamFilterAcc"
-    show Expand          = "streamExpand"
-    show Source          = "streamSource"
-    show Sink            = "streamSink"
-
-
-data StreamVertex = StreamVertex
-    { vertexId   :: Int            -- Id needed for uniquely identifying a vertex. (Is there a nicer way?)
-    , operator   :: StreamOperator
-    , parameters :: [String]       -- operator arguments (excluding the input stream)
-    , intype     :: String
-    , outtype    :: String
-    } deriving (Eq,Show)
-
-instance Ord StreamVertex where
-    compare x y = compare (vertexId x) (vertexId y)
+import Striot.StreamGraph
+import Striot.LogicalOptimiser
 
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
@@ -80,7 +44,6 @@ createPartitions g (p:ps) = ((overlay vs es):tailParts, cutEdges `overlay` tailC
 unPartition :: ([Graph StreamVertex], Graph StreamVertex) -> Graph StreamVertex
 unPartition (a,b) = overlay b $ foldl overlay Empty a
 
-type StreamGraph = Graph StreamVertex
 
 ------------------------------------------------------------------------------
 -- Code generation from StreamGraph definitions
@@ -104,12 +67,14 @@ data GenerateOpts = GenerateOpts
     { imports   :: [String]     -- list of import statements to add to generated files
     , packages  :: [String]     -- list of Cabal packages to install within containers
     , preSource :: Maybe String -- code to run prior to starting nodeSource
+    , rewrite   :: Bool         -- should each partition be logically optimised?
     }
 
 defaultOpts = GenerateOpts
     { imports   = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent"]
     , packages  = []
     , preSource = Nothing
+    , rewrite   = True
     }
 
 generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
@@ -117,7 +82,10 @@ generateCode sg pm opts = generateCode' (createPartitions sg pm) opts
 
 generateCode' :: ([StreamGraph], StreamGraph) -> GenerateOpts -> [String]
 generateCode' (sgs,cuts) opts = let
-                  enumeratedParts = zip [1..] sgs
+                  sgs' = if   rewrite opts
+                         then map optimise sgs
+                         else sgs
+                  enumeratedParts = zip [1..] sgs'
                   in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
 
 data NodeType = NodeSource | NodeSink | NodeLink deriving (Show)
@@ -284,31 +252,6 @@ test_reform_s0 = assertEqual s0 (unPartition $ createPartitions s0 [[0],[1]])
 test_reform_s1 = assertEqual s1 (unPartition $ createPartitions s1 [[0,1],[2]])
 test_reform_s1_2 = assertEqual s1 (unPartition $ createPartitions s1 [[0],[1,2]])
 
-------------------------------------------------------------------------------
--- quickcheck experiment
-
-instance Arbitrary StreamOperator where
-    arbitrary = elements [ Map , Filter , Expand , Window , Merge , Join , Scan
-                         , FilterAcc , Source , Sink ]
-
-instance Arbitrary StreamVertex where
-    arbitrary = do
-        vertexId <- arbitrary
-        operator <- arbitrary
-        let parameters = []
-            intype = "String"
-            outtype = "String"
-            in
-                return $ StreamVertex vertexId operator parameters intype outtype
-
-streamgraph :: Gen StreamGraph
-streamgraph = sized streamgraph'
-streamgraph' 0 = return g where g = empty :: StreamGraph
-streamgraph' n | n>0 = do
-    v <- arbitrary
-    t <- streamgraph' (n-1)
-    return $ connect (vertex v) t
-
 genDockerfile listen opts = 
     let pkgs = packages opts in concat
     [ "FROM striot/striot-base:latest\n"
@@ -345,3 +288,12 @@ simpleStream tupes = path lst
         tupes3 = zip3 [1..] intypes tupes
         lst = map (\ (i,intype,(op,params,outtype)) ->
             StreamVertex i op params intype outtype) tupes3
+
+------------------------------------------------------------------------------
+-- logical optimisation
+
+optimise :: StreamGraph -> StreamGraph
+optimise sg = let
+    sgs  = applyRules 5 sg
+    best = snd $ maximum $ map (\g -> (costModel g, g) ) sgs
+    in best

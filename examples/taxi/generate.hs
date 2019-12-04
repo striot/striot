@@ -3,9 +3,8 @@
 -}
 
 import Striot.CompileIoT
+import Striot.StreamGraph
 import Algebra.Graph
-
-import VizGraph
 
 opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
                                 , "Striot.FunctionalProcessing"
@@ -18,6 +17,7 @@ opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
                                 ] -- threadDelay
                     , packages = []
                     , preSource = Just "preSource"
+                    , rewrite = True
                     }
 source = "do\n\
 \   line <- getLine;\n\
