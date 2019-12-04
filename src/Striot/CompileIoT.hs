@@ -13,7 +13,7 @@ module Striot.CompileIoT ( createPartitions
                          , htf_thisModulesTests
                          ) where
 
-import Data.List (intercalate, sort)
+import Data.List (intercalate)
 import Algebra.Graph
 import Test.Framework
 import System.FilePath ((</>))
