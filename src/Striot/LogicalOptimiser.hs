@@ -46,7 +46,7 @@ applyRules :: Int -> StreamGraph -> [StreamGraph]
 applyRules n sg =
         if   n < 1 then [sg]
         else let
-             sgs = map ((&) sg) $ catMaybes $ map (firstMatch sg) rules
+             sgs = map ((&) sg) $ mapMaybe (firstMatch sg) rules
              in    sg : sgs ++ (concatMap (applyRules (n-1)) sgs)
 
 rules :: [RewriteRule]
