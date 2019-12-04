@@ -47,7 +47,7 @@ applyRules n sg =
         if   n < 1 then [sg]
         else let
              sgs = map ((&) sg) $ catMaybes $ map (firstMatch sg) rules
-             in    sg : sgs ++ (concat $ map (applyRules (n-1)) sgs)
+             in    sg : sgs ++ (concatMap (applyRules (n-1)) sgs)
 
 rules :: [RewriteRule]
 rules = [ filterFuse
