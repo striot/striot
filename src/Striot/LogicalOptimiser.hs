@@ -59,6 +59,7 @@ rules = [ filterFuse
         , mapScan
         , expandFilter
         , mapFilterAcc
+        , mapWindow
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -268,6 +269,30 @@ mapFilterAccPost =
     Vertex (StreamVertex 1 Map ["f","s"] "Int" "String")
 
 test_mapFilterAcc = assertEqual (applyRule mapFilterAcc mapFilterAccPre) mapFilterAccPost
+
+-- streamMap f >>> streamWindow wm == streamWindow wm >>> streamMap (map f) --
+
+mapWindow :: RewriteRule
+mapWindow (Connect (Vertex m@(StreamVertex i Map (f:s:[]) t1 _))
+                   (Vertex w@(StreamVertex j Window (wm:s':[]) _ t2))) =
+    let t3 = "[" ++ t1 ++ "]"
+        w2 = StreamVertex i Window [wm,s] t1 t3
+        m2 = StreamVertex j Map ["map ("++f++")",s'] t3 t2
+    in  Just (replaceVertex m w2 . replaceVertex w m2)
+
+mapWindow _ = Nothing
+
+mapWindowPre =
+    Vertex (StreamVertex 0 Map ["show","s"] "Int" "String")
+    `Connect`
+    Vertex (StreamVertex 1 Window ["chop 2", "s'"] "String" "[String]")
+
+mapWindowPost =
+    Vertex (StreamVertex 0 Window ["chop 2", "s"] "Int" "[Int]")
+    `Connect`
+    Vertex (StreamVertex 1 Map ["map (show)", "s'"] "[Int]" "[String]")
+
+test_mapWindow = assertEqual (applyRule mapWindow mapWindowPre) mapWindowPost
 
 -- utility/boilerplate -------------------------------------------------------
 
