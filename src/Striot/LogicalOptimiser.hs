@@ -62,6 +62,7 @@ rules = [ filterFuse
         , mapWindow
         , expandMap
         , expandScan
+        , expandExpand
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -360,6 +361,30 @@ expandScanPost = path
     p  = "(\\b a' -> tail $ scanl (f) (last b) a')"
 
 test_expandScan = assertEqual (simplify$applyRule expandScan expandScanPre) expandScanPost
+
+-- streamExpand >>> streamExpand == streamMap concat >>> streamExpand --------
+-- [[a]]        [a]             a  [[a]]            [a]              a
+
+expandExpand :: RewriteRule
+expandExpand (Connect (Vertex e@(StreamVertex i Expand _ t1 t2))
+                      (Vertex   (StreamVertex j Expand _ _ _))) =
+    let m = StreamVertex i Map ["concat","s"] t1 t2
+    in  Just (replaceVertex e m)
+
+expandExpand _ = Nothing
+
+expandExpandPre =
+    Vertex (StreamVertex 0 Expand [] "[[Int]]" "[Int]")
+    `Connect`
+    Vertex (StreamVertex 1 Expand [] "[Int]" "Int")
+
+expandExpandPost =
+    Vertex (StreamVertex 0 Map ["concat","s"] "[[Int]]" "[Int]")
+    `Connect`
+    Vertex (StreamVertex 1 Expand [] "[Int]" "Int")
+
+test_expandExpand = assertEqual (applyRule expandExpand expandExpandPre)
+    expandExpandPost
 
 -- utility/boilerplate -------------------------------------------------------
 
