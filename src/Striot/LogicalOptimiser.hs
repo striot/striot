@@ -58,6 +58,7 @@ rules = [ filterFuse
         , mapFuse
         , mapScan
         , expandFilter
+        , mapFilterAcc
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -243,6 +244,30 @@ expandFilterPost =
     Vertex (StreamVertex 2 Expand ["bar"] "[Int]" "Int")
 
 test_expandFilter = assertEqual (applyRule expandFilter expandFilterPre) expandFilterPost
+
+-- streamMap f >>> streamFilterAcc g a p == streamFilterAcc g a (f >>> p) >>> streamMap f
+
+mapFilterAcc :: RewriteRule
+mapFilterAcc (Connect (Vertex m@(StreamVertex i Map (f:s:[]) t1 _))
+                      (Vertex f1@(StreamVertex j FilterAcc (g:a:p:ps) _ _))) =
+
+    let f2 = StreamVertex i FilterAcc [g, a, ("("++f++")>>>("++p++")"), s] t1 t1
+        m2 = m { vertexId = j }
+    in  Just (replaceVertex f1 m2 . replaceVertex m f2)
+
+mapFilterAcc _ = Nothing
+
+mapFilterAccPre =
+    Vertex (StreamVertex 0 Map ["f","s"] "Int" "String")
+    `Connect`
+    Vertex (StreamVertex 1 FilterAcc ["g","a","p","s'"] "String" "String")
+
+mapFilterAccPost =
+    Vertex (StreamVertex 0 FilterAcc ["g","a","(f)>>>(p)","s"] "Int" "Int")
+    `Connect`
+    Vertex (StreamVertex 1 Map ["f","s"] "Int" "String")
+
+test_mapFilterAcc = assertEqual (applyRule mapFilterAcc mapFilterAccPre) mapFilterAccPost
 
 -- utility/boilerplate -------------------------------------------------------
 
