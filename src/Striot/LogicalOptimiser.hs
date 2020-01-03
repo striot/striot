@@ -11,7 +11,7 @@ import Algebra.Graph
 import Test.Framework hiding ((===))
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Function ((&))
-import Data.List (nub)
+import Data.List (nub, sort)
 
 -- applying encoded rules and their resulting ReWriteOps ----------------------
 
@@ -61,6 +61,7 @@ rules = [ filterFuse
         , mapFilterAcc
         , mapWindow
         , expandMap
+        , expandScan
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -320,6 +321,53 @@ expandMapPost =
 
 test_expandMap = assertEqual (applyRule expandMap expandMapPre) expandMapPost
 
+-- streamExpand >>> streamScan f a == ----------------------------------------
+--     streamFilter (not.null)
+--         >>> streamScan (\b a' -> tail $ scanl f (last b) a') [a]
+--         >>> streamExpand
+
+expandScan :: RewriteRule
+expandScan (Connect (Vertex  e@(StreamVertex i Expand (s:[])      t1 t2))
+                    (Vertex sc@(StreamVertex j Scan   (f:a:s':[]) _  t3))) =
+    Just $ \g ->
+        let t4 = "[" ++ t3 ++ "]"
+            k  = newVertexId g
+            p  = "(\\b a' -> tail $ scanl ("++f++") (last b) a')"
+
+            f' = StreamVertex i Filter ["not.null", s]    t1 t1
+            sc'= StreamVertex j Scan   [p,"["++a++"]",s'] t1 t4
+            e' = StreamVertex k Expand []                 t4 t3
+
+        in  overlay (path [f',sc',e']) $
+            (removeEdge f' e' . replaceVertex e f' . replaceVertex sc e') g
+
+expandScan _ = Nothing
+
+expandScanPre = path
+    [ StreamVertex 0 Source []             "[Int]" "[Int]"
+    , StreamVertex 1 Expand ["s"]          "[Int]" "Int"
+    , StreamVertex 2 Scan   ["f","a","s'"] "Int"   "Int"
+    , StreamVertex 3 Sink   []             "Int"   "Int"
+    ]
+
+expandScanPost = path
+    [ StreamVertex 0 Source []               "[Int]" "[Int]"
+    , StreamVertex 1 Filter ["not.null","s"] "[Int]" "[Int]"
+    , StreamVertex 2 Scan   [p,"[a]","s'"]   "[Int]" "[Int]"
+    , StreamVertex 4 Expand []               "[Int]" "Int"
+    , StreamVertex 3 Sink   []               "Int"   "Int"
+    ] where
+    p  = "(\\b a' -> tail $ scanl (f) (last b) a')"
+
+test_expandScan = assertEqual (simplify$applyRule expandScan expandScanPre) expandScanPost
+
 -- utility/boilerplate -------------------------------------------------------
+
+-- generate a new vertexId which doesn't clash with any existing ones
+-- TODO this will still break the assumption that CompileIoT makes regarding
+-- vertexId ordering in a path. We either need to renumber all subsequent nodes
+-- or remove that requirement in CompileIoT
+newVertexId :: StreamGraph -> Int
+newVertexId = succ . last . sort . map vertexId . vertexList
 
 main = htfMain htf_thisModulesTests
