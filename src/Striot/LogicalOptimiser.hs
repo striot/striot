@@ -92,6 +92,7 @@ rules = [ filterFuse
         , expandMap
         , expandScan
         , expandExpand
+        , windowExpandWindow
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -414,6 +415,45 @@ expandExpandPost =
 
 test_expandExpand = assertEqual (applyRule expandExpand expandExpandPre)
     expandExpandPost
+
+-- streamWindow w >>> streamExpand >>> streamWindow w == streamWindow w ------
+
+windowExpandWindow :: RewriteRule
+windowExpandWindow g =
+    let vs = take 3 (vertexList g)
+        appropriate = map operator vs == [Window, Expand, Window] &&
+                      (parameters . head) vs == (parameters . last) vs
+        [w,e,w'] = vs
+    in if   not appropriate then Nothing
+       else Just (simplify . removeEdge w' w' . mergeVertices (`elem` [w,e]) w')
+
+windowExpandWindowPre = path
+    [ StreamVertex 0 Window ["chop 2"] "Int" "[Int]"
+    , StreamVertex 1 Expand [] "[Int]" "Int"
+    , StreamVertex 2 Window ["chop 2"] "Int" "[Int]"
+    ]
+windowExpandWindowPost = Vertex $ StreamVertex 2 Window ["chop 2"] "Int" "[Int]"
+
+test_windowExpandWindow = assertEqual (applyRule windowExpandWindow windowExpandWindowPre)
+    windowExpandWindowPost
+
+-- additional test to ensure that edges from nodes outside of the matching sub-graph
+-- are correctly rewritten 
+windowExpandWindowPre2 = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 Window ["chop 2"] "Int" "[Int]"
+    , StreamVertex 2 Expand [] "[Int]" "Int"
+    , StreamVertex 3 Window ["chop 2"] "Int" "[Int]"
+    , StreamVertex 4 Sink [] "[Int]" "[Int]"
+    ]
+windowExpandWindowPost2 = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 3 Window ["chop 2"] "Int" "[Int]"
+    , StreamVertex 4 Sink [] "[Int]" "[Int]"
+    ]
+
+test_windowExpandWindow2 = assertEqual (applyRule windowExpandWindow windowExpandWindowPre2)
+    windowExpandWindowPost2
 
 -- utility/boilerplate -------------------------------------------------------
 
