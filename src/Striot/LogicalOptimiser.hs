@@ -305,7 +305,7 @@ expandMap (Connect (Vertex e@(StreamVertex i Expand _ t1 _))
                    (Vertex m@(StreamVertex j Map (f:s:[]) _ t4))) =
     let t5 = "[" ++ t4 ++ "]"
         m2 = StreamVertex i Map ["map ("++f++")",s] t1 t5
-        e2 = StreamVertex j Expand [] t5 t4
+        e2 = StreamVertex j Expand ["s"] t5 t4
     in  Just (replaceVertex m e2 . replaceVertex e m2)
 
 expandMap _ = Nothing
@@ -318,7 +318,7 @@ expandMapPre =
 expandMapPost =
     Vertex (StreamVertex 0 Map ["map (show)","s"] "[Int]" "[String]")
     `Connect`
-    Vertex (StreamVertex 1 Expand [] "[String]" "String")
+    Vertex (StreamVertex 1 Expand ["s"] "[String]" "String")
 
 test_expandMap = assertEqual (applyRule expandMap expandMapPre) expandMapPost
 
