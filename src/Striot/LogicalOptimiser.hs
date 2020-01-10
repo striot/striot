@@ -233,7 +233,7 @@ test_mapScan = assertEqual (applyRule mapScan mapScanPre) mapScanPost
 expandFilter :: RewriteRule
 expandFilter (Connect (Vertex e@(StreamVertex j Expand [s] t1 t2))
                       (Vertex f@(StreamVertex i Filter (p:s':[]) _ _))) =
-    let m = StreamVertex j Map ["filter ("++p++")",s] t1 t1
+    let m = StreamVertex j Map ["(filter ("++p++"))",s] t1 t1
         e'= StreamVertex i Expand [s'] t1 t2
     in  Just (replaceVertex f e' . replaceVertex e m)
 expandFilter _ = Nothing
@@ -243,7 +243,7 @@ expandFilterPre =
     `Connect`
     Vertex (StreamVertex 2 Filter ["p","bar"] "Int" "Int")
 expandFilterPost =
-    Vertex (StreamVertex 1 Map ["filter (p)", "foo"] "[Int]" "[Int]")
+    Vertex (StreamVertex 1 Map ["(filter (p))", "foo"] "[Int]" "[Int]")
     `Connect`
     Vertex (StreamVertex 2 Expand ["bar"] "[Int]" "Int")
 
