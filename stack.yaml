@@ -11,3 +11,4 @@ extra-deps:
 - connection-0.3.1
 - socks-0.6.1
 - hw-kafka-client-3.0.0
+- envy-2.0.0.0
