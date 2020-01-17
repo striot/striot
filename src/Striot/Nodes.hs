@@ -21,23 +21,28 @@ import qualified Control.Exception                             as E (bracket,
                                                                      evaluate)
 import           Control.Monad                                 (forever, unless,
                                                                 when, void)
+import           Control.Monad.Reader
+import           Control.Monad.IO.Class
 import           Control.DeepSeq                               (force)
+import           Control.Lens
 import qualified Data.ByteString                               as B (ByteString,
                                                                      length,
                                                                      null)
 import qualified Data.ByteString.Lazy.Char8                    as BLC
+import           Data.IORef
 import           Data.Maybe
 import           Data.Store                                    (Store, encode, decode)
 import qualified Data.Store.Streaming                          as SS
-import           Data.Text                                     as T (pack)
+import           Data.Text                                     as T (Text, pack)
 import           Data.Time                                     (getCurrentTime)
-import           Network.MQTT.Client hiding                    (Timeout)
+import           Network.MQTT.Client as MQTT hiding            (Timeout)
 import           Network.MQTT.Types                            (RetainHandling(..))
 import           Network.Socket
 import           Network.Socket.ByteString
 import           Network.URI                                   (parseURI)
 import           Striot.FunctionalIoTtypes
 import           System.Exit                                   (exitFailure)
+import           Striot.Nodes.Types as NT
 import           System.IO
 import           System.IO.ByteBuffer                          as BB
 import           System.IO.Unsafe
@@ -45,21 +50,11 @@ import           System.Metrics.Prometheus.Concurrent.Registry as PR (new, regis
                                                                       registerGauge,
                                                                       sample)
 import           System.Metrics.Prometheus.Http.Scrape         (serveHttpTextMetrics)
-import           System.Metrics.Prometheus.Metric.Counter      as PC (Counter,
-                                                                      add, inc)
-import           System.Metrics.Prometheus.Metric.Gauge        as PG (Gauge,
-                                                                      dec, inc)
+import           System.Metrics.Prometheus.Metric.Counter      as PC (add, inc)
+import           System.Metrics.Prometheus.Metric.Gauge        as PG (dec, inc)
 import           System.Metrics.Prometheus.MetricId            (addLabel)
 import           Kafka.Producer                                as KP
 import           Kafka.Consumer                                as KC
-
-
-data Metrics = Metrics { _ingressConn   :: Gauge
-                       , _ingressBytes  :: Counter
-                       , _ingressEvents :: Counter
-                       , _egressConn    :: Gauge
-                       , _egressBytes   :: Counter
-                       , _egressEvents  :: Counter }
 
 
 --- SINK FUNCTIONS ---
@@ -110,7 +105,7 @@ nodeLink streamOp inputPort outputHost outputPort = do
     putStrLn "Starting link ..."
     stream <- processSocket metrics sock
     let result = streamOp stream
-    sendStream result metrics outputHost outputPort
+    sendStreamTCP result metrics outputHost outputPort
 
 
 -- A Link with 2 inputs
@@ -129,7 +124,7 @@ nodeLink2 streamOp inputPort1 inputPort2 outputHost outputPort = do
     stream1 <- processSocket metrics sock1
     stream2 <- processSocket metrics sock2
     let result = streamOp stream1 stream2
-    sendStream result metrics outputHost outputPort
+    sendStreamTCP result metrics outputHost outputPort
 
 
 --- SOURCE FUNCTIONS ---
@@ -145,74 +140,183 @@ nodeSource pay streamGraph host port = do
     putStrLn "Starting source ..."
     stream <- readListFromSource pay metrics
     let result = streamGraph stream
-    sendStream result metrics host port
+    sendStreamTCP result metrics host port
     -- or printStream if it's a completely self contained streamGraph
 
 
 --- MQTT FUNCTIONS ---
 
-nodeSourceMqtt :: Store beta
-               => IO alpha
-               -> (Stream alpha -> Stream beta)
-               -> String
-               -> HostName
-               -> ServiceName
-               -> IO ()
-nodeSourceMqtt pay streamOp nodeName host port = do
-    metrics <- startPrometheus nodeName
-    putStrLn "Starting source ..."
-    stream <- readListFromSource pay metrics
-    let result = streamOp stream
-    sendStreamMqtt result metrics nodeName host port
+-- nodeSourceMqtt :: Store beta
+--                => IO alpha
+--                -> (Stream alpha -> Stream beta)
+--                -> String
+--                -> HostName
+--                -> ServiceName
+--                -> IO ()
+-- nodeSourceMqtt pay streamOp nodeName host port = do
+--     metrics <- startPrometheus nodeName
+--     putStrLn "Starting source ..."
+--     stream <- readListFromSource pay metrics
+--     let result = streamOp stream
+--     sendStreamMQTT result metrics nodeName host port
 
 
-nodeLinkMqtt :: (Store alpha, Store beta)
-             => (Stream alpha -> Stream beta)
-             -> String
-             -> HostName
-             -> ServiceName
-             -> HostName
-             -> ServiceName
-             -> IO ()
-nodeLinkMqtt streamOp nodeName inputHost inputPort outputHost outputPort = do
-    metrics <- startPrometheus nodeName
-    putStrLn "Starting link ..."
-    stream <- processSocketMqtt metrics nodeName inputHost inputPort
-    let result = streamOp stream
-    sendStream result metrics outputHost outputPort
+-- nodeLinkMqtt :: (Store alpha, Store beta)
+--              => (Stream alpha -> Stream beta)
+--              -> String
+--              -> HostName
+--              -> ServiceName
+--              -> HostName
+--              -> ServiceName
+--              -> IO ()
+-- nodeLinkMqtt streamOp nodeName inputHost inputPort outputHost outputPort = do
+--     metrics <- startPrometheus nodeName
+--     putStrLn "Starting link ..."
+--     stream <- processSocketMQTT metrics nodeName inputHost inputPort
+--     let result = streamOp stream
+--     sendStreamTCP result metrics outputHost outputPort
 
 
 --- KAFKA FUNCTIONS ---
 
-nodeSourceKafka :: Store beta
-                => IO alpha
-                -> (Stream alpha -> Stream beta)
-                -> String
-                -> HostName
-                -> ServiceName
-                -> IO ()
-nodeSourceKafka pay streamOp nodeName host port = do
-    metrics <- startPrometheus nodeName
-    putStrLn "Starting source ..."
-    stream <- readListFromSource pay metrics
-    let result = streamOp stream
-    sendStreamKafka result metrics nodeName host (read port)
+-- nodeSourceKafka :: Store beta
+--                 => IO alpha
+--                 -> (Stream alpha -> Stream beta)
+--                 -> String
+--                 -> HostName
+--                 -> ServiceName
+--                 -> IO ()
+-- nodeSourceKafka pay streamOp nodeName host port = do
+--     metrics <- startPrometheus nodeName
+--     putStrLn "Starting source ..."
+--     stream <- readListFromSource pay metrics
+--     let result = streamOp stream
+--     sendStreamKafka result metrics nodeName host (read port)
 
 
-nodeLinkKafka :: (Store alpha, Store beta)
-              => (Stream alpha -> Stream beta)
-              -> String
-              -> HostName
-              -> ServiceName
-              -> HostName
-              -> ServiceName
-              -> IO ()
-nodeLinkKafka streamOp nodeName inputHost inputPort outputHost outputPort = do
-    metrics <- startPrometheus nodeName
-    putStrLn "Starting link ..."
-    stream <- processSocketKafka metrics nodeName inputHost (read inputPort)
+-- nodeLinkKafka :: (Store alpha, Store beta)
+--               => (Stream alpha -> Stream beta)
+--               -> String
+--               -> HostName
+--               -> ServiceName
+--               -> HostName
+--               -> ServiceName
+--               -> IO ()
+-- nodeLinkKafka streamOp nodeName inputHost inputPort outputHost outputPort = do
+--     metrics <- startPrometheus nodeName
+--     putStrLn "Starting link ..."
+--     stream <- processSocketKafka metrics nodeName inputHost (read inputPort)
+--     let result = streamOp stream
+--     sendStreamTCP result metrics outputHost outputPort
+
+--- CONFIG FUNCTIONS ---
+
+-- defaultConfig :: ServiceName -> HostName -> ServiceName -> StriotConfig
+-- defaultConfig inPort outHost outPort = baseConfig (tcpConfig "" inPort) (tcpConfig outHost outPort)
+
+-- baseConfig :: ConnectionConfig -> ConnectionConfig -> StriotConfig
+-- baseConfig icc ecc = StriotConfig "" icc ecc 10
+
+-- tcpConfig :: HostName -> ServiceName -> ConnectionConfig
+-- tcpConfig host port = ConnTCPConfig $ TCPConfig $ NetConfig host port
+
+-- mqttConfig :: String -> HostName -> ServiceName -> ConnectionConfig
+-- mqttConfig topic host port = ConnMQTTConfig $ NT.MQTTConfig { _mqttConn  = NetConfig host port
+--                                                             , _mqttTopic = topic }
+
+-- defaultMqttConfig :: HostName -> ServiceName -> ConnectionConfig
+-- defaultMqttConfig = mqttConfig "StriotQueue"
+
+-- NEW NODE FUNCTIONS
+
+nodeLinkNew :: (Store alpha, Store beta)
+            => StriotConfig
+            -> (Stream alpha -> Stream beta)
+            -> IO ()
+nodeLinkNew config streamOp = do
+    ref <- newIORef Metrics {}
+    let conf = set met ref config
+    runReaderT (unApp $ nodeInternal streamOp) conf
+
+
+nodeInternal :: (Store alpha, Store beta,
+                MonadReader r m,
+                HasStriotConfig r,
+                MonadIO m)
+             => (Stream alpha -> Stream beta) -> m ()
+nodeInternal streamOp = do
+    c <- ask
+    liftIO $ writeIORef (c ^. met) =<< startPrometheus (c ^. nodeName)
+    stream <- processInput
     let result = streamOp stream
-    sendStream result metrics outputHost outputPort
+    sendStream result
+
+
+processInput :: (Store alpha,
+                MonadReader r m,
+                HasStriotConfig r,
+                MonadIO m)
+             => m (Stream alpha)
+processInput = connectDispatch >>= (liftIO . U.getChanContents)
+
+
+connectDispatch :: (Store alpha,
+                   MonadReader r m,
+                   HasStriotConfig r,
+                   MonadIO m)
+                => m (U.OutChan (Event alpha))
+connectDispatch = do
+    c <- ask
+    liftIO $ do
+        (inChan, outChan) <- U.newChan (c ^. chanSize)
+        metrics <- readIORef $ c ^. met
+        async $ connectDispatch' (c ^. nodeName)
+                                 (c ^. ingressConnConfig)
+                                 metrics
+                                 inChan
+        return outChan
+
+
+connectDispatch' :: (Store alpha,
+                    MonadIO m)
+                 => String
+                 -> ConnectionConfig
+                 -> Metrics
+                 -> U.InChan (Event alpha)
+                 -> m ()
+connectDispatch' nodeName (ConnTCPConfig   cc) met chan = liftIO $ connectTCP       nodeName cc met chan
+connectDispatch' nodeName (ConnKafkaConfig cc) met chan = liftIO $ runKafkaConsumer nodeName cc met chan
+connectDispatch' nodeName (ConnMQTTConfig  cc) met chan = liftIO $ runMQTTSub       nodeName cc met chan
+
+
+sendStream :: (Store alpha,
+                 MonadReader r m,
+                 HasStriotConfig r,
+                 MonadIO m)
+              => Stream alpha
+              -> m ()
+sendStream stream = do
+    c <- ask
+    liftIO $ do
+        metrics <- readIORef $ c ^. met
+        sendDispatch (c ^. nodeName)
+                     (c ^. egressConnConfig)
+                     metrics
+                     stream
+
+
+
+sendDispatch :: (Store alpha,
+                MonadIO m)
+             => String
+             -> ConnectionConfig
+             -> Metrics
+             -> Stream alpha
+             -> m ()
+sendDispatch nodeName (ConnTCPConfig   cc) met stream = liftIO $ sendStreamTCP   nodeName cc met stream
+sendDispatch nodeName (ConnKafkaConfig cc) met stream = liftIO $ sendStreamKafka nodeName cc met stream
+sendDispatch nodeName (ConnMQTTConfig  cc) met stream = liftIO $ sendStreamMQTT  nodeName cc met stream
+
 
 
 --- UTILITY FUNCTIONS ---
@@ -231,45 +335,53 @@ readListFromSource = go
             Event (Just now) . Just <$> pay
 
 
+-- ==========================================================================
 {- processSocket is a wrapper function that handles concurrently
 accepting and handling connections on the socket and reading all of the strings
 into an event Stream -}
-processSocket :: Store alpha => Metrics -> Socket -> IO (Stream alpha)
-processSocket met sock = U.getChanContents =<< acceptConnections met sock
+-- processSocket :: Store alpha => Metrics -> Socket -> IO (Stream alpha)
+-- processSocket met sock = U.getChanContents =<< acceptConnections met sock
 
 
-{- acceptConnections takes a socket as an argument and spins up a new thread to
-process the data received. The returned TChan object contains the data from
-the socket -}
-acceptConnections :: Store alpha => Metrics -> Socket -> IO (U.OutChan (Event alpha))
-acceptConnections met sock = do
-    (inChan, outChan) <- U.newChan chanSize
-    async $ connectionHandler met sock inChan
-    return outChan
+-- {- acceptConnections takes a socket as an argument and spins up a new thread to
+-- process the data received. The returned TChan object contains the data from
+-- the socket -}
+-- acceptConnections :: Store alpha => Metrics -> Socket -> IO (U.OutChan (Event alpha))
+-- acceptConnections met sock = do
+--     (inChan, outChan) <- U.newChan chanSize'
+--     async $ connectionHandler met sock inChan
+--     return outChan
 
 
-{- We are using a bounded queue to prevent extreme memory usage when
-input rate > consumption rate. This value may need to be increased to achieve
-higher throughput when computation costs are low -}
-chanSize :: Int
-chanSize = 10
+-- {- We are using a bounded queue to prevent extreme memory usage when
+-- input rate > consumption rate. This value may need to be increased to achieve
+-- higher throughput when computation costs are low -}
+-- chanSize' :: Int
+-- chanSize' = 10
 
 
 {- connectionHandler sits accepting any new connections. Once accepted, a new
 thread is forked to read from the socket. The function then loops to accept any
 subsequent connections -}
-connectionHandler :: Store alpha => Metrics -> Socket -> U.InChan (Event alpha) -> IO ()
-connectionHandler met sockIn eventChan = forever $ do
-    (conn, _) <- accept sockIn
-    forkFinally (PG.inc (_ingressConn met)
-                 >> processData met conn eventChan)
-                (\_ -> PG.dec (_ingressConn met)
-                       >> close conn)
+connectTCP :: Store alpha
+                  => String
+                  -> TCPConfig
+                  -> Metrics
+                  -> U.InChan (Event alpha)
+                  -> IO ()
+connectTCP _ conf met chan = do
+    sock <- listenSocket $ conf ^. tcpConn . port
+    forever $ do
+        (conn, _) <- accept sock
+        forkFinally (PG.inc (_ingressConn met)
+                    >> processData met conn chan)
+                    (\_ -> PG.dec (_ingressConn met)
+                        >> close conn)
 
 
 {- processData takes a Socket and UChan. All of the events are read through
 use of a ByteBuffer and recv. The events are decoded by using store-streaming
-and added to the chan  -}
+and added to the chan  -}   
 processData :: Store alpha => Metrics -> Socket -> U.InChan (Event alpha) -> IO ()
 processData met conn eventChan =
     BB.with Nothing $ \buffer -> forever $ do
@@ -304,11 +416,11 @@ readFromSocket conn = do
 
 {- Connects to socket within a bracket to ensure the socket is closed if an
 exception occurs -}
-sendStream :: Store alpha => Stream alpha -> Metrics -> HostName -> ServiceName -> IO ()
-sendStream []     _   _    _    = return ()
-sendStream stream met host port =
+sendStreamTCP :: Store alpha => String -> TCPConfig -> Metrics -> Stream alpha -> IO ()
+sendStreamTCP _ _    _   []     = return ()
+sendStreamTCP _ conf met stream =
     E.bracket (PG.inc (_egressConn met)
-               >> connectSocket host port)
+               >> connectSocket (conf ^. tcpConn . host) (conf ^. tcpConn . port))
               (\conn -> PG.dec (_egressConn met)
                         >> close conn)
               (\conn -> writeSocket conn met stream)
@@ -388,38 +500,40 @@ createSocket host port hints = do
 
 --- MQTT ---
 
-processSocketMqtt :: Store alpha => Metrics -> String -> HostName -> ServiceName -> IO (Stream alpha)
-processSocketMqtt met nodeName host port = U.getChanContents =<< acceptConnectionsMqtt met nodeName host port
+-- processSocketMqtt :: Store alpha => Metrics -> String -> HostName -> ServiceName -> IO (Stream alpha)
+-- processSocketMqtt met nodeName host port = U.getChanContents =<< acceptConnectionsMqtt met nodeName host port
 
 
-acceptConnectionsMqtt :: Store alpha => Metrics -> String -> HostName -> ServiceName -> IO (U.OutChan (Event alpha))
-acceptConnectionsMqtt met nodeName host port = do
-    (inChan, outChan) <- U.newChan chanSize
-    async $ runMqttSub met nodeName mqttTopics host port inChan
-    return outChan
+-- acceptConnectionsMqtt :: Store alpha => Metrics -> String -> HostName -> ServiceName -> IO (U.OutChan (Event alpha))
+-- acceptConnectionsMqtt met nodeName host port = do
+--     (inChan, outChan) <- U.newChan chanSize'
+--     async $ runMQTTSub met nodeName mqttTopics host port inChan
+--     return outChan
 
 
-sendStreamMqtt :: Store alpha => Stream alpha -> Metrics -> String -> HostName -> ServiceName -> IO ()
-sendStreamMqtt stream met nodeName host port = do
-    mc <- runMqttPub nodeName host port
+sendStreamMQTT :: Store alpha => String -> NT.MQTTConfig -> Metrics -> Stream alpha -> IO ()
+sendStreamMQTT nodeName conf met stream = do
+    mc <- runMQTTPub nodeName (conf ^. mqttConn . host) (conf ^. mqttConn . port)
     mapM_ (\x -> do
                     val <- E.evaluate . force . encode $ x
                     PC.inc (_egressEvents met)
                         >> PC.add (B.length val) (_egressBytes met)
-                        >> publishq mc (head mqttTopics) (BLC.fromStrict val) False QoS0 []) stream
+                        >> publishq mc (read $ conf ^. mqttTopic) (BLC.fromStrict val) False QoS0 []) stream
 
 
-runMqttPub :: String -> HostName -> ServiceName -> IO MQTTClient
-runMqttPub nodeName host port =
+runMQTTPub :: String -> HostName -> ServiceName -> IO MQTTClient
+runMQTTPub nodeName host port =
     let (Just uri) = parseURI $ "mqtt://" ++ host ++ ":" ++ port
     in  connectURI (netmqttConf nodeName host port NoCallback) uri
 
 
-runMqttSub :: Store alpha => Metrics -> String -> [Topic] -> HostName -> ServiceName -> U.InChan (Event alpha) -> IO ()
-runMqttSub met nodeName topics host port chan = do
-    let (Just uri) = parseURI $ "mqtt://" ++ host ++ ":" ++ port
-    mc <- connectURI (netmqttConf nodeName host port (SimpleCallback $ mqttMessageCallback met chan)) uri
-    print =<< subscribe mc (map (\x -> (x, subOptions)) topics) []
+runMQTTSub :: Store alpha => String -> NT.MQTTConfig -> Metrics -> U.InChan (Event alpha) -> IO ()
+runMQTTSub nodeName conf met chan = do
+    let h = conf ^. mqttConn . host
+        p = conf ^. mqttConn . port
+        (Just uri) = parseURI $ "mqtt://" ++ h ++ ":" ++ p
+    mc <- connectURI (netmqttConf nodeName h p (SimpleCallback $ mqttMessageCallback met chan)) uri
+    print =<< subscribe mc (map (\x -> (x, subOptions)) [read $ (conf ^. mqttTopic)]) []
     waitForClient mc
 
 
@@ -433,35 +547,39 @@ mqttMessageCallback met chan mc topic msg _ =
                     Left  _     -> return ()
 
 
-mqttTopics :: [Topic]
-mqttTopics = ["StriotQueue"]
+-- mqttTopics :: [Topic]
+-- mqttTopics = ["StriotQueue"]
 
 
-netmqttConf :: String -> HostName -> ServiceName -> MessageCallback -> MQTTConfig
-netmqttConf nodeName host port msgCB = mqttConfig{ _hostname = host
-                                                 , _port     = read port
-                                                 , _connID   = nodeName
-                                                 , _username = Just "striot"
-                                                 , _password = Just "striot"
-                                                 , _msgCB    = msgCB }
+netmqttConf :: String -> HostName -> ServiceName -> MessageCallback -> MQTT.MQTTConfig
+netmqttConf nodeName host port msgCB =
+    mqttConfig
+        { MQTT._hostname = host
+        , MQTT._port     = read port
+        , _connID        = nodeName
+        , _username      = Just "striot"
+        , _password      = Just "striot"
+        , _msgCB         = msgCB }
 
 
 mqttSubOptions :: SubOptions
-mqttSubOptions = subOptions{ _retainHandling = SendOnSubscribeNew
-                           , _retainAsPublished = True
-                           , _noLocal = True
-                           , _subQoS = QoS0 }
+mqttSubOptions =
+    subOptions
+        { _retainHandling    = SendOnSubscribeNew
+        , _retainAsPublished = True
+        , _noLocal           = True
+        , _subQoS            = QoS0 }
 
 
 --- KAFKA ---
 
-sendStreamKafka :: Store alpha => Stream alpha -> Metrics -> String -> HostName -> PortNumber -> IO ()
-sendStreamKafka stream met nodeName host port =
+sendStreamKafka :: Store alpha => String -> KafkaConfig -> Metrics -> Stream alpha -> IO ()
+sendStreamKafka nodeName conf met stream =
     E.bracket mkProducer clProducer runHandler >>= print
         where
           mkProducer              = PG.inc (_egressConn met)
                                     >> print "create new producer"
-                                    >> newProducer (producerProps host port)
+                                    >> newProducer (producerProps conf)
           clProducer (Left _)     = print "error close producer"
                                     >> return ()
           clProducer (Right prod) = PG.dec (_egressConn met)
@@ -469,56 +587,55 @@ sendStreamKafka stream met nodeName host port =
                                     >> print "close producer"
           runHandler (Left err)   = return $ Left err
           runHandler (Right prod) = print "runhandler producer"
-                                    >> sendMessagesKafka prod stream met
+                                    >> sendMessagesKafka prod (TopicName . read $ conf ^. kafkaTopic) stream met
 
 
 kafkaConnectDelayMs :: Int
-kafkaConnectDelayMs = 100000
+kafkaConnectDelayMs = 300000
 
 
-producerProps :: HostName -> PortNumber -> ProducerProperties
-producerProps host port =
-    KP.brokersList [BrokerAddress $ T.pack $ host ++ ":" ++ show port]
+producerProps :: KafkaConfig -> ProducerProperties
+producerProps conf =
+    KP.brokersList [BrokerAddress $ brokerAddress conf]
        <> KP.logLevel KafkaLogInfo
 
 
-sendMessagesKafka :: Store alpha => KafkaProducer -> Stream alpha -> Metrics -> IO (Either KafkaError ())
-sendMessagesKafka prod stream met = do
+sendMessagesKafka :: Store alpha => KafkaProducer -> TopicName -> Stream alpha -> Metrics -> IO (Either KafkaError ())
+sendMessagesKafka prod topic stream met = do
     mapM_ (\x -> do
             let val = encode x
-            produceMessage prod (mkMessage Nothing (Just val))
+            produceMessage prod (mkMessage topic Nothing (Just val))
                 >> PC.inc (_egressEvents met)
                 >> PC.add (B.length val) (_egressBytes met)
           ) stream
     return $ Right ()
 
 
-mkMessage :: Maybe B.ByteString -> Maybe B.ByteString -> ProducerRecord
-mkMessage k v = ProducerRecord
-                  { prTopic = kafkaTopic
-                  , prPartition = UnassignedPartition
-                  , prKey = k
-                  , prValue = v
-                  }
+mkMessage :: TopicName -> Maybe B.ByteString -> Maybe B.ByteString -> ProducerRecord
+mkMessage topic k v =
+    ProducerRecord
+        { prTopic     = topic
+        , prPartition = UnassignedPartition
+        , prKey       = k
+        , prValue     = v
+        }
 
 
-kafkaTopic :: TopicName
-kafkaTopic = TopicName "striot-queue"
+-- defaultKafkaTopic :: TopicName
+-- defaultKafkaTopic = TopicName "striot-queue"
 
 
-processSocketKafka :: Store alpha => Metrics -> String -> HostName -> PortNumber -> IO (Stream alpha)
-processSocketKafka met nodeName host port = U.getChanContents =<< runKafkaConsumer met nodeName host port
+-- processSocketKafka :: Store alpha => Metrics -> String -> HostName -> PortNumber -> IO (Stream alpha)
+-- processSocketKafka met nodeName host port = U.getChanContents =<< runKafkaConsumer met nodeName host port
 
 
-runKafkaConsumer :: Store alpha => Metrics -> String -> HostName -> PortNumber -> IO (U.OutChan (Event alpha))
-runKafkaConsumer met nodeName host port = do
-    (inChan, outChan) <- U.newChan chanSize
-    async $ E.bracket mkConsumer clConsumer (runHandler inChan)
-    return outChan
+runKafkaConsumer :: Store alpha => String -> KafkaConfig -> Metrics -> U.InChan (Event alpha) -> IO ()
+runKafkaConsumer nodeName conf met chan = E.bracket mkConsumer clConsumer (runHandler chan)
     where
         mkConsumer                 = PG.inc (_ingressConn met)
                                      >> print "create new consumer"
-                                     >> newConsumer (consumerProps host port) consumerSub
+                                     >> newConsumer (consumerProps conf)
+                                                    (consumerSub $ TopicName . read $ conf ^. kafkaTopic) 
         clConsumer      (Left err) = print "error close consumer"
                                      >> return ()
         clConsumer      (Right kc) = void $ closeConsumer kc
@@ -532,7 +649,7 @@ runKafkaConsumer met nodeName host port = do
 
 processKafkaMessages :: Store alpha => Metrics -> KafkaConsumer -> U.InChan (Event alpha) -> IO ()
 processKafkaMessages met kc chan = forever $ do
-    threadDelay (300000)
+    threadDelay kafkaConnectDelayMs
     msg <- pollMessage kc (Timeout 50)
     either (\_ -> return ()) extractValue msg
       where
@@ -545,14 +662,18 @@ processKafkaMessages met kc chan = forever $ do
                                 (decode v)
 
 
-consumerProps :: HostName -> PortNumber -> ConsumerProperties
-consumerProps host port =
-    KC.brokersList [BrokerAddress $ T.pack $ host ++ ":" ++ show port]
-         <> groupId (ConsumerGroupId "striot_consumer_group")
+consumerProps :: KafkaConfig -> ConsumerProperties
+consumerProps conf =
+    KC.brokersList [BrokerAddress $ brokerAddress conf]
+         <> groupId (ConsumerGroupId . read $ conf ^. kafkaConGroup)
          <> KC.logLevel KafkaLogInfo
          <> KC.callbackPollMode CallbackPollModeSync
 
 
-consumerSub :: Subscription
-consumerSub = topics [kafkaTopic]
-           <> offsetReset Earliest
+consumerSub :: TopicName -> Subscription
+consumerSub topic = topics [topic]
+                    <> offsetReset Earliest
+
+
+brokerAddress :: KafkaConfig -> T.Text
+brokerAddress conf = T.pack $ (conf ^. kafkaConn . host) ++ ":" ++ (conf ^. kafkaConn . port)

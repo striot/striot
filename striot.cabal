@@ -20,6 +20,7 @@ library
                       Striot.FunctionalProcessing
                       Striot.LogicalOptimiser
                       Striot.Nodes
+                      Striot.Nodes.Types
                       Striot.CompileIoT
                       Striot.StreamGraph
   -- other-modules:
@@ -46,6 +47,8 @@ library
                     , deepseq
                     , network-uri
                     , hw-kafka-client   >= 3.0.0
+                    , mtl
+                    , lens
   hs-source-dirs:     src
   default-language:   Haskell2010
 
@@ -75,11 +78,14 @@ test-suite test-striot
                     , deepseq
                     , network-uri
                     , hw-kafka-client   >= 3.0.0
+                    , mtl
+                    , lens
   other-modules:      Striot.CompileIoT
                       Striot.FunctionalIoTtypes
                       Striot.FunctionalProcessing
                       Striot.LogicalOptimiser
                       Striot.Nodes
+                      Striot.Nodes.Types
                       Striot.StreamGraph
                       VizGraph
   default-language:   Haskell2010
