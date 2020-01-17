@@ -1,10 +1,14 @@
-module Jackson where
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
+
+module Striot.Jackson where
 -- import FunctionalIoTtypes
 -- import FunctionalProcessing
 import Data.Array -- cabal install array
 import Matrix.LU -- cabal install dsp
 import Matrix.Matrix
 import Data.List
+
+import Test.Framework
 
 -- References & Manuals
 -- https://en.wikipedia.org/wiki/Jackson_network
@@ -14,32 +18,44 @@ import Data.List
 -- https://hackage.haskell.org/package/array-0.5.1.1/docs/Data-Array.html
 -- http://haskelldsp.sourceforge.net/doc/Matrix.Matrix.html
 
+-- |Derive the identity matrix from a 2D Array
 identity:: (Ix a, Integral a, Num b) => Array (a,a) b -> Array (a,a) b
 identity p = listArray (bounds p) $ [if row==column then 1 else 0| row<-[1..size],column<-[1..size]]
                         where size = fst $ snd $ bounds p
                         
+-- |Matrix subtraction.
+-- The indexes must begin at 1.
 mm_subtract:: (Ix a, Integral a, Num b) => Array (a, a) b -> Array (a, a) b -> Array (a, a) b
 mm_subtract x y = listArray (bounds x) $ [(x Data.Array.! (row,column))-(y Data.Array.! (row,column))| row<-[1..size],column<-[1..size]] 
                           where size = fst $ snd $ bounds x
                           
-                          
+-- | Matrix multiplication.
+-- The indexes must begin at 1.
 ma_mult:: (Ix a, Integral a, Num b) => Array (a, a) b -> b -> Array (a, a) b 
 ma_mult x v   = listArray (bounds x) $ [v*(x Data.Array.! (row,column))| row<-[1..size],column<-[1..size]] 
                           where size = fst $ snd $ bounds x
                           
+-- | Vector (1D Array) multiplication by value.
+-- The indexes must begin at 1.
 va_mult:: (Ix a, Integral a, Num b) => Array a b -> b -> Array a b 
 va_mult x val   = listArray (bounds x) $ [val*(x Data.Array.! row)| row<-[1..size]] 
                           where size = snd $ bounds x
                           
+-- | Vector (1D Array) multiplication.
+-- The indexes must begin at 1.
 vv_mult:: (Ix a, Integral a, Num b) => Array a b -> Array a b -> Array a b
 vv_mult v1 v2 = listArray (bounds v1) $ [(v1 Data.Array.! row)*(v2 Data.Array.!row) |row <- [1..size]]
                           where size = snd $ bounds v1
 
+-- | Vector (1D Array) equivalent of `take`
 v_take:: Int -> Array Int b -> Array Int b
 v_take max v = listArray (1,max) $ [v Data.Array.! row |row <- [1..max]]
 
 -- Jackson Network: lambda = (I-P')^(-1)a where a = (alpha.p0i)i=1..J
 arrivalRate:: Array (Int, Int) Double -> Array Int Double -> Double -> Array Int Double  
+-- p - selectivities of filters
+-- p0i - distribution of input events into the system (i.e. to which nodes, which are the source nodes)
+-- alpha- arrival rate into the system
 arrivalRate p p0i alpha =  mv_mult (inverse $ mm_subtract (identity p) (m_trans p)) aa
                                where aa = va_mult p0i alpha
   
@@ -177,3 +193,16 @@ test5 = identity ex1
 test6 = mm_subtract ex1 ex1
 test7 = m_trans ex1
 test8 = mm_subtract (identity ex1) (m_trans ex1)
+
+------------------------------------------------------------------------------
+-- HTF tests (TODO: convert the above)
+
+prop_identity = do
+    n <- vectorOf 9 arbitrary :: Gen [Double]
+    return $ identity (listArray shape n)
+        == listArray shape
+           ([1, 0, 0
+            ,0, 1, 0
+            ,0, 0, 1
+            ] :: [Double])
+    where shape = ((1,1),(3,3))
