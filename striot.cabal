@@ -25,7 +25,7 @@ library
   -- other-modules:
   -- other-extensions:
   build-depends:      base              >= 4.9
-                    , network           >= 3.0.0.0
+                    , network           >= 3.1.0.0
                     , containers        >= 0.5
                     , split             >= 0.2
                     , time              >= 1.6
@@ -36,9 +36,9 @@ library
                     , filepath          >= 1.4
                     , directory         >= 1.3
                     , store
-                    , store-streaming
+                    , store-streaming   >= 0.1.0
                     , async
-                    , prometheus        >= 2.0.0
+                    , prometheus        >= 2.1.2
                     , text
                     , process
   hs-source-dirs:     src
@@ -49,7 +49,7 @@ test-suite test-striot
   type:               exitcode-stdio-1.0
   main-is:            TestMain.hs
   build-depends:      base              >= 4.9
-                    , network           >= 3.0.0.0
+                    , network           >= 3.1.0.0
                     , containers        >= 0.5
                     , split             >= 0.2
                     , time              >= 1.6
@@ -60,9 +60,9 @@ test-suite test-striot
                     , filepath          >= 1.4
                     , directory         >= 1.3
                     , store
-                    , store-streaming
+                    , store-streaming   >= 0.1.0
                     , async
-                    , prometheus        >= 2.0.0
+                    , prometheus        >= 2.1.2
                     , text
                     , process
   other-modules:      Striot.CompileIoT
