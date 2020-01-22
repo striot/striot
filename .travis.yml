@@ -12,9 +12,15 @@ stages:
   - name: image
     if: branch = master AND type = push
 
+before_install:
+  - wget -qO - https://packages.confluent.io/deb/5.3/archive.key | sudo apt-key add -
+  - sudo add-apt-repository "deb [arch=amd64] https://packages.confluent.io/deb/5.3 stable main"
+  - sudo apt-get update && sudo apt-get install librdkafka-dev
+
 install:
-  - cabal install happy
-  - cabal install --only-dependencies --enable-tests
+  - cabal install happy alex
+  - cabal install c2hs
+  - cabal install --only-dependencies --enable-tests --extra-include-dirs=/usr/local/include --extra-lib-dirs=/usr/local/lib
 
 jobs:
   include:

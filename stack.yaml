@@ -6,3 +6,8 @@ extra-deps:
 - prometheus-2.1.2
 - store-streaming-0.1.0.0
 - unagi-chan-0.4.1.0
+- net-mqtt-0.6.2.1
+- websockets-0.12.6.1
+- connection-0.3.1
+- socks-0.6.1
+- hw-kafka-client-3.0.0

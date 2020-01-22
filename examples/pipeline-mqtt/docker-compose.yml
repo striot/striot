@@ -1,0 +1,26 @@
+version: "3"
+services:
+  mqtt:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "1883"
+  node3:
+    build: node3
+    stdin_open: true
+    tty: true
+    ports:
+      - "9001"
+  node2:
+    build: node2
+    ports:
+      - "9001"
+    stdin_open: true
+    tty: true
+    depends_on:
+      - mqtt
+      - node3
+  node1:
+    build: node1
+    depends_on:
+      - mqtt
+      - node2
