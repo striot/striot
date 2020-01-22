@@ -1,11 +1,14 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Striot.Nodes ( nodeSink
-                    , nodeSink2
+module Striot.Nodes ( nodeSource
                     , nodeLink
                     , nodeLink2
-                    , nodeSource
+                    , nodeSink
+                    , nodeSink2
                     , defaultConfig
+                    , defaultSource
+                    , defaultLink
+                    , defaultSink
                     ) where
 
 import           Control.Concurrent.Async                      (async)
@@ -84,7 +87,7 @@ nodeLink' streamOp = do
     sendStream metrics result
 
 
--- {- Old style configless link with 2 inputs }
+-- Old style configless link with 2 inputs
 nodeLink2 :: (Store alpha, Store beta, Store gamma)
           => (Stream alpha -> Stream beta -> Stream gamma)
           -> ServiceName
@@ -129,7 +132,7 @@ nodeSink' streamOp iofn = do
     liftIO $ iofn result
 
 
--- {- Old style configless sink with 2 inputs }
+-- Old style configless sink with 2 inputs
 nodeSink2 :: (Store alpha, Store beta, Store gamma)
           => (Stream alpha -> Stream beta -> Stream gamma)
           -> (Stream gamma -> IO ())
@@ -150,17 +153,41 @@ nodeSink2 streamOp iofn inputPort1 inputPort2 = do
 
 --- CONFIG FUNCTIONS ---
 
-defaultConfig :: String -> HostName -> ServiceName -> HostName -> ServiceName -> StriotConfig
+defaultConfig :: String
+              -> HostName
+              -> ServiceName
+              -> HostName
+              -> ServiceName
+              -> StriotConfig
 defaultConfig = defaultConfig' TCP TCP
 
 
-defaultConfig' :: ConnectProtocol -> ConnectProtocol -> String -> HostName -> ServiceName -> HostName -> ServiceName -> StriotConfig
+defaultSource :: HostName -> ServiceName -> StriotConfig
+defaultSource = defaultConfig "striot-source" "" ""
+
+
+defaultLink :: ServiceName -> HostName -> ServiceName -> StriotConfig
+defaultLink = defaultConfig "striot-link" ""
+
+
+defaultSink :: ServiceName -> StriotConfig
+defaultSink port = defaultConfig "striot-sink" "" port "" ""
+
+
+defaultConfig' :: ConnectProtocol
+               -> ConnectProtocol
+               -> String
+               -> HostName
+               -> ServiceName
+               -> HostName
+               -> ServiceName
+               -> StriotConfig
 defaultConfig' ict ect nn inHost inPort outHost outPort =
     let ccf ct = case ct of
                     TCP   -> tcpConfig
                     KAFKA -> defaultKafkaConfig
                     MQTT  -> defaultMqttConfig
-    in  baseConfig nn ((ccf ict) inHost inPort) ((ccf ect) outHost outPort)
+    in  baseConfig nn (ccf ict inHost inPort) (ccf ect outHost outPort)
 
 
 baseConfig :: String -> ConnectionConfig -> ConnectionConfig -> StriotConfig
@@ -195,6 +222,8 @@ mqttConfig topic host port =
 defaultMqttConfig :: HostName -> ServiceName -> ConnectionConfig
 defaultMqttConfig = mqttConfig "StriotQueue"
 
+
+--- INTERNAL OPS ---
 
 processInput :: (Store alpha,
                 MonadReader r m,
@@ -261,8 +290,6 @@ sendDispatch nodeName (ConnTCPConfig   cc) met stream = liftIO $ sendStreamTCP  
 sendDispatch nodeName (ConnKafkaConfig cc) met stream = liftIO $ sendStreamKafka nodeName cc met stream
 sendDispatch nodeName (ConnMQTTConfig  cc) met stream = liftIO $ sendStreamMQTT  nodeName cc met stream
 
-
---- UTILITY FUNCTIONS ---
 
 readListFromSource :: IO alpha -> Metrics -> IO (Stream alpha)
 readListFromSource = go

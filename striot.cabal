@@ -46,13 +46,12 @@ library
                     , net-mqtt          >= 0.6.2.1
                     , text
                     , process
-                    , stm
                     , deepseq
-                    , network-uri
-                    , hw-kafka-client   >= 3.0.0
-                    , mtl
-                    , lens
-                    , envy
+                    , network-uri       >= 2.6.1.0
+                    , hw-kafka-client   >= 3.0.0 
+                    , mtl               >= 2.2.2
+                    , lens              >= 4.17.1
+                    , envy              >= 2.0.0.0
   hs-source-dirs:     src
   default-language:   Haskell2010
 
@@ -78,13 +77,12 @@ test-suite test-striot
                     , net-mqtt          >= 0.6.2.1
                     , text
                     , process
-                    , stm
                     , deepseq
-                    , network-uri
+                    , network-uri       >= 2.6.1.0
                     , hw-kafka-client   >= 3.0.0
-                    , mtl
-                    , lens
-                    , envy
+                    , mtl               >= 2.2.2
+                    , lens              >= 4.17.1
+                    , envy              >= 2.0.0.0
   other-modules:      Striot.CompileIoT
                       Striot.FunctionalIoTtypes
                       Striot.FunctionalProcessing

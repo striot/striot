@@ -65,8 +65,8 @@ makeClassy ''StriotConfig
 instance ToEnv StriotConfig where
     toEnv StriotConfig {..} =
         makeEnv $
-            [ "STRIOT_NODE_NAME"          .= _nodeName
-            , "STRIOT_CHAN_SIZE"          .= _chanSize
+            [ "STRIOT_NODE_NAME" .= _nodeName
+            , "STRIOT_CHAN_SIZE" .= _chanSize
             ] ++ writeConf INGRESS _ingressConnConfig
               ++ writeConf EGRESS  _egressConnConfig
 
