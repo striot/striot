@@ -1,0 +1,36 @@
+version: "3"
+services:
+  kafka:
+    image: wurstmeister/kafka:latest
+    ports:
+      - "9092"
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CREATE_TOPICS: "striot-queue:1:1"
+  zookeeper:
+      image: wurstmeister/zookeeper:latest
+      ports:
+        - "2181"
+  node3:
+    build: node3
+    ports:
+      - "9001"
+    stdin_open: true
+    tty: true
+  node2:
+    build: node2
+    ports:
+      - "9001"
+    stdin_open: true
+    tty: true
+    depends_on:
+      - kafka
+      - node3
+  node1:
+    build: node1
+    stdin_open: true
+    tty: true
+    depends_on:
+      - kafka
+      - node2
