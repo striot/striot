@@ -1,14 +1,23 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 
-module Striot.Jackson where
+module Striot.Jackson ( arrivalRate
+                      , utilisation
+                      , avgeResponseTime
+                      , avgeTimeInQueue
+                      , avgeNumberOfCustomersInSystem
+                      ) where
+
 -- import FunctionalIoTtypes
 -- import FunctionalProcessing
 import Data.Array -- cabal install array
 import Matrix.LU -- cabal install dsp
 import Matrix.Matrix
 import Data.List
-
 import Test.Framework
+import Data.Maybe (fromMaybe, fromJust)
+
+import Striot.StreamGraph
+import Algebra.Graph
 
 -- References & Manuals
 -- https://en.wikipedia.org/wiki/Jackson_network
@@ -56,6 +65,7 @@ arrivalRate:: Array (Int, Int) Double -> Array Int Double -> Double -> Array Int
 -- p - selectivities of filters
 -- p0i - distribution of input events into the system (i.e. to which nodes, which are the source nodes)
 -- alpha- arrival rate into the system
+-- XXX throwing a run-time exception when called via calcAllSg, for zeroth element
 arrivalRate p p0i alpha = arrivalRate' p aa
                               where aa = va_mult p0i alpha
 
@@ -135,6 +145,7 @@ taxiQ1Array = listArray ((1,1),(6,6)) $
                   0   ,0   ,0   ,0   ,0    ,0.1,     -- node 5 streamFilterAcc
                   0   ,0   ,0   ,0   ,0    ,0  ]     -- node 6 the output of Q1
 
+ 
 taxiQ1Inputs = listArray (1,6) $ [1,0,0,0,0,0] -- all events in the input stream are sent to node 1
 
 taxiQ1meanServiceTimes:: Array Int Double
@@ -156,7 +167,7 @@ taxiQ1avgeTimeInQueue = avgeTimeInQueue   taxiQ1arrivalRates taxiQ1meanServiceTi
 
 data OperatorInfo = OperatorInfo { opId        :: Int
                                  , arrRate     :: Double
-                                 , serviceTime :: Double
+                                 , serviceTime :: Double -- XXX rename, clashes with StreamGraph
                                  , util        :: Double
                                  , stab        :: Bool
                                  , custInSys   :: Double
@@ -210,3 +221,66 @@ prop_identity = do
             ,0, 0, 1
             ] :: [Double])
     where shape = ((1,1),(3,3))
+
+main = htfMain htf_thisModulesTests
+
+------------------------------------------------------------------------------
+-- derive* functions to convert the Jackson parameters embedded in the
+-- StreamGraph into a form that Jackson code accepts. These should be
+-- temporary, and merged/refactored as part of the Jackson code at a
+-- later date.
+--
+-- | Calculate the P propagation array for a StreamGraph based on its
+-- filter selectivities.
+derivePropagationArray :: StreamGraph -> Array (Int, Int) Double
+derivePropagationArray g = let
+    vl = map (\v -> (vertexId v, v)) (vertexList g)
+    el = map (\(x,y) -> (vertexId x, vertexId y)) (edgeList g)
+    m  = fst (head vl)
+    n  = fst (last vl)
+    prop x y = if (x, y) `elem` el
+               then let v = fromJust (lookup x vl)
+                    in case operator v of
+                       (Filter x)    -> x
+                       (FilterAcc x) -> x
+                       _             -> 1
+               else 0
+
+    in listArray ((m,m),(n,n)) $ [ prop x y | x <- [m..n], y <- [m..n]]
+
+-- | calculate an array of external input arrival probabilities
+deriveInputsArray :: StreamGraph -> Double -> Array Int Double
+deriveInputsArray sg totalArrivalRate = let
+    vl = map (\v -> (vertexId v, v)) (vertexList sg)
+    m  = fst (head vl)
+    n  = fst (last vl)
+
+    srcProp x = case lookup x vl of
+        Nothing -> 0
+        Just v  -> case operator v of
+                Source x -> x / totalArrivalRate
+                _        -> 0
+
+    in listArray (m,n) $ map srcProp [m..n]
+
+
+-- | derive an Array of service times from a StreamGraph
+deriveServiceTimes :: StreamGraph -> Array Int Double
+deriveServiceTimes sg = let
+    vl = map (\v -> (vertexId v, v)) (vertexList sg)
+    m  = fst (head vl)
+    n  = fst (last vl)
+    prop x = case lookup x vl of
+        Nothing -> 0
+        Just v  -> (Striot.StreamGraph.serviceTime) v
+
+    in listArray (m,n) $ map prop [m..n]
+
+calcAllSg :: StreamGraph -> [OperatorInfo]
+calcAllSg sg = calcAll propagation arrivals services
+    where
+        propagation      = derivePropagationArray sg
+        totalArrivalRate = sum $ map (\(Source x) -> x) $ filter isSource $ map operator $ vertexList sg
+        inputs           = deriveInputsArray sg totalArrivalRate
+        services         = deriveServiceTimes sg
+        arrivals         = arrivalRate propagation inputs totalArrivalRate
