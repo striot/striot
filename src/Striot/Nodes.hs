@@ -182,18 +182,18 @@ defaultConfig' :: ConnectProtocol
                -> HostName
                -> ServiceName
                -> StriotConfig
-defaultConfig' ict ect nn inHost inPort outHost outPort =
+defaultConfig' ict ect name inHost inPort outHost outPort =
     let ccf ct = case ct of
                     TCP   -> tcpConfig
                     KAFKA -> defaultKafkaConfig
                     MQTT  -> defaultMqttConfig
-    in  baseConfig nn (ccf ict inHost inPort) (ccf ect outHost outPort)
+    in  baseConfig name (ccf ict inHost inPort) (ccf ect outHost outPort)
 
 
 baseConfig :: String -> ConnectionConfig -> ConnectionConfig -> StriotConfig
-baseConfig nn icc ecc =
+baseConfig name icc ecc =
     StriotConfig
-        { _nodeName          = nn
+        { _nodeName          = name
         , _ingressConnConfig = icc
         , _egressConnConfig  = ecc
         , _chanSize          = 10
@@ -258,9 +258,9 @@ connectDispatch' :: (Store alpha,
                  -> Metrics
                  -> U.InChan (Event alpha)
                  -> m ()
-connectDispatch' nodeName (ConnTCPConfig   cc) met chan = liftIO $ connectTCP       nodeName cc met chan
-connectDispatch' nodeName (ConnKafkaConfig cc) met chan = liftIO $ runKafkaConsumer nodeName cc met chan
-connectDispatch' nodeName (ConnMQTTConfig  cc) met chan = liftIO $ runMQTTSub       nodeName cc met chan
+connectDispatch' name (ConnTCPConfig   cc) met chan = liftIO $ connectTCP       name cc met chan
+connectDispatch' name (ConnKafkaConfig cc) met chan = liftIO $ runKafkaConsumer name cc met chan
+connectDispatch' name (ConnMQTTConfig  cc) met chan = liftIO $ runMQTTSub       name cc met chan
 
 
 sendStream :: (Store alpha,
@@ -286,9 +286,9 @@ sendDispatch :: (Store alpha,
              -> Metrics
              -> Stream alpha
              -> m ()
-sendDispatch nodeName (ConnTCPConfig   cc) met stream = liftIO $ sendStreamTCP   nodeName cc met stream
-sendDispatch nodeName (ConnKafkaConfig cc) met stream = liftIO $ sendStreamKafka nodeName cc met stream
-sendDispatch nodeName (ConnMQTTConfig  cc) met stream = liftIO $ sendStreamMQTT  nodeName cc met stream
+sendDispatch name (ConnTCPConfig   cc) met stream = liftIO $ sendStreamTCP   name cc met stream
+sendDispatch name (ConnKafkaConfig cc) met stream = liftIO $ sendStreamKafka name cc met stream
+sendDispatch name (ConnMQTTConfig  cc) met stream = liftIO $ sendStreamMQTT  name cc met stream
 
 
 readListFromSource :: IO alpha -> Metrics -> IO (Stream alpha)
@@ -308,20 +308,17 @@ readListFromSource = go
 --- PROMETHEUS ---
 
 startPrometheus :: String -> IO Metrics
-startPrometheus nodeName = do
+startPrometheus name = do
     reg <- PR.new
-    let lbl = addLabel "node" (T.pack nodeName) mempty
-        registerFn fn name = fn name lbl reg
-    ingressConn   <- registerFn registerGauge   "striot_ingress_connection"
-    ingressBytes  <- registerFn registerCounter "striot_ingress_bytes_total"
-    ingressEvents <- registerFn registerCounter "striot_ingress_events_total"
-    egressConn    <- registerFn registerGauge   "striot_egress_connection"
-    egressBytes   <- registerFn registerCounter "striot_egress_bytes_total"
-    egressEvents  <- registerFn registerCounter "striot_egress_events_total"
+    let lbl = addLabel "node" (T.pack name) mempty
+        registerFn fn mName = fn mName lbl reg
+        rg = registerFn registerGauge
+        rc = registerFn registerCounter
     async $ serveHttpTextMetrics 8080 ["metrics"] (PR.sample reg)
-    return Metrics { _ingressConn   = ingressConn
-                   , _ingressBytes  = ingressBytes
-                   , _ingressEvents = ingressEvents
-                   , _egressConn    = egressConn
-                   , _egressBytes   = egressBytes
-                   , _egressEvents  = egressEvents }
+    Metrics
+        <$> rg "striot_ingress_connection"
+        <*> rc "striot_ingress_bytes_total"
+        <*> rc "striot_ingress_events_total"
+        <*> rg "striot_egress_connection"
+        <*> rc "striot_egress_bytes_total"
+        <*> rc "striot_egress_events_total"
