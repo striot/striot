@@ -95,7 +95,7 @@ instance FromEnv StriotConfig where
             <$> envMaybe "STRIOT_NODE_NAME" .!= "striot"
             <*> readConf INGRESS
             <*> readConf EGRESS
-            <*> env "STRIOT_CHAN_SIZE"
+            <*> envMaybe "STRIOT_CHAN_SIZE" .!= 10
 
 readConf :: ConnectType -> Parser ConnectionConfig
 readConf t = do

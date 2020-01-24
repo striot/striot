@@ -35,7 +35,7 @@ sendStreamKafka name conf met stream =
                                     >> print "close producer"
           runHandler (Left err)   = return $ Left err
           runHandler (Right prod) = print "runhandler producer"
-                                    >> sendMessagesKafka prod (TopicName . read $ conf ^. kafkaTopic) stream met
+                                    >> sendMessagesKafka prod (TopicName . T.pack $ conf ^. kafkaTopic) stream met
 
 
 kafkaConnectDelayMs :: Int
@@ -75,7 +75,7 @@ runKafkaConsumer name conf met chan = E.bracket mkConsumer clConsumer (runHandle
         mkConsumer                 = PG.inc (_ingressConn met)
                                      >> print "create new consumer"
                                      >> newConsumer (consumerProps conf)
-                                                    (consumerSub $ TopicName . read $ conf ^. kafkaTopic)
+                                                    (consumerSub $ TopicName . T.pack $ conf ^. kafkaTopic)
         clConsumer      (Left err) = print "error close consumer"
                                      >> return ()
         clConsumer      (Right kc) = void $ closeConsumer kc
@@ -105,7 +105,7 @@ processKafkaMessages met kc chan = forever $ do
 consumerProps :: KafkaConfig -> ConsumerProperties
 consumerProps conf =
     KC.brokersList [BrokerAddress $ brokerAddress conf]
-         <> groupId (ConsumerGroupId . read $ conf ^. kafkaConGroup)
+         <> groupId (ConsumerGroupId . T.pack $ conf ^. kafkaConGroup)
          <> KC.logLevel KafkaLogInfo
          <> KC.callbackPollMode CallbackPollModeSync
 

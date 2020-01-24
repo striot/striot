@@ -11,6 +11,7 @@ import qualified Data.ByteString                          as B (length)
 import qualified Data.ByteString.Lazy.Char8               as BLC
 import           Data.Store                               (Store, decode,
                                                            encode)
+import           Data.Text                                as T (pack)
 import           Network.MQTT.Client                      as MQTT hiding
                                                                    (Timeout)
 import           Network.MQTT.Types                       (RetainHandling (..))
@@ -30,7 +31,7 @@ sendStreamMQTT name conf met stream = do
                     val <- E.evaluate . force . encode $ x
                     PC.inc (_egressEvents met)
                         >> PC.add (B.length val) (_egressBytes met)
-                        >> publishq mc (read $ conf ^. mqttTopic) (BLC.fromStrict val) False QoS0 []) stream
+                        >> publishq mc (T.pack $ conf ^. mqttTopic) (BLC.fromStrict val) False QoS0 []) stream
 
 
 runMQTTPub :: String -> HostName -> ServiceName -> IO MQTTClient
@@ -45,7 +46,7 @@ runMQTTSub name conf met chan = do
         p = conf ^. mqttConn . port
         (Just uri) = parseURI $ "mqtt://" ++ h ++ ":" ++ p
     mc <- connectURI (netmqttConf name h p (SimpleCallback $ mqttMessageCallback met chan)) uri
-    print =<< subscribe mc (map (\x -> (x, subOptions)) [read $ (conf ^. mqttTopic)]) []
+    print =<< subscribe mc (map (\x -> (x, subOptions)) [T.pack (conf ^. mqttTopic)]) []
     waitForClient mc
 
 
