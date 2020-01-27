@@ -3,11 +3,13 @@
  -}
 
 import Striot.CompileIoT
+import Striot.StreamGraph
 import Algebra.Graph
 
 opts = GenerateOpts { imports   = ["Striot.FunctionalIoTtypes", "Striot.FunctionalProcessing", "Striot.Nodes", "Control.Concurrent", "System.Random"]
                     , packages  = ["random"]
                     , preSource = Nothing
+                    , rewrite = False
                     }
 
 source = "do\n\

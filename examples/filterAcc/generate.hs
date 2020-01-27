@@ -3,10 +3,12 @@
  -}
 
 import Striot.CompileIoT
+import Striot.StreamGraph
 import Algebra.Graph
 
 opts = defaultOpts { imports  = imports defaultOpts ++ ["System.Random"]
                    , packages = ["random"]
+                   , rewrite = False
                    }
 
 source = "do\n\
