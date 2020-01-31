@@ -104,11 +104,16 @@ streamFilterAcc:: (beta -> alpha -> beta) ->  -- the accumulator fn:
 An example of its use is where we only want to propagate an event if its value is different to the previous event (though the timestamp may differ). This can be written:
 
 ```haskell
-changes:: Eq alpha=> Stream alpha -> Stream alpha
-changes s = streamFilterAcc (\_ h -> h)
-                            (value $ head s)
-                            (/=)
-                            (tail s)
+changes:: Eq alpha => Stream alpha -> Stream alpha
+changes s = streamFilterAcc 
+                 (\_ h -> (False,h))
+                 (True,undefined) 
+                 testChange s
+
+testChange :: Eq alpha => alpha -> (Bool,alpha) -> Bool
+testChange newVal (True ,_     ) = True
+testChange newVal (False,oldVal) = 
+                         oldVal /= newVal
 ```
 
 Another example is a function that samples its input, only passing through one event in n:
