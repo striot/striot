@@ -11,7 +11,7 @@ import Algebra.Graph
 import Test.Framework hiding ((===))
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Function ((&))
-import Data.List (nub)
+import Data.List (nub, sort)
 
 -- applying encoded rules and their resulting ReWriteOps ----------------------
 
@@ -57,6 +57,12 @@ rules = [ filterFuse
         , filterAccFilterAcc
         , mapFuse
         , mapScan
+        , expandFilter
+        , mapFilterAcc
+        , mapWindow
+        , expandMap
+        , expandScan
+        , expandExpand
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -222,6 +228,171 @@ mapScanPost = Vertex $
     StreamVertex 1 Scan ["(let f = (f); g = (g) in (flip (flip f >>> g)))", "a", "s"] "Int" "Int"
 test_mapScan = assertEqual (applyRule mapScan mapScanPre) mapScanPost
 
+-- streamExpand >>> streamFilter f == streamMap (filter f) >>> streamExpand --
+
+expandFilter :: RewriteRule
+expandFilter (Connect (Vertex e@(StreamVertex j Expand [s] t1 t2))
+                      (Vertex f@(StreamVertex i Filter (p:s':[]) _ _))) =
+    let m = StreamVertex j Map ["(filter ("++p++"))",s] t1 t1
+        e'= StreamVertex i Expand [s'] t1 t2
+    in  Just (replaceVertex f e' . replaceVertex e m)
+expandFilter _ = Nothing
+
+expandFilterPre =
+    Vertex (StreamVertex 1 Expand ["foo"] "[Int]" "Int")
+    `Connect`
+    Vertex (StreamVertex 2 Filter ["p","bar"] "Int" "Int")
+expandFilterPost =
+    Vertex (StreamVertex 1 Map ["(filter (p))", "foo"] "[Int]" "[Int]")
+    `Connect`
+    Vertex (StreamVertex 2 Expand ["bar"] "[Int]" "Int")
+
+test_expandFilter = assertEqual (applyRule expandFilter expandFilterPre) expandFilterPost
+
+-- streamMap f >>> streamFilterAcc g a p == streamFilterAcc g a (f >>> p) >>> streamMap f
+
+mapFilterAcc :: RewriteRule
+mapFilterAcc (Connect (Vertex m@(StreamVertex i Map (f:s:[]) t1 _))
+                      (Vertex f1@(StreamVertex j FilterAcc (g:a:p:ps) _ _))) =
+
+    let f2 = StreamVertex i FilterAcc [g, a, ("("++f++")>>>("++p++")"), s] t1 t1
+        m2 = m { vertexId = j }
+    in  Just (replaceVertex f1 m2 . replaceVertex m f2)
+
+mapFilterAcc _ = Nothing
+
+mapFilterAccPre =
+    Vertex (StreamVertex 0 Map ["f","s"] "Int" "String")
+    `Connect`
+    Vertex (StreamVertex 1 FilterAcc ["g","a","p","s'"] "String" "String")
+
+mapFilterAccPost =
+    Vertex (StreamVertex 0 FilterAcc ["g","a","(f)>>>(p)","s"] "Int" "Int")
+    `Connect`
+    Vertex (StreamVertex 1 Map ["f","s"] "Int" "String")
+
+test_mapFilterAcc = assertEqual (applyRule mapFilterAcc mapFilterAccPre) mapFilterAccPost
+
+-- streamMap f >>> streamWindow wm == streamWindow wm >>> streamMap (map f) --
+
+mapWindow :: RewriteRule
+mapWindow (Connect (Vertex m@(StreamVertex i Map (f:s:[]) t1 _))
+                   (Vertex w@(StreamVertex j Window (wm:s':[]) _ t2))) =
+    let t3 = "[" ++ t1 ++ "]"
+        w2 = StreamVertex i Window [wm,s] t1 t3
+        m2 = StreamVertex j Map ["map ("++f++")",s'] t3 t2
+    in  Just (replaceVertex m w2 . replaceVertex w m2)
+
+mapWindow _ = Nothing
+
+mapWindowPre =
+    Vertex (StreamVertex 0 Map ["show","s"] "Int" "String")
+    `Connect`
+    Vertex (StreamVertex 1 Window ["chop 2", "s'"] "String" "[String]")
+
+mapWindowPost =
+    Vertex (StreamVertex 0 Window ["chop 2", "s"] "Int" "[Int]")
+    `Connect`
+    Vertex (StreamVertex 1 Map ["map (show)", "s'"] "[Int]" "[String]")
+
+test_mapWindow = assertEqual (applyRule mapWindow mapWindowPre) mapWindowPost
+
+-- streamExpand >>> streamMap f == streamMap (map f) >>> streamExpand --------
+-- [a]           a            b   [a]               [b]               b
+
+expandMap :: RewriteRule
+expandMap (Connect (Vertex e@(StreamVertex i Expand _ t1 _))
+                   (Vertex m@(StreamVertex j Map (f:s:[]) _ t4))) =
+    let t5 = "[" ++ t4 ++ "]"
+        m2 = StreamVertex i Map ["map ("++f++")",s] t1 t5
+        e2 = StreamVertex j Expand ["s"] t5 t4
+    in  Just (replaceVertex m e2 . replaceVertex e m2)
+
+expandMap _ = Nothing
+
+expandMapPre =
+    Vertex (StreamVertex 0 Expand [] "[Int]" "Int")
+    `Connect`
+    Vertex (StreamVertex 1 Map ["show","s"] "Int" "String")
+
+expandMapPost =
+    Vertex (StreamVertex 0 Map ["map (show)","s"] "[Int]" "[String]")
+    `Connect`
+    Vertex (StreamVertex 1 Expand ["s"] "[String]" "String")
+
+test_expandMap = assertEqual (applyRule expandMap expandMapPre) expandMapPost
+
+-- streamExpand >>> streamScan f a == ----------------------------------------
+--     streamFilter (not.null)
+--         >>> streamScan (\b a' -> tail $ scanl f (last b) a') [a]
+--         >>> streamExpand
+
+expandScan :: RewriteRule
+expandScan (Connect (Vertex  e@(StreamVertex i Expand (s:[])      t1 t2))
+                    (Vertex sc@(StreamVertex j Scan   (f:a:s':[]) _  t3))) =
+    Just $ \g ->
+        let t4 = "[" ++ t3 ++ "]"
+            k  = newVertexId g
+            p  = "(\\b a' -> tail $ scanl ("++f++") (last b) a')"
+
+            f' = StreamVertex i Filter ["not.null", s]    t1 t1
+            sc'= StreamVertex j Scan   [p,"["++a++"]",s'] t1 t4
+            e' = StreamVertex k Expand []                 t4 t3
+
+        in  overlay (path [f',sc',e']) $
+            (removeEdge f' e' . replaceVertex e f' . replaceVertex sc e') g
+
+expandScan _ = Nothing
+
+expandScanPre = path
+    [ StreamVertex 0 Source []             "[Int]" "[Int]"
+    , StreamVertex 1 Expand ["s"]          "[Int]" "Int"
+    , StreamVertex 2 Scan   ["f","a","s'"] "Int"   "Int"
+    , StreamVertex 3 Sink   []             "Int"   "Int"
+    ]
+
+expandScanPost = path
+    [ StreamVertex 0 Source []               "[Int]" "[Int]"
+    , StreamVertex 1 Filter ["not.null","s"] "[Int]" "[Int]"
+    , StreamVertex 2 Scan   [p,"[a]","s'"]   "[Int]" "[Int]"
+    , StreamVertex 4 Expand []               "[Int]" "Int"
+    , StreamVertex 3 Sink   []               "Int"   "Int"
+    ] where
+    p  = "(\\b a' -> tail $ scanl (f) (last b) a')"
+
+test_expandScan = assertEqual (simplify$applyRule expandScan expandScanPre) expandScanPost
+
+-- streamExpand >>> streamExpand == streamMap concat >>> streamExpand --------
+-- [[a]]        [a]             a  [[a]]            [a]              a
+
+expandExpand :: RewriteRule
+expandExpand (Connect (Vertex e@(StreamVertex i Expand _ t1 t2))
+                      (Vertex   (StreamVertex j Expand _ _ _))) =
+    let m = StreamVertex i Map ["concat","s"] t1 t2
+    in  Just (replaceVertex e m)
+
+expandExpand _ = Nothing
+
+expandExpandPre =
+    Vertex (StreamVertex 0 Expand [] "[[Int]]" "[Int]")
+    `Connect`
+    Vertex (StreamVertex 1 Expand [] "[Int]" "Int")
+
+expandExpandPost =
+    Vertex (StreamVertex 0 Map ["concat","s"] "[[Int]]" "[Int]")
+    `Connect`
+    Vertex (StreamVertex 1 Expand [] "[Int]" "Int")
+
+test_expandExpand = assertEqual (applyRule expandExpand expandExpandPre)
+    expandExpandPost
+
 -- utility/boilerplate -------------------------------------------------------
+
+-- generate a new vertexId which doesn't clash with any existing ones
+-- TODO this will still break the assumption that CompileIoT makes regarding
+-- vertexId ordering in a path. We either need to renumber all subsequent nodes
+-- or remove that requirement in CompileIoT
+newVertexId :: StreamGraph -> Int
+newVertexId = succ . last . sort . map vertexId . vertexList
 
 main = htfMain htf_thisModulesTests
