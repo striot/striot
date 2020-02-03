@@ -25,9 +25,10 @@ import Striot.LogicalOptimiser
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
 
+-- |The user's desired partitioning of the input Graph.
+-- Each element in the outer-most list corresponds to a distinct partition.
+-- The inner-lists are the IDs of Operators to include in that partition.
 type PartitionMap = [[Int]]
--- outer-list index: partition ID
--- each inner-list is a list of Vertex IDs to include in that partition
 
 -- createPartitions returns ([partition map], [inter-graph links])
 -- where inter-graph links are the cut edges due to partitioning
@@ -43,7 +44,6 @@ createPartitions g (p:ps) = ((overlay vs es):tailParts, cutEdges `overlay` tailC
 
 unPartition :: ([Graph StreamVertex], Graph StreamVertex) -> Graph StreamVertex
 unPartition (a,b) = overlay b $ foldl overlay Empty a
-
 
 ------------------------------------------------------------------------------
 -- Code generation from StreamGraph definitions
@@ -77,6 +77,9 @@ defaultOpts = GenerateOpts
     , rewrite   = True
     }
 
+-- |Partitions the supplied `StreamGraph` according to the supplied `PartitionMap`
+-- and options specified within the supplied `GenerateOpts` and returns a list of
+-- the sub-graphs converted into source code and encoded as `String`s.
 generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
 generateCode sg pm opts = generateCode' (createPartitions sg pm) opts
 
@@ -275,11 +278,19 @@ writePart opts (x,y) = let
         writeFile (bn </> "Dockerfile") dockerfile
         writeFile fn y
 
--- a very high level function for using the Partitioner
+-- |Partitions the supplied `StreamGraph` according to the supplied `PartitionMap`;
+-- invokes `generateCode` for each derived sub-graph; writes out the resulting
+-- source code to individual source code files, one per node.
 partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
 partitionGraph graph partitions opts =
     mapM_ (writePart opts) $ zip [1..] $ generateCode graph partitions opts
 
+-- |Convenience function for specifying a simple path-style of stream processing
+-- program, with no merge or join operations. The list of tuples are converted
+-- into a series of connected Stream Vertices in a Graph. The tuple arguments are
+-- the relevant `StreamOperator` for the node; the parameters and the *output*
+-- type. The other parameters to `StreamVertex` are inferred from the neighbouring
+-- tuples. Unique and ascending `vertexId` values are assigned.
 simpleStream :: [(StreamOperator, [String], String)] -> Graph StreamVertex
 simpleStream tupes = path lst
 

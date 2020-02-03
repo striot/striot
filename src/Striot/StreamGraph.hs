@@ -11,6 +11,10 @@ module Striot.StreamGraph ( StreamGraph(..)
 import Algebra.Graph
 import Test.Framework -- Arbitrary, etc.
 
+-- |The `StreamOperator` and associated information required to encode a stream-processing
+-- program into a Graph. Each distinct `StreamVertex` within a `StreamGraph` should have a
+-- unique `vertexId` to ensure that they can be distinguished. For simple path-style graphs,
+-- the IDs should be in ascending order.
 data StreamVertex = StreamVertex
     { vertexId   :: Int
     , operator   :: StreamOperator
@@ -19,8 +23,11 @@ data StreamVertex = StreamVertex
     , outtype    :: String
     } deriving (Eq,Show)
 
+-- |A graph representation of a stream-processing program.
 type StreamGraph = Graph StreamVertex
 
+-- |An enumeration of the possible stream operators within a stream-processing program,
+-- as well as `Source` and `Sink` to represent the ingress and egress points of programs.
 data StreamOperator = Map
                     | Filter
                     | Expand
