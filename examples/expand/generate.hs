@@ -1,4 +1,6 @@
 import Striot.CompileIoT
+import Striot.StreamGraph
+
 import Algebra.Graph
 
 opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
@@ -10,6 +12,7 @@ opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
                                 ]
                     , packages  = ["random"]
                     , preSource = Nothing
+                    , rewrite = False
                     }
 
 -- 40 words picked randomly from the dictionary, 20 of which are prefixed

@@ -3,6 +3,7 @@
  -}
 
 import Striot.CompileIoT
+import Striot.StreamGraph
 import Algebra.Graph
 
 source x = "do\n\
