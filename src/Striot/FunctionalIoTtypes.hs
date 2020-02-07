@@ -4,8 +4,7 @@ import           Data.Store
 import           Data.Time    (UTCTime)
 import           GHC.Generics (Generic)
 
-data Event alpha = Event { eventId :: Int
-                         , time    :: Maybe Timestamp
+data Event alpha = Event { time    :: Maybe Timestamp
                          , value   :: Maybe alpha}
      deriving (Eq, Ord, Show, Read, Generic)
 
