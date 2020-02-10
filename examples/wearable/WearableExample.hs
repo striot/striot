@@ -79,16 +79,14 @@ jan_1_1900_time :: UTCTime
 jan_1_1900_time = UTCTime jan_1_1900_day 0 -- gives example time for the first event
 
 
-sampleDataGenerator :: Int -> UTCTime -> Int -> [Int] -> Stream PebbleMode60 -- Start Time -> Interval between events in ms ->
+sampleDataGenerator :: UTCTime -> Int -> [Int] -> Stream PebbleMode60 -- Start Time -> Interval between events in ms ->
                                                                           -- List of random numbers -> Events
-sampleDataGenerator i start interval rands =
+sampleDataGenerator start interval rands =
          Event
-            i
             (Just start)
             (Just ((rands !! 0, rands !! 1, rands !! 2)
             , if rands !! 3 < 10 then 1 :: Int else 0 :: Int))
         : sampleDataGenerator
-              (i + 1)
               (addUTCTime (toEnum (interval * 10 ^ 9)) start)
               interval
               (drop 5 rands)
@@ -98,35 +96,35 @@ main :: IO ()
 main = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ stepCount $ stepEvent $ edEvent $ sampleDataGenerator 0 jan_1_1900_time 10 rs
+  print.take 100 $ stepCount $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
 ------------- Tests for debugging----------------------------------
 main2 :: IO ()
 main2 = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ sampleDataGenerator 0 jan_1_1900_time 10 rs
+  print.take 100 $ sampleDataGenerator jan_1_1900_time 10 rs
 
 main3 :: IO ()
 main3 = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ stepEvent $ edEvent $ sampleDataGenerator 0 jan_1_1900_time 10 rs
+  print.take 100 $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
 main4 :: IO ()
 main4 = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ edEvent $ sampleDataGenerator 0 jan_1_1900_time 10 rs
+  print.take 100 $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
 main5 :: IO ()
 main5 = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ streamFilter (\[ed1,ed2]-> (ed1>threshold) && (ed2<=threshold)) $ streamWindow (sliding 2) $ edEvent $ sampleDataGenerator 0 jan_1_1900_time 10 rs
+  print.take 100 $ streamFilter (\[ed1,ed2]-> (ed1>threshold) && (ed2<=threshold)) $ streamWindow (sliding 2) $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
 main6 :: IO ()
 main6 = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ streamWindow (chopTime 120) $ stepEvent $ edEvent $ sampleDataGenerator 0 jan_1_1900_time 10 rs
+  print.take 100 $ streamWindow (chopTime 120) $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs

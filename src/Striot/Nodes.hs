@@ -218,17 +218,17 @@ nodeLinkKafka streamOp nodeName inputHost inputPort outputHost outputPort = do
 --- UTILITY FUNCTIONS ---
 
 readListFromSource :: IO alpha -> Metrics -> IO (Stream alpha)
-readListFromSource = go 0
+readListFromSource = go
   where
-    go i pay met = unsafeInterleaveIO $ do
-        x  <- msg i
+    go pay met = unsafeInterleaveIO $ do
+        x  <- msg
         PC.inc (_ingressEvents met)
-        xs <- go (i + 1) pay met    -- This will overflow eventually
+        xs <- go pay met
         return (x : xs)
       where
-        msg x = do
+        msg = do
             now <- getCurrentTime
-            Event x (Just now) . Just <$> pay
+            Event (Just now) . Just <$> pay
 
 
 {- processSocket is a wrapper function that handles concurrently

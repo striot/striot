@@ -27,7 +27,7 @@ jan_1_1900_time = UTCTime jan_1_1900_day 0 -- gives example time for the first e
 
 sampleDataGenerator:: UTCTime -> Int -> [Int] -> Stream Int -- Start Time -> Interval between events in ms -> 
                                                             --- List of random numbers -> Events
-sampleDataGenerator start interval rands = (Event (rands!!0) (Just start) (Just (rands!!0))):
+sampleDataGenerator start interval rands = (Event (Just start) (Just (rands!!0))):
                                            (sampleDataGenerator (addUTCTime (toEnum (interval*10^9)) start) interval (drop 1 rands))
 
 nfib:: Int -> Int
