@@ -53,7 +53,7 @@ type WindowMaker alpha = Stream alpha -> [Stream alpha]
 type WindowAggregator alpha beta = [alpha] -> beta
 
 streamWindow :: WindowMaker alpha -> Stream alpha -> Stream [alpha]
-streamWindow fwm s = mapWindowId Nothing (fwm s)
+streamWindow fwm s = mapWindowId (fwm s)
            where getVals :: Stream alpha -> [alpha]
                  getVals s' = map (\(Event _ (Just val))->val) $ filter dataEvent s'
                  mapWindowId :: [Stream alpha] -> Stream [alpha]
