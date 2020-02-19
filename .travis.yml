@@ -13,6 +13,7 @@ stages:
     if: branch = master AND type = push
 
 before_install:
+  # install librdkafka-dev
   - wget -qO - https://packages.confluent.io/deb/5.3/archive.key | sudo apt-key add -
   - sudo add-apt-repository "deb [arch=amd64] https://packages.confluent.io/deb/5.3 stable main"
   - sudo apt-get update && sudo apt-get install librdkafka-dev
@@ -26,6 +27,10 @@ jobs:
   include:
     - stage: build
       name: Build and test striot
+      script:
+        - cabal configure --enable-tests && cabal build && cabal test
+        - ./gen_test_makefile.sh > Makefile
+        - make
     - stage: image
       install: true
       name: Build striot-base docker image
