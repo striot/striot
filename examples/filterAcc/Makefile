@@ -1,3 +1,5 @@
+GHC := stack ghc --
+
 run: node1/node.hs node2/node.hs
 	docker-compose up --build
 
@@ -5,7 +7,7 @@ node1/node.hs node2/node.hs: generate
 	./generate
 
 generate: generate.hs
-	stack ghc -- -i../../src generate.hs
+	$(GHC) -i../../src generate.hs
 
 clean:
 	rm -f generate generate.hi generate.o node1/node.hs node2/node.hs \
