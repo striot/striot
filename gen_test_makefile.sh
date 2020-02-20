@@ -28,8 +28,8 @@ gen()
         a+=("$d")
 
         echo -e "$d:"
-        echo -e "\tmake -C $d clean GHC=\"\$(GHC)\""
-        echo -e "\tmake -C $d generate GHC=\"\$(GHC)\""
+        echo -e "\t+make -C $d clean GHC=\"\$(GHC)\""
+        echo -e "\t+make -C $d generate GHC=\"\$(GHC)\""
         echo -e "\tcd \"$d\" && ./generate"
 
         for n in "$d"/node?/node.hs
@@ -40,7 +40,7 @@ gen()
 
     echo clean:
     for d in "${a[@]}"; do
-        echo -e "\tmake -C $d clean GHC=\"\$(GHC)\""
+        echo -e "\t+make -C $d clean GHC=\"\$(GHC)\""
     done
     echo
 
