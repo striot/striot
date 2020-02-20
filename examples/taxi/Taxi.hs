@@ -120,7 +120,7 @@ inRangeQ2 = inRange 600 600
 
 --- Parse the input file --------------------------------------------------------------------------------------
 tripSource :: String -> Stream Trip -- parse input file into a Stream of Trips
-tripSource s = map ((\t -> Event 0 (Just (dropoffDatetime t)) (Just t))
+tripSource s = map ((\t -> Event (Just (dropoffDatetime t)) (Just t))
                    . stringsToTrip . Data.List.Split.splitOn ",") (lines s)
 
 -- turns a line from the input file (already split into a list of fields) into a Trip datastructure
@@ -137,11 +137,11 @@ stringsToTrip s = error ("error in input: " ++ intercalate "," s)
 ----------------------------------------------------------------------------------------------------------------
 
 journeyChanges :: Stream ((UTCTime, UTCTime),[(Journey, Int)]) -> Stream ((UTCTime, UTCTime),[(Journey, Int)])
-journeyChanges (Event _ _ (Just val):r) = streamFilterAcc (\acc h -> if snd h == snd acc then acc else h) val (\h acc -> snd h /= snd acc) r
+journeyChanges (Event _ (Just val):r) = streamFilterAcc (\acc h -> if snd h == snd acc then acc else h) val (\h acc -> snd h /= snd acc) r
 
 --- removes consecutive repeated values from a stream, leaving only the changes
 changes :: Eq alpha => Stream alpha -> Stream alpha
-changes (e@(Event _ _ (Just val)):r) = e : streamFilterAcc (\_ h -> h) val (/=) r
+changes (e@(Event _ (Just val)):r) = e : streamFilterAcc (\_ h -> h) val (/=) r
 
 -- produces an ordered list of the i most frequent elements from list a list
 topk :: (Num freq, Ord freq, Ord alpha) => Int -> [alpha] -> [(alpha, freq)]
@@ -386,7 +386,7 @@ q2TripSourceTest10 = do
 --  streamExpand . streamWindow tripTimes . <source of Event Trip>
 tripTimes :: WindowMaker Trip
 tripTimes [] = []
-tripTimes (e@(Event eid _ v):t) = [Event eid (fmap dropoffDatetime v) v] : tripTimes t
+tripTimes (e@(Event _ v):t) = [Event (fmap dropoffDatetime v) v] : tripTimes t
 
 -- a function to run on the source node prior to setting up the stream
 -- the nodeSource function will call "getLine" which operates on the "stdin" file handle
