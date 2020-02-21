@@ -3,6 +3,7 @@
 module Striot.LogicalOptimiser ( applyRules
                                , costModel
                                , optimise
+                               , optimiseWriteOut
 
                                , htf_thisModulesTests
                                ) where
@@ -12,7 +13,7 @@ import Algebra.Graph
 import Test.Framework hiding ((===))
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Function ((&))
-import Data.List (nub, sort)
+import Data.List (nub, sort, intercalate)
 
 -- applying encoded rules and their resulting ReWriteOps ----------------------
 
@@ -60,6 +61,22 @@ optimise sg = let
     in if score > base
        then candidate
        else sg
+
+-- | Optimise a StreamGraph and write the result out as Haskell source
+-- code to the supplied FilePath, along with some of the necessary
+-- supporting code.
+optimiseWriteOut :: FilePath -> StreamGraph -> IO ()
+optimiseWriteOut fn =
+    writeFile fn . template . show . simplify . optimise
+
+template g = intercalate "\n"
+    [ "import Striot.StreamGraph"
+    , "import Algebra.Graph"
+    , "\n"
+    , "graph = " ++ g
+    ]
+
+------------------------------------------------------------------------------
 
 rules :: [RewriteRule]
 rules = [ filterFuse
@@ -408,4 +425,3 @@ newVertexId :: StreamGraph -> Int
 newVertexId = succ . last . sort . map vertexId . vertexList
 
 main = htfMain htf_thisModulesTests
-
