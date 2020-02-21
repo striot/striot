@@ -299,12 +299,3 @@ simpleStream tupes = path lst
         tupes3 = zip3 [1..] intypes tupes
         lst = map (\ (i,intype,(op,params,outtype)) ->
             StreamVertex i op params intype outtype) tupes3
-
-------------------------------------------------------------------------------
--- logical optimisation
-
-optimise :: StreamGraph -> StreamGraph
-optimise sg = let
-    sgs  = applyRules 5 sg
-    best = snd $ maximum $ map (\g -> (costModel g, g) ) sgs
-    in best

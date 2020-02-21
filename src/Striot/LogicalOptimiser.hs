@@ -2,6 +2,7 @@
 
 module Striot.LogicalOptimiser ( applyRules
                                , costModel
+                               , optimise
 
                                , htf_thisModulesTests
                                ) where
@@ -48,6 +49,14 @@ applyRules n sg =
         else let
              sgs = map ((&) sg) $ mapMaybe (firstMatch sg) rules
              in    sg : sgs ++ (concatMap (applyRules (n-1)) sgs)
+
+-- | Return an optimised version of the supplied StreamGraph, or the
+-- graph itself if no better alternative is found.
+optimise :: StreamGraph -> StreamGraph
+optimise sg = let
+    sgs  = nub $ applyRules 5 sg
+    best = snd $ maximum $ map (\g -> (costModel g, g) ) sgs
+    in best
 
 rules :: [RewriteRule]
 rules = [ filterFuse
@@ -396,3 +405,4 @@ newVertexId :: StreamGraph -> Int
 newVertexId = succ . last . sort . map vertexId . vertexList
 
 main = htfMain htf_thisModulesTests
+
