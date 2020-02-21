@@ -1,8 +1,8 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 
-module VizGraph ( streamGraphToDot
-                , displayGraph
-                , htf_thisModulesTests) where
+module Striot.VizGraph ( streamGraphToDot
+                       , displayGraph
+                       , htf_thisModulesTests) where
 
 import Striot.StreamGraph
 import Algebra.Graph
