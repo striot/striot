@@ -33,7 +33,7 @@ gen()
         echo -e "\tcd \"$d\" && ./generate"
 
         for n in "$d"/node?/node.hs
-            do echo -e "\t\$(GHC) -i. -i$d $n"
+            do echo -e "\t\$(GHC) -isrc -i$d $n"
         done
         echo
     done
