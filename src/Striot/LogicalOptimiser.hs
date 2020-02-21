@@ -54,9 +54,12 @@ applyRules n sg =
 -- graph itself if no better alternative is found.
 optimise :: StreamGraph -> StreamGraph
 optimise sg = let
-    sgs  = nub $ applyRules 5 sg
-    best = snd $ maximum $ map (\g -> (costModel g, g) ) sgs
-    in best
+    base              = costModel sg
+    sgs               = nub $ applyRules 5 sg
+    (score,candidate) = maximum $ map (\g -> (costModel g, g) ) sgs
+    in if score > base
+       then candidate
+       else sg
 
 rules :: [RewriteRule]
 rules = [ filterFuse
