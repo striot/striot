@@ -38,19 +38,7 @@ data StreamOperator = Map
                     | FilterAcc
                     | Source
                     | Sink
-                    deriving (Ord,Eq)
-
-instance Show StreamOperator where
-    show Map             = "streamMap"
-    show Filter          = "streamFilter"
-    show Window          = "streamWindow"
-    show Merge           = "streamMerge"
-    show Join            = "streamJoin"
-    show Scan            = "streamScan"
-    show FilterAcc       = "streamFilterAcc"
-    show Expand          = "streamExpand"
-    show Source          = "streamSource"
-    show Sink            = "streamSink"
+                    deriving (Show,Ord,Eq)
 
 instance Ord StreamVertex where
     compare x y = compare (vertexId x) (vertexId y)
