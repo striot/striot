@@ -2,6 +2,8 @@
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
 import Striot.Nodes
+import Striot.Nodes.Types
+import System.Envy
 import Control.Concurrent
 
 
@@ -17,4 +19,7 @@ streamGraphFn n1 = let
 
 main :: IO ()
 main = do
-       nodeSourceKafka src1 streamGraphFn "node1" "kafka" "9092"
+    conf <- decodeEnv :: IO (Either String StriotConfig)
+    case conf of
+        Left _  -> print "Could not read from env"
+        Right c -> nodeSource c src1 streamGraphFn

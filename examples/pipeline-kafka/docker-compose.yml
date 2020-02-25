@@ -24,6 +24,17 @@ services:
       - "9001"
     stdin_open: true
     tty: true
+    environment:
+      STRIOT_NODE_NAME: striot-link
+      STRIOT_INGRESS_TYPE: KAFKA
+      STRIOT_INGRESS_HOST: kafka
+      STRIOT_INGRESS_PORT: 9092
+      STRIOT_INGRESS_KAFKA_TOPIC: striot-queue
+      STRIOT_INGRESS_KAFKA_CON_GROUP: striot_con_group
+      STRIOT_EGRESS_TYPE: TCP
+      STRIOT_EGRESS_HOST: node3
+      STRIOT_EGRESS_PORT: 9001
+      STRIOT_CHAN_SIZE: 10
     depends_on:
       - kafka
       - node3
@@ -31,6 +42,17 @@ services:
     build: node1
     stdin_open: true
     tty: true
+    environment:
+      STRIOT_NODE_NAME: striot-source
+      STRIOT_INGRESS_TYPE: TCP
+      STRIOT_INGRESS_HOST: ""
+      STRIOT_INGRESS_PORT: ""
+      STRIOT_EGRESS_TYPE: KAFKA
+      STRIOT_EGRESS_HOST: kafka
+      STRIOT_EGRESS_PORT: 9092
+      STRIOT_EGRESS_KAFKA_TOPIC: striot-queue
+      STRIOT_EGRESS_KAFKA_CON_GROUP: none
+      STRIOT_CHAN_SIZE: 10
     depends_on:
       - kafka
       - node2

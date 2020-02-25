@@ -17,4 +17,4 @@ streamGraphFn n1 = let
 
 
 main :: IO ()
-main = nodeSink streamGraphFn sink1 "9001"
+main = nodeSink (defaultSink "9001") streamGraphFn sink1

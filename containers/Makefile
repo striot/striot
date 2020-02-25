@@ -6,7 +6,7 @@ readme = $(base)/README.md
 cabal = $(base)/striot.cabal
 
 src_dir := $(base)/src
-in_srcs := $(wildcard ../src/*.hs) $(wildcard ../src/**/*.hs)
+in_srcs := $(wildcard ../src/*.hs) $(wildcard ../src/**/*.hs) $(wildcard ../src/**/**/*.hs)
 out_srcs := $(subst ..,$(base),$(in_srcs))
 
 .PHONY: all

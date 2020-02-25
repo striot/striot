@@ -16,11 +16,31 @@ services:
       - "9001"
     stdin_open: true
     tty: true
+    environment:
+      STRIOT_NODE_NAME: striot-link
+      STRIOT_INGRESS_TYPE: MQTT
+      STRIOT_INGRESS_HOST: mqtt
+      STRIOT_INGRESS_PORT: 1883
+      STRIOT_INGRESS_MQTT_TOPIC: StriotQueue
+      STRIOT_EGRESS_TYPE: TCP
+      STRIOT_EGRESS_HOST: node3
+      STRIOT_EGRESS_PORT: 9001
+      STRIOT_CHAN_SIZE: 10
     depends_on:
       - mqtt
       - node3
   node1:
     build: node1
+    environment:
+      STRIOT_NODE_NAME: striot-source
+      STRIOT_INGRESS_TYPE: TCP
+      STRIOT_INGRESS_HOST: ""
+      STRIOT_INGRESS_PORT: ""
+      STRIOT_EGRESS_TYPE: MQTT
+      STRIOT_EGRESS_HOST: mqtt
+      STRIOT_EGRESS_PORT: 1883
+      STRIOT_EGRESS_MQTT_TOPIC: StriotQueue
+      STRIOT_CHAN_SIZE: 10
     depends_on:
       - mqtt
       - node2
