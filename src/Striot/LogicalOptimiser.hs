@@ -14,6 +14,7 @@ import Test.Framework hiding ((===))
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Function ((&))
 import Data.List (nub, sort, intercalate)
+import Control.Arrow ((>>>))
 
 -- applying encoded rules and their resulting ReWriteOps ----------------------
 
@@ -93,6 +94,7 @@ rules = [ filterFuse
         , expandScan
         , expandExpand
         , windowExpandWindow
+        , mergeFilter 
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -455,7 +457,53 @@ windowExpandWindowPost2 = path
 test_windowExpandWindow2 = assertEqual (applyRule windowExpandWindow windowExpandWindowPre2)
     windowExpandWindowPost2
 
+-- streamFilter f (streamMerge [s1, s2]) -------------------------------------
+-- = streamMerge [streamFilter f s1, streamFilter f s2]
+
+mergeFilter :: RewriteRule
+mergeFilter (Connect (Vertex m@(StreamVertex i Merge _ _ ty))
+                     (Vertex f@(StreamVertex j Filter pred _ _))) =
+
+    Just $ \g -> let
+
+        mkFilter g = StreamVertex (newVertexId g) Filter pred ty ty
+
+        -- for each NODE that connects to Merge: (:: [StreamVertex])
+        inbound    = map fst . filter ((m==) . snd) . edgeList $ g
+
+        -- * remove that edge (:: [StreamGraph -> StreamGraph])
+        snipMerge  = map (\v -> removeEdge v m) inbound
+
+        -- * insert new Filters (:: [StreamGraph -> StreamGraph])
+        newFilters = map (\v -> \g -> overlay g $ path [v, mkFilter g, m]) inbound
+
+  in (removeEdge m f
+      >>> replaceVertex f m  -- remove existing filter
+      >>> foldRules snipMerge
+      >>> foldRules newFilters) g
+
+mergeFilter _ = Nothing
+
+v1 = StreamVertex 0 Source []           "Int" "Int"
+v2 = StreamVertex 1 Source []           "Int" "Int"
+v3 = StreamVertex 2 Merge  []           "Int" "Int"
+v4 = StreamVertex 3 Filter ["(>3)","s"] "Int" "Int"
+v5 = StreamVertex 4 Sink   []           "Int" "Int"
+
+mergeFilterPre = overlay (path [v1,v3,v4,v5]) (path [v2,v3])
+
+v6 = StreamVertex 5 Filter ["(>3)","s"] "Int" "Int"
+v7 = StreamVertex 6 Filter ["(>3)","s"] "Int" "Int"
+
+mergeFilterPost = overlay (path [v1,v6,v3,v5]) (path [v2,v7,v3])
+
+test_mergeFilter = assertEqual (applyRule mergeFilter mergeFilterPre)
+    mergeFilterPost
 -- utility/boilerplate -------------------------------------------------------
+
+-- | left-biased rule application via fold
+foldRules :: [Graph a -> Graph a] -> Graph a -> Graph a
+foldRules rules g = foldl (&) g rules
 
 -- generate a new vertexId which doesn't clash with any existing ones
 -- TODO this will still break the assumption that CompileIoT makes regarding
