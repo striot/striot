@@ -95,6 +95,7 @@ rules = [ filterFuse
         , expandExpand
         , windowExpandWindow
         , mergeFilter 
+        , mergeExpand
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -574,6 +575,29 @@ mergeFilterPost = overlay (path [v1,v6,v3,v5]) (path [v2,v7,v3])
 
 test_mergeFilter = assertEqual (applyRule mergeFilter mergeFilterPre)
     mergeFilterPost
+
+-- streamExpand (streamMerge [s1, s2]) -------------------------------------
+-- = streamMerge [streamExpand s1, streamExpand s2]
+
+mergeExpand :: RewriteRule
+mergeExpand = hoistOp Expand
+
+v8  = StreamVertex 0 Source [] "[Int]" "[Int]"
+v9  = StreamVertex 1 Source [] "[Int]" "[Int]"
+v10 = StreamVertex 2 Merge  [] "[Int]" "[Int]"
+v11 = StreamVertex 3 Expand [] "[Int]" "Int"
+
+mergeExpandPre  = overlay (path [v8, v10, v11, v5]) (path [v9, v10])
+
+v12 = StreamVertex 2 Merge  [] "Int" "Int"
+v13 = StreamVertex 5 Expand [] "[Int]" "Int"
+v14 = StreamVertex 6 Expand [] "[Int]" "Int"
+
+mergeExpandPost = overlay (path [v8, v13, v12, v5]) (path [v9, v14, v12])
+
+test_mergeExpand = assertEqual (applyRule mergeExpand mergeExpandPre)
+    mergeExpandPost
+
 -- utility/boilerplate -------------------------------------------------------
 
 -- | left-biased rule application via fold
