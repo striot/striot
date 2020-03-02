@@ -96,6 +96,7 @@ rules = [ filterFuse
         , windowExpandWindow
         , mergeFilter 
         , mergeExpand
+        , mergeMap
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -597,6 +598,28 @@ mergeExpandPost = overlay (path [v8, v13, v12, v5]) (path [v9, v14, v12])
 
 test_mergeExpand = assertEqual (applyRule mergeExpand mergeExpandPre)
     mergeExpandPost
+
+-- streamMap (streamMerge [s1, s2]) ------------------------------------------
+-- = streamMerge [streamMap s1, streamMap s2]
+
+mergeMap :: RewriteRule
+mergeMap = hoistOp Map
+
+v15 = StreamVertex 0 Source [] "Int" "Int"
+v16 = StreamVertex 1 Source [] "Int" "Int"
+v17 = StreamVertex 2 Merge []  "Int" "Int"
+v18 = StreamVertex 3 Map ["show","s"]  "Int" "String"
+v19 = StreamVertex 4 Sink [] "String" "String"
+
+mergeMapPre = overlay (path [v15,v17,v18,v19]) (path [v16,v17])
+
+v20 = StreamVertex 5 Map ["show","s"]  "Int" "String"
+v21 = StreamVertex 6 Map ["show","s"]  "Int" "String"
+v22 = StreamVertex 2 Merge [] "String" "String"
+
+mergeMapPost = overlay (path [v15,v20,v22,v19]) (path [v16,v21,v22])
+
+test_mergeMap = assertEqual (applyRule mergeMap mergeMapPre) mergeMapPost
 
 -- utility/boilerplate -------------------------------------------------------
 
