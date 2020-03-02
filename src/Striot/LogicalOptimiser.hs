@@ -529,12 +529,16 @@ test_windowExpandWindow2 = assertEqual (applyRule windowExpandWindow windowExpan
 -- = streamMerge [streamFilter f s1, streamFilter f s2]
 
 mergeFilter :: RewriteRule
-mergeFilter (Connect (Vertex m@(StreamVertex i Merge _ _ ty))
-                     (Vertex f@(StreamVertex j Filter pred _ _))) =
+mergeFilter = hoistOp Filter
 
-    Just $ \g -> let
+-- | "hoist" an Operator (such as a Filter) upstream through a Merge operator.
+hoistOp op (Connect (Vertex m@(StreamVertex i Merge _ _ ty))
+                      (Vertex f@(StreamVertex j o pred _ ty'))) =
 
-        mkFilter g = StreamVertex (newVertexId g) Filter pred ty ty
+    if o /= op then Nothing
+    else Just $ \g -> let
+
+        mkOp g = StreamVertex (newVertexId g) op pred ty ty'
 
         -- for each NODE that connects to Merge: (:: [StreamVertex])
         inbound    = map fst . filter ((m==) . snd) . edgeList $ g
@@ -542,15 +546,18 @@ mergeFilter (Connect (Vertex m@(StreamVertex i Merge _ _ ty))
         -- * remove that edge (:: [StreamGraph -> StreamGraph])
         snipMerge  = map (\v -> removeEdge v m) inbound
 
-        -- * insert new Filters (:: [StreamGraph -> StreamGraph])
-        newFilters = map (\v -> \g -> overlay g $ path [v, mkFilter g, m]) inbound
+        -- * insert new Operators (:: [StreamGraph -> StreamGraph])
+        newOps = map (\v -> \g -> overlay g $ path [v, mkOp g, m]) inbound
+
+        m' = m { intype = ty', outtype = ty' }
 
   in (removeEdge m f
-      >>> replaceVertex f m  -- remove existing filter
+      >>> replaceVertex f m
       >>> foldRules snipMerge
-      >>> foldRules newFilters) g
+      >>> foldRules newOps
+      >>> replaceVertex m m') g
 
-mergeFilter _ = Nothing
+hoistOp _ _ = Nothing
 
 v1 = StreamVertex 0 Source []           "Int" "Int"
 v2 = StreamVertex 1 Source []           "Int" "Int"
