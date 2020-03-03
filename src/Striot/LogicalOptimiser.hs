@@ -98,6 +98,7 @@ rules = [ filterFuse
         , mergeExpand
         , mergeMap
         , mapMerge
+        , filterMerge
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -649,9 +650,41 @@ mapMerge (Connect (Vertex ma@(StreamVertex i Map fs t1 t2))
 mapMerge _ = Nothing
 
 mapMergePre  = mergeMapPost
-mapMergePost = overlay (path [v15,v17,v18 { vertexId = 7 }, v19]) (path [v16,v17])
+mapMergePost = overlay (path [v15,v17,v18 {vertexId = 7}, v19]) (path [v16,v17])
 
 test_mapMerge = assertEqual (applyRule mapMerge mapMergePre) mapMergePost
+
+-- streamMerge [streamFilter p s1, streamFilter p s2] ------------------------
+-- == streamFilter p (streamMerge [s1,s2])
+
+filterMerge :: RewriteRule
+filterMerge (Connect (Vertex f@(StreamVertex i Filter fs t1 t2))
+                  (Vertex me@(StreamVertex j Merge _ t3 _))) =
+    Just $ \g -> let
+        inbound = map fst . filter ((me==) . snd) . edgeList $ g
+        -- the pattern match is not enough to be conclusive that this applies
+        in  if [Filter] == nub (map operator inbound) &&
+            1 == length (nub (map parameters inbound))
+            then let
+                me' = me { intype = t1, outtype = t1 }
+                f' = f { vertexId =  newVertexId g }
+                on  = snd . head . filter ((==me) . fst) . edgeList $ g
+                in ( removeEdge me on
+                    -- remove all the inbound filters
+                    >>> mergeVertices (`elem` inbound) me
+                    >>> replaceVertex me me' -- fix Merge type
+                    >>> removeEdge me' me'
+                    -- new after Merge
+                    >>> overlay (path [me', f', on])
+                ) g
+           else g
+
+filterMerge _ = Nothing
+
+filterMergePre  = mergeFilterPost
+filterMergePost = overlay (path [v1,v3,v4 {vertexId=7},v5]) (path [v2,v3])
+test_filterMerge = assertEqual (applyRule filterMerge filterMergePre)
+    filterMergePost
 
 -- utility/boilerplate -------------------------------------------------------
 
