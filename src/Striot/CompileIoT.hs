@@ -226,7 +226,10 @@ generateCodeFromVertex (opid, v)  = let
         then ["n", show (opid-2), " n", show (opid-1)]
         else ["n", show (opid-1)]
     in
-        "n" ++ show opid ++ " = (\\" ++ lparams ++ " -> " ++ show op ++ " " ++ params ++ ") " ++ args
+        "n" ++ show opid ++ " = (\\" ++ lparams ++ " -> " ++ printOp op ++ " " ++ params ++ ") " ++ args
+
+printOp :: StreamOperator -> String
+printOp = (++) "stream" . show
 
 -- how many incoming edges to this partition?
 -- + how many source nodes
@@ -299,12 +302,3 @@ simpleStream tupes = path lst
         tupes3 = zip3 [1..] intypes tupes
         lst = map (\ (i,intype,(op,params,outtype)) ->
             StreamVertex i op params intype outtype) tupes3
-
-------------------------------------------------------------------------------
--- logical optimisation
-
-optimise :: StreamGraph -> StreamGraph
-optimise sg = let
-    sgs  = applyRules 5 sg
-    best = snd $ maximum $ map (\g -> (costModel g, g) ) sgs
-    in best

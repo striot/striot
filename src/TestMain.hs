@@ -4,7 +4,7 @@ module Main where
 
 import Test.Framework
 import {-@ HTF_TESTS @-} Striot.CompileIoT
-import {-@ HTF_TESTS @-} VizGraph
+import {-@ HTF_TESTS @-} Striot.VizGraph
 
 import Striot.FunctionalIoTtypes
 import {-@ HTF_TESTS @-} Striot.FunctionalProcessing

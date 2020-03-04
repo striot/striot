@@ -2,6 +2,8 @@
 
 module Striot.LogicalOptimiser ( applyRules
                                , costModel
+                               , optimise
+                               , optimiseWriteOut
 
                                , htf_thisModulesTests
                                ) where
@@ -11,7 +13,7 @@ import Algebra.Graph
 import Test.Framework hiding ((===))
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Function ((&))
-import Data.List (nub, sort)
+import Data.List (nub, sort, intercalate)
 
 -- applying encoded rules and their resulting ReWriteOps ----------------------
 
@@ -48,6 +50,33 @@ applyRules n sg =
         else let
              sgs = map ((&) sg) $ mapMaybe (firstMatch sg) rules
              in    sg : sgs ++ (concatMap (applyRules (n-1)) sgs)
+
+-- | Return an optimised version of the supplied StreamGraph, or the
+-- graph itself if no better alternative is found.
+optimise :: StreamGraph -> StreamGraph
+optimise sg = let
+    base              = costModel sg
+    sgs               = nub $ applyRules 5 sg
+    (score,candidate) = maximum $ map (\g -> (costModel g, g) ) sgs
+    in if score > base
+       then candidate
+       else sg
+
+-- | Optimise a StreamGraph and write the result out as Haskell source
+-- code to the supplied FilePath, along with some of the necessary
+-- supporting code.
+optimiseWriteOut :: FilePath -> StreamGraph -> IO ()
+optimiseWriteOut fn =
+    writeFile fn . template . show . simplify . optimise
+
+template g = intercalate "\n"
+    [ "import Striot.StreamGraph"
+    , "import Algebra.Graph"
+    , "\n"
+    , "graph = " ++ g
+    ]
+
+------------------------------------------------------------------------------
 
 rules :: [RewriteRule]
 rules = [ filterFuse

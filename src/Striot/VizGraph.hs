@@ -1,8 +1,8 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 
-module VizGraph ( streamGraphToDot
-                , displayGraph
-                , htf_thisModulesTests) where
+module Striot.VizGraph ( streamGraphToDot
+                       , displayGraph
+                       , htf_thisModulesTests) where
 
 import Striot.StreamGraph
 import Algebra.Graph
@@ -18,7 +18,10 @@ streamGraphToDot :: StreamGraph -> String
 streamGraphToDot = export myStyle
 
 show' :: StreamVertex -> String
-show' v = intercalate " " $ ((show . operator) v) : ((map (\s->"("++s++")")) . parameters) v
+show' v = intercalate " " $ ((printOp . operator) v) : ((map (\s->"("++s++")")) . parameters) v
+
+printOp :: StreamOperator -> String
+printOp = (++) "stream" . show
 
 myStyle :: Style StreamVertex String
 myStyle = Style
