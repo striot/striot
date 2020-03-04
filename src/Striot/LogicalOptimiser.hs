@@ -100,6 +100,7 @@ rules = [ filterFuse
         , mapMerge
         , filterMerge
         , expandMerge
+        , mergeFuse
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -681,6 +682,35 @@ expandMergePre  = mergeExpandPost
 expandMergePost = overlay (path [v8, v10, v11 {vertexId=7}, v5]) (path [v9, v10])
 test_expandMerge = assertEqual (applyRule expandMerge expandMergePre)
     expandMergePost
+
+-- streamMerge merge ---------------------------------------------------------
+
+-- | fuse two Merge operators. The order-preserving transformation is strictly
+-- right-oriented i.e. merge [s1, merge [s2,s3]] == merge [s1,s2,s3] but for
+-- non-order-preserving we can write a much more generic rule.
+mergeFuse :: RewriteRule
+mergeFuse (Connect (Vertex m1@(StreamVertex i Merge _ _ _))
+                   (Vertex m2@(StreamVertex j Merge _ _ _))) =
+    Just (removeEdge m1 m1 . mergeVertices (`elem` [m1,m2]) m1)
+
+mergeFuse _ = Nothing
+
+v23 = StreamVertex 0 Source [] "Int" "Int"
+v24 = StreamVertex 1 Source [] "Int" "Int"
+v25 = StreamVertex 2 Source [] "Int" "Int"
+v26 = StreamVertex 3 Merge []  "Int" "Int"
+v27 = StreamVertex 4 Merge []  "Int" "Int"
+v28 = StreamVertex 5 Sink []   "Int" "Int"
+
+mergeFusePre = path [v23,v26,v27,v28]
+    `Overlay`  path [v24,v26,v27]
+    `Overlay`  path [v25,v27]
+
+mergeFusePost = path [v23,v26,v28]
+    `Overlay`   path [v24,v26]
+    `Overlay`   path [v25,v26]
+
+test_mergeFuse = assertEqual (applyRule mergeFuse mergeFusePre) mergeFusePost
 
 -- utility/boilerplate -------------------------------------------------------
 
