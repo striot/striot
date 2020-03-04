@@ -99,6 +99,7 @@ rules = [ filterFuse
         , mergeMap
         , mapMerge
         , filterMerge
+        , expandMerge
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -669,6 +670,17 @@ filterMergePre  = mergeFilterPost
 filterMergePost = overlay (path [v1,v3,v4 {vertexId=7},v5]) (path [v2,v3])
 test_filterMerge = assertEqual (applyRule filterMerge filterMergePre)
     filterMergePost
+
+-- streamMerge [streamExpand s1, streamExpand s2] ----------------------------
+-- == streamExpand (streamMerge [s1,s2])
+
+expandMerge :: RewriteRule
+expandMerge = pushOp Expand
+
+expandMergePre  = mergeExpandPost
+expandMergePost = overlay (path [v8, v10, v11 {vertexId=7}, v5]) (path [v9, v10])
+test_expandMerge = assertEqual (applyRule expandMerge expandMergePre)
+    expandMergePost
 
 -- utility/boilerplate -------------------------------------------------------
 
