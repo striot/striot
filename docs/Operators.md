@@ -1,5 +1,16 @@
 # Striot — functional stream processing for IoT
 
+ * [Stream Operators](#stream-operators)
+   * [Filter](#filter)
+   * [Filtering with an Accumulating Parameter](#filtering-with-an-accumulating-parameter)
+   * [Mapping Streams](#mapping-streams)
+   * [Scan](#scan)
+   * [Expand](#expand)
+   * [Windowing](#windowing)
+   * [Merge](#merge)
+   * [Join](#join)
+ * [Dynamically creating Functional Stream Graphs](#dynamically-creating-functional-stream-graphs)
+
 We model a stream as a (possibly infinite) list of events. Each event may or may not be timestamped:
 
 
