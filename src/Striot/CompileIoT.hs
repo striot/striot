@@ -18,6 +18,7 @@ import Algebra.Graph
 import Test.Framework
 import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
+import Data.Function ((&))
 
 import Striot.StreamGraph
 import Striot.LogicalOptimiser
@@ -41,6 +42,34 @@ createPartitions g (p:ps) = ((overlay vs es):tailParts, cutEdges `overlay` tailC
     fv v      = (vertexId v) `elem` p
     edgesOut  = edges $ filter (\(v1,v2) -> (fv v1) && (not(fv v2))) (edgeList g)
     (tailParts, tailCuts) = createPartitions g ps
+
+-- | In situations where the first operator of a partition is streamMerge,
+-- remove it, since the merging will be achieved by the TCP/IP layer.
+stripMerge :: StreamGraph -> StreamGraph
+stripMerge g = let
+    allEdges         = edgeList g
+    allVertices      = vertexList g
+    internalVertices = map snd allEdges
+    outerMerges      = filter (\v -> operator v == Merge
+                               && not (v `elem` internalVertices)) allVertices
+    rewrite m = let
+        nextOp = head $ filter (\v -> (m,v) `elem` allEdges) allVertices
+        in removeEdge nextOp nextOp . replaceVertex m nextOp
+
+    in foldl (&) g (map rewrite outerMerges)
+
+stripMergePre = path
+    [ StreamVertex 0 Merge [] "Int" "Int"
+    , StreamVertex 1 Map ["show","s"] "Int" "String"
+    , StreamVertex 2 Sink ["mapM_ print"] "String" "String"
+    ]
+stripMergePost = path
+    [ StreamVertex 1 Map ["show","s"] "Int" "String"
+    , StreamVertex 2 Sink ["mapM_ print"] "String" "String"
+    ]
+test_stripMerge_1 = assertEqual (stripMerge stripMergePre) stripMergePost
+test_stripMerge_2 = assertEqual (stripMerge stripMergePost) stripMergePost
+
 
 unPartition :: ([Graph StreamVertex], Graph StreamVertex) -> Graph StreamVertex
 unPartition (a,b) = overlay b $ foldl overlay Empty a
