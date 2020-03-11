@@ -147,23 +147,36 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
     (possibleSrcSinkFn sg) :
     sgTypeSignature :
     sgIntro :
-    (map ((padding++).generateCodeFromVertex) (zip [(valence+1)..] intVerts)) ++
+    sgBody ++
     [padding ++ "in " ++ lastIdentifier,"\n",
     "main :: IO ()",
     nodeFn sg] where
         nodeId = "-- node"++(show partId)
         padding = "    "
-        sgTypeSignature = "streamGraphFn ::"++(concat $ take valence $ repeat $ " Stream "++(inType sg)++" ->")++" Stream "++(outType sg)
+        pad = map (padding++)
+
+        sgTypeSignature = if startsWithJoin sg
+            then "streamGraphFn ::"
+                    ++" Stream "++inType sg++" ->"
+                    ++" Stream "++inType sg++" ->"
+                    ++" Stream "++outType sg
+            else "streamGraphFn ::"++" Stream "++inType sg++" ->"++" Stream "++outType sg
+
         sgIntro = "streamGraphFn "++sgArgs++" = let"
-        sgArgs = unwords $ map (('n':).show) [1..valence]
+        sgArgs = if startsWithJoin sg
+            then "n1 n2"
+            else "n1"
+        sgBody = pad $ case zip [(valence+1)..] intVerts of
+            [] -> ["n2 = n1"]
+            ns -> map generateCodeFromVertex ns
         imports' = (map ("import "++) (imports opts)) ++ ["\n"]
         lastIdentifier = 'n':(show $ (length intVerts) + valence)
         intVerts= filter (\x-> not $ operator x `elem` [Source,Sink]) $ vertexList sg
         valence = partValence sg cuts
         nodeFn sg = case (nodeType sg) of
-            NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts
+            NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts parts
             NodeLink   -> generateNodeLink (partId + 1)
-            NodeSink   -> generateNodeSink valence
+            NodeSink   -> generateNodeSink sg
         possibleSrcSinkFn sg = case (nodeType sg) of
             NodeSource -> generateSrcFn sg
             NodeLink   -> ""
@@ -173,7 +186,7 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
 -- special-case if the terminal node is a Sink node: we want the
 -- "pure" StreamGraph type that feeds into the sink function.
 outType :: StreamGraph -> String
-outType sg = let node = (head . reverse . vertexList) sg
+outType sg = let node = (last . vertexList) sg
         in if operator node == Sink
            then intype node
            else outtype node
@@ -225,11 +238,17 @@ generateNodeLink n = "main = nodeLink (defaultLink \"9001\" \"node"++(show n)++"
 
 -- warts:
 --  we accept a list of onward nodes but nodeSource only accepts one anyway
-generateNodeSrc :: Integer -> [Integer] -> GenerateOpts -> String
-generateNodeSrc partId nodes opts = let
+generateNodeSrc :: Integer -> [Integer] -> GenerateOpts -> [(Integer, StreamGraph)] -> String
+generateNodeSrc partId nodes opts parts = let
     node = head nodes
     host = "node" ++ (show node)
-    port = 9001 + partId -1 -- XXX Unlikely to always be correct
+
+    port = case lookup node parts of
+        Just sg -> if startsWithJoin sg
+                   then 9001 + partId -1 -- XXX Unlikely to always be correct
+                   else 9001
+        Nothing -> 9001
+
     pref = case preSource opts of
        Nothing -> ""
        Just f  -> f
@@ -238,11 +257,26 @@ generateNodeSrc partId nodes opts = let
 \       "++pref++"\n\
 \       nodeSource (defaultSource \""++host++"\" \""++(show port)++"\") src1 streamGraphFn"
 
-generateNodeSink :: Int -> String
-generateNodeSink v = case v of
-    1 -> "main = nodeSink (defaultSink \"9001\") streamGraphFn sink1"
-    2 -> "main = nodeSink2 streamGraphFn sink1 \"9001\" \"9002\""
-    v -> error "generateNodeSink: unhandled valence " ++ (show v)
+-- | does this StreamGraph start with a Join operator?
+startsWithJoin :: StreamGraph -> Bool
+startsWithJoin sg = let
+    joinOps   = filter ((==Join).operator) . vertexList $ sg
+    hasInputs = map snd . edgeList $ sg
+    in length joinOps > 0 && (not . or . map (`elem` hasInputs) $ joinOps)
+
+test_startsWithJoin_1 = assertBool . startsWithJoin . path $
+    [StreamVertex 1 Join [] "" "", StreamVertex 0 Merge [] "" ""]
+
+test_startsWithJoin_2 = assertBool . not . startsWithJoin . path $
+    [StreamVertex 0 Merge [] "" "", StreamVertex 1 Join [] "" ""]
+
+test_startsWithJoin_3 = assertBool . not . startsWithJoin $ empty
+
+generateNodeSink :: StreamGraph -> String
+generateNodeSink sg =
+    if startsWithJoin sg
+    then "main = nodeSink2 streamGraphFn sink1 \"9001\" \"9002\""
+    else "main = nodeSink (defaultSink \"9001\") streamGraphFn sink1"
 
 -- generateCodeFromVertex:  generates Haskell code to be included in a
 -- let expression, corresponding to the supplied StreamVertex. The Int
