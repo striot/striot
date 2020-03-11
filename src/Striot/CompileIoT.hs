@@ -35,13 +35,14 @@ type PartitionMap = [[Int]]
 -- where inter-graph links are the cut edges due to partitioning
 createPartitions :: Graph StreamVertex -> PartitionMap -> ([Graph StreamVertex], Graph StreamVertex)
 createPartitions _ [] = ([],empty)
-createPartitions g (p:ps) = ((overlay vs es):tailParts, cutEdges `overlay` tailCuts) where
-    vs        = vertices $ filter fv (vertexList g)
-    es        = edges $ filter (\(v1,v2) -> (fv v1) && (fv v2)) (edgeList g)
-    cutEdges  = edgesOut
-    fv v      = (vertexId v) `elem` p
-    edgesOut  = edges $ filter (\(v1,v2) -> (fv v1) && (not(fv v2))) (edgeList g)
-    (tailParts, tailCuts) = createPartitions g ps
+createPartitions g (p:ps) = (thisGraph:tailParts, edgesOut `overlay` tailCuts) where
+    fv v       = (vertexId v) `elem` p
+    vs         = vertices $ filter fv (vertexList g)
+    es         = edges $ filter (\(v1,v2) -> (fv v1) && (fv v2)) (edgeList g)
+    thisGraph  = overlay vs es
+    stripMerge = mkStripMerge thisGraph g
+    edgesOut   = edges $ filter (\(v1,v2) -> (fv v1) && (not(fv v2))) (edgeList (stripMerge g))
+    (tailParts, tailCuts) = createPartitions (stripMerge g) ps
 
 -- | Builds a function to remove Merges from a StreamGraph, if they are
 -- connected to from operators in another (local) graph. We remove Merges
