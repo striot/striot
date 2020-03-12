@@ -170,7 +170,8 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
             [] -> ["n2 = n1"]
             ns -> map generateCodeFromVertex ns
         imports' = (map ("import "++) (imports opts)) ++ ["\n"]
-        lastIdentifier = 'n':(show $ (length intVerts) + valence)
+        lastIdentifier = 'n':(show $ length intVerts
+            + if startsWithJoin sg then 2 else 1)
         intVerts= filter (\x-> not $ operator x `elem` [Source,Sink]) $ vertexList sg
         valence = partValence sg cuts
         nodeFn sg = case (nodeType sg) of
