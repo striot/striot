@@ -1,21 +1,29 @@
 # consumer via streamMerge
+node4:
+  build: node4
+  stdin_open: true
+  tty: true
+
+# producers:
+
 node3:
   build: node3
   stdin_open: true
   tty: true
+  links:
+    - node4
 
-# first producer
 node2:
   build: node2
   stdin_open: true
   tty: true
   links:
-    - node3
+    - node4
 
-# second producer
+
 node1:
   build: node1
   stdin_open: true
   tty: true
   links:
-    - node3
+    - node4
