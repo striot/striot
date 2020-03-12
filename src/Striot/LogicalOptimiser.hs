@@ -14,6 +14,7 @@ import Test.Framework hiding ((===))
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Function ((&))
 import Data.List (nub, sort, intercalate)
+import Control.Arrow ((>>>))
 
 -- applying encoded rules and their resulting ReWriteOps ----------------------
 
@@ -92,6 +93,14 @@ rules = [ filterFuse
         , expandMap
         , expandScan
         , expandExpand
+        , windowExpandWindow
+        , mergeFilter 
+        , mergeExpand
+        , mergeMap
+        , mapMerge
+        , filterMerge
+        , expandMerge
+        , mergeFuse
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -105,11 +114,16 @@ filterFuse (Connect (Vertex a@(StreamVertex i Filter (p:s:[]) ty _))
 
 filterFuse _ = Nothing
 
-f3 = Vertex $ StreamVertex 0 Filter ["(>3)", "s"] "String" "String"
-f4 = Vertex $ StreamVertex 1 Filter ["(<5)", "s"] "String" "String"
-filterFusePre = Connect f3 f4
-filterFusePost = Vertex $ StreamVertex 0 Filter
-    ["((\\p q x -> p x && q x) ((>3)) ((<5)))", "s"] "String" "String"
+so' = StreamVertex 0 Source [] "String" "String"
+f3  = StreamVertex 1 Filter ["(>3)", "s"] "String" "String"
+f4  = StreamVertex 2 Filter ["(<5)", "s"] "String" "String"
+si' = StreamVertex 3 Sink [] "String" "String"
+
+filterFusePre = path [so', f3, f4, si']
+
+filterFusePost = path [ so'
+    , StreamVertex 1 Filter ["((\\p q x -> p x && q x) ((>3)) ((<5)))", "s"] "String" "String"
+    , si' ]
 
 test_filterFuse = assertEqual (applyRule filterFuse filterFusePre)
     filterFusePost
@@ -126,14 +140,17 @@ mapFilter (Connect (Vertex m@(StreamVertex i Map (f:s:[]) intype _))
 
 mapFilter _ = Nothing
 
-m1 = Vertex $ StreamVertex 0 Map ["show","s"] "Int" "String"
-f1 = Vertex $ StreamVertex 1 Filter ["\\x -> length x <3","s"] "String" "String"
+m1 = StreamVertex 1 Map ["show","s"] "Int" "String"
+f1 = StreamVertex 2 Filter ["\\x -> length x <3","s"] "String" "String"
 
-f2 = Vertex $ StreamVertex 0 Filter ["(\\x -> length x <3).(show)","s"] "Int" "Int"
-m2 = Vertex $ StreamVertex 1 Map ["show","s"] "Int" "String"
+f2 = StreamVertex 1 Filter ["(\\x -> length x <3).(show)","s"] "Int" "Int"
+m2 = StreamVertex 2 Map ["show","s"] "Int" "String"
 
-mapFilterPre = m1 `Connect` f1
-mapFilterPost = f2 `Connect` m2
+so = StreamVertex 0 Source [] "Int" "Int"
+si = StreamVertex 3 Sink [] "String" "String"
+
+mapFilterPre  = path [ so, m1, f1, si ]
+mapFilterPost = path [ so, f2, m2, si ]
 
 test_mapfilter2 = assertEqual mapFilterPost
     $ applyRule mapFilter mapFilterPre
@@ -168,15 +185,22 @@ filterFilterAcc (Connect (Vertex v1@(StreamVertex i Filter (p:s:[]) ty _))
     in  Just (removeEdge v3 v3 . mergeVertices (`elem` [v1,v2]) v3)
 filterFilterAcc _ = Nothing
 
-filterFilterAccPre = Vertex (StreamVertex 3 Filter ["p","s"] "Int" "Int")
-                     `Connect`
-                     Vertex (StreamVertex 2 FilterAcc ["f","a","q","s"] "Int" "Int")
-filterFilterAccPost = Vertex $
-  StreamVertex 3 FilterAcc [ "(let p = (p); f = (f) in \\a v -> if p v then f a v else a)"
-                           , "a"
-                           , "(let p = (p); q = (q) in \\v a -> p v && q v a)"
-                           , "s"
-                           ] "Int" "Int"
+filterFilterAccPre = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 Filter ["p","s"] "Int" "Int"
+    , StreamVertex 2 FilterAcc ["f","a","q","s"] "Int" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
+
+filterFilterAccPost = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 FilterAcc [ "(let p = (p); f = (f) in \\a v -> if p v then f a v else a)"
+                               , "a"
+                               , "(let p = (p); q = (q) in \\v a -> p v && q v a)"
+                               , "s"
+                               ] "Int" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
 
 test_filterFilterAcc = assertEqual (applyRule filterFilterAcc filterFilterAccPre)
     filterFilterAccPost
@@ -191,14 +215,21 @@ filterAccFilter (Connect (Vertex v1@(StreamVertex i FilterAcc (f:a:p:s:[]) ty _)
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 filterAccFilter _ = Nothing
 
-filterAccFilterPre  = Vertex (StreamVertex 1 FilterAcc ["f","a","p","s"] "Int" "Int")
-                      `Connect`
-                      Vertex (StreamVertex 2 Filter ["q","s"] "Int" "Int")
-filterAccFilterPost = Vertex $
-    StreamVertex 1 FilterAcc [ "f", "a"
-                             , "(let p = (p); q = (q) in \\v a -> p v a && q v)"
-                             , "s"
-                             ] "Int" "Int"
+filterAccFilterPre = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 FilterAcc ["f","a","p","s"] "Int" "Int"
+    , StreamVertex 2 Filter ["q","s"] "Int" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
+
+filterAccFilterPost = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 FilterAcc [ "f", "a"
+                               , "(let p = (p); q = (q) in \\v a -> p v a && q v)"
+                               , "s"
+                               ] "Int" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
 
 test_filterAccFilter = assertEqual (applyRule filterAccFilter filterAccFilterPre)
     filterAccFilterPost
@@ -216,15 +247,22 @@ filterAccFilterAcc (Connect (Vertex v1@(StreamVertex i FilterAcc (f:a:p:s:[]) ty
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 filterAccFilterAcc _ = Nothing
 
-filterAccFilterAccPre  = Vertex (StreamVertex 1 FilterAcc ["f","a","p","s"] "Int" "Int")
-                         `Connect`
-                         Vertex (StreamVertex 2 FilterAcc ["g","b","q","s"] "Int" "Int")
-filterAccFilterAccPost = Vertex $
-    StreamVertex 1 FilterAcc [ "(let f = (f); p = (p); g = (g) in \\ (a,b) v -> (f a v, if p v a then g b v else b))"
-                             , "(a,b)"
-                             , "(let p = (p); q = (q) in \\v (y,z) -> p v y && q v z)"
-                             , "s"
-                             ] "Int" "Int"
+filterAccFilterAccPre = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 FilterAcc ["f","a","p","s"] "Int" "Int"
+    , StreamVertex 2 FilterAcc ["g","b","q","s"] "Int" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
+
+filterAccFilterAccPost = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 FilterAcc [ "(let f = (f); p = (p); g = (g) in \\ (a,b) v -> (f a v, if p v a then g b v else b))"
+                               , "(a,b)"
+                               , "(let p = (p); q = (q) in \\v (y,z) -> p v y && q v z)"
+                               , "s"
+                               ] "Int" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
 test_filterAccFilterAcc = assertEqual (applyRule filterAccFilterAcc filterAccFilterAccPre)
     filterAccFilterAccPost
 
@@ -237,9 +275,18 @@ mapFuse (Connect (Vertex v1@(StreamVertex i Map (f:s:[]) t1 _))
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 mapFuse _ = Nothing
 
-mapFusePre = Vertex (StreamVertex 0 Map ["show", "s"] "Int" "String") `Connect`
-  Vertex (StreamVertex 1 Map ["length"] "String" "Int")
-mapFusePost = Vertex $ StreamVertex 0 Map ["(let f = (show); g = (length) in (f >>> g))", "s"] "Int" "Int"
+mapFusePre = path
+    [ StreamVertex 0 Source [] "String" "String"
+    , StreamVertex 1 Map ["show", "s"] "Int" "String"
+    , StreamVertex 2 Map ["length"] "String" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
+
+mapFusePost = path
+    [ StreamVertex 0 Source [] "String" "String"
+    , StreamVertex 1 Map ["(let f = (show); g = (length) in (f >>> g))", "s"] "Int" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
 test_mapFuse = assertEqual (applyRule mapFuse mapFusePre) mapFusePost
 
 -- streamMap >>> streamScan --------------------------------------------------
@@ -251,10 +298,19 @@ mapScan (Connect (Vertex v1@(StreamVertex i Map (f:s:[]) t1 _))
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 mapScan _ = Nothing
 
-mapScanPre = Vertex (StreamVertex 1 Map ["f","s"] "Int" "Int") `Connect`
-    Vertex (StreamVertex 2 Scan ["g","a"] "Int" "Int")
-mapScanPost = Vertex $
-    StreamVertex 1 Scan ["(let f = (f); g = (g) in (flip (flip f >>> g)))", "a", "s"] "Int" "Int"
+mapScanPre = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 Map ["f","s"] "Int" "Int"
+    , StreamVertex 2 Scan ["g","a"] "Int" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
+
+mapScanPost = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 Scan ["(let f = (f); g = (g) in (flip (flip f >>> g)))", "a", "s"] "Int" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
+
 test_mapScan = assertEqual (applyRule mapScan mapScanPre) mapScanPost
 
 -- streamExpand >>> streamFilter f == streamMap (filter f) >>> streamExpand --
@@ -267,14 +323,19 @@ expandFilter (Connect (Vertex e@(StreamVertex j Expand [s] t1 t2))
     in  Just (replaceVertex f e' . replaceVertex e m)
 expandFilter _ = Nothing
 
-expandFilterPre =
-    Vertex (StreamVertex 1 Expand ["foo"] "[Int]" "Int")
-    `Connect`
-    Vertex (StreamVertex 2 Filter ["p","bar"] "Int" "Int")
-expandFilterPost =
-    Vertex (StreamVertex 1 Map ["(filter (p))", "foo"] "[Int]" "[Int]")
-    `Connect`
-    Vertex (StreamVertex 2 Expand ["bar"] "[Int]" "Int")
+expandFilterPre = path
+    [ StreamVertex 0 Source [] "[Int]" "[Int]"
+    , StreamVertex 1 Expand ["foo"] "[Int]" "Int"
+    , StreamVertex 2 Filter ["p","bar"] "Int" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
+
+expandFilterPost = path
+    [ StreamVertex 0 Source [] "[Int]" "[Int]"
+    , StreamVertex 1 Map ["(filter (p))", "foo"] "[Int]" "[Int]"
+    , StreamVertex 2 Expand ["bar"] "[Int]" "Int"
+    , StreamVertex 3 Sink [] "Int" "Int"
+    ]
 
 test_expandFilter = assertEqual (applyRule expandFilter expandFilterPre) expandFilterPost
 
@@ -290,15 +351,19 @@ mapFilterAcc (Connect (Vertex m@(StreamVertex i Map (f:s:[]) t1 _))
 
 mapFilterAcc _ = Nothing
 
-mapFilterAccPre =
-    Vertex (StreamVertex 0 Map ["f","s"] "Int" "String")
-    `Connect`
-    Vertex (StreamVertex 1 FilterAcc ["g","a","p","s'"] "String" "String")
+mapFilterAccPre = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 Map ["f","s"] "Int" "String"
+    , StreamVertex 2 FilterAcc ["g","a","p","s'"] "String" "String"
+    , StreamVertex 3 Sink [] "String" "String"
+    ]
 
-mapFilterAccPost =
-    Vertex (StreamVertex 0 FilterAcc ["g","a","(f)>>>(p)","s"] "Int" "Int")
-    `Connect`
-    Vertex (StreamVertex 1 Map ["f","s"] "Int" "String")
+mapFilterAccPost = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 FilterAcc ["g","a","(f)>>>(p)","s"] "Int" "Int"
+    , StreamVertex 2 Map ["f","s"] "Int" "String"
+    , StreamVertex 3 Sink [] "String" "String"
+    ]
 
 test_mapFilterAcc = assertEqual (applyRule mapFilterAcc mapFilterAccPre) mapFilterAccPost
 
@@ -314,15 +379,19 @@ mapWindow (Connect (Vertex m@(StreamVertex i Map (f:s:[]) t1 _))
 
 mapWindow _ = Nothing
 
-mapWindowPre =
-    Vertex (StreamVertex 0 Map ["show","s"] "Int" "String")
-    `Connect`
-    Vertex (StreamVertex 1 Window ["chop 2", "s'"] "String" "[String]")
+mapWindowPre = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 Map ["show","s"] "Int" "String"
+    , StreamVertex 2 Window ["chop 2", "s'"] "String" "[String]"
+    , StreamVertex 3 Sink [] "[String]" "[String]"
+    ]
 
-mapWindowPost =
-    Vertex (StreamVertex 0 Window ["chop 2", "s"] "Int" "[Int]")
-    `Connect`
-    Vertex (StreamVertex 1 Map ["map (show)", "s'"] "[Int]" "[String]")
+mapWindowPost = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 Window ["chop 2", "s"] "Int" "[Int]"
+    , StreamVertex 2 Map ["map (show)", "s'"] "[Int]" "[String]"
+    , StreamVertex 3 Sink [] "[String]" "[String]"
+    ]
 
 test_mapWindow = assertEqual (applyRule mapWindow mapWindowPre) mapWindowPost
 
@@ -339,15 +408,19 @@ expandMap (Connect (Vertex e@(StreamVertex i Expand _ t1 _))
 
 expandMap _ = Nothing
 
-expandMapPre =
-    Vertex (StreamVertex 0 Expand [] "[Int]" "Int")
-    `Connect`
-    Vertex (StreamVertex 1 Map ["show","s"] "Int" "String")
+expandMapPre = path
+    [ StreamVertex 0 Source [] "[Int]" "[Int]"
+    , StreamVertex 1 Expand [] "[Int]" "Int"
+    , StreamVertex 2 Map ["show","s"] "Int" "String"
+    , StreamVertex 3 Sink [] "String" "String"
+    ]
 
-expandMapPost =
-    Vertex (StreamVertex 0 Map ["map (show)","s"] "[Int]" "[String]")
-    `Connect`
-    Vertex (StreamVertex 1 Expand ["s"] "[String]" "String")
+expandMapPost = path
+    [ StreamVertex 0 Source [] "[Int]" "[Int]"
+    , StreamVertex 1 Map ["map (show)","s"] "[Int]" "[String]"
+    , StreamVertex 2 Expand ["s"] "[String]" "String"
+    , StreamVertex 3 Sink [] "String" "String"
+    ]
 
 test_expandMap = assertEqual (applyRule expandMap expandMapPre) expandMapPost
 
@@ -402,20 +475,248 @@ expandExpand (Connect (Vertex e@(StreamVertex i Expand _ t1 t2))
 
 expandExpand _ = Nothing
 
-expandExpandPre =
-    Vertex (StreamVertex 0 Expand [] "[[Int]]" "[Int]")
-    `Connect`
-    Vertex (StreamVertex 1 Expand [] "[Int]" "Int")
+expandExpandPre = path
+    [ StreamVertex 0 Source [] "[Int]" "[Int]"
+    , StreamVertex 1 Expand [] "[[Int]]" "[Int]"
+    , StreamVertex 2 Expand [] "[Int]" "Int"
+    , StreamVertex 3 Sink   [] "Int" "[Int]"
+    ]
 
-expandExpandPost =
-    Vertex (StreamVertex 0 Map ["concat","s"] "[[Int]]" "[Int]")
-    `Connect`
-    Vertex (StreamVertex 1 Expand [] "[Int]" "Int")
+expandExpandPost = path
+    [ StreamVertex 0 Source [] "[Int]" "[Int]"
+    , StreamVertex 1 Map ["concat","s"] "[[Int]]" "[Int]"
+    , StreamVertex 2 Expand [] "[Int]" "Int"
+    , StreamVertex 3 Sink   [] "Int" "[Int]"
+    ]
 
 test_expandExpand = assertEqual (applyRule expandExpand expandExpandPre)
     expandExpandPost
 
+-- streamWindow w >>> streamExpand >>> streamWindow w == streamWindow w ------
+
+windowExpandWindow :: RewriteRule
+windowExpandWindow g =
+    let vs = take 3 (vertexList g)
+        appropriate = map operator vs == [Window, Expand, Window] &&
+                      (parameters . head) vs == (parameters . last) vs
+        [w,e,w'] = vs
+    in if   not appropriate then Nothing
+       else Just (simplify . removeEdge w' w' . mergeVertices (`elem` [w,e]) w')
+
+windowExpandWindowPre = path
+    [ StreamVertex 0 Window ["chop 2"] "Int" "[Int]"
+    , StreamVertex 1 Expand [] "[Int]" "Int"
+    , StreamVertex 2 Window ["chop 2"] "Int" "[Int]"
+    ]
+windowExpandWindowPost = Vertex $ StreamVertex 2 Window ["chop 2"] "Int" "[Int]"
+
+test_windowExpandWindow = assertEqual (applyRule windowExpandWindow windowExpandWindowPre)
+    windowExpandWindowPost
+
+-- additional test to ensure that edges from nodes outside of the matching sub-graph
+-- are correctly rewritten 
+windowExpandWindowPre2 = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 Window ["chop 2"] "Int" "[Int]"
+    , StreamVertex 2 Expand [] "[Int]" "Int"
+    , StreamVertex 3 Window ["chop 2"] "Int" "[Int]"
+    , StreamVertex 4 Sink [] "[Int]" "[Int]"
+    ]
+windowExpandWindowPost2 = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 3 Window ["chop 2"] "Int" "[Int]"
+    , StreamVertex 4 Sink [] "[Int]" "[Int]"
+    ]
+
+test_windowExpandWindow2 = assertEqual (applyRule windowExpandWindow windowExpandWindowPre2)
+    windowExpandWindowPost2
+
+-- streamFilter f (streamMerge [s1, s2]) -------------------------------------
+-- = streamMerge [streamFilter f s1, streamFilter f s2]
+
+mergeFilter :: RewriteRule
+mergeFilter = hoistOp Filter
+
+-- | "hoist" an Operator (such as a Filter) upstream through a Merge operator.
+hoistOp op (Connect (Vertex m@(StreamVertex i Merge _ _ ty))
+                      (Vertex f@(StreamVertex j o pred _ ty'))) =
+
+    if o /= op then Nothing
+    else Just $ \g -> let
+
+        mkOp g = StreamVertex (newVertexId g) op pred ty ty'
+
+        -- for each NODE that connects to Merge: (:: [StreamVertex])
+        inbound    = map fst . filter ((m==) . snd) . edgeList $ g
+
+        -- * remove that edge (:: [StreamGraph -> StreamGraph])
+        snipMerge  = map (\v -> removeEdge v m) inbound
+
+        -- * insert new Operators (:: [StreamGraph -> StreamGraph])
+        newOps = map (\v -> \g -> overlay g $ path [v, mkOp g, m]) inbound
+
+        m' = m { intype = ty', outtype = ty' }
+
+  in (removeEdge m f
+      >>> replaceVertex f m
+      >>> foldRules snipMerge
+      >>> foldRules newOps
+      >>> replaceVertex m m') g
+
+hoistOp _ _ = Nothing
+
+v1 = StreamVertex 0 Source []           "Int" "Int"
+v2 = StreamVertex 1 Source []           "Int" "Int"
+v3 = StreamVertex 2 Merge  []           "Int" "Int"
+v4 = StreamVertex 3 Filter ["(>3)","s"] "Int" "Int"
+v5 = StreamVertex 4 Sink   []           "Int" "Int"
+
+mergeFilterPre = overlay (path [v1,v3,v4,v5]) (path [v2,v3])
+
+v6 = StreamVertex 5 Filter ["(>3)","s"] "Int" "Int"
+v7 = StreamVertex 6 Filter ["(>3)","s"] "Int" "Int"
+
+mergeFilterPost = overlay (path [v1,v6,v3,v5]) (path [v2,v7,v3])
+
+test_mergeFilter = assertEqual (applyRule mergeFilter mergeFilterPre)
+    mergeFilterPost
+
+-- streamExpand (streamMerge [s1, s2]) -------------------------------------
+-- = streamMerge [streamExpand s1, streamExpand s2]
+
+mergeExpand :: RewriteRule
+mergeExpand = hoistOp Expand
+
+v8  = StreamVertex 0 Source [] "[Int]" "[Int]"
+v9  = StreamVertex 1 Source [] "[Int]" "[Int]"
+v10 = StreamVertex 2 Merge  [] "[Int]" "[Int]"
+v11 = StreamVertex 3 Expand [] "[Int]" "Int"
+
+mergeExpandPre  = overlay (path [v8, v10, v11, v5]) (path [v9, v10])
+
+v12 = StreamVertex 2 Merge  [] "Int" "Int"
+v13 = StreamVertex 5 Expand [] "[Int]" "Int"
+v14 = StreamVertex 6 Expand [] "[Int]" "Int"
+
+mergeExpandPost = overlay (path [v8, v13, v12, v5]) (path [v9, v14, v12])
+
+test_mergeExpand = assertEqual (applyRule mergeExpand mergeExpandPre)
+    mergeExpandPost
+
+-- streamMap (streamMerge [s1, s2]) ------------------------------------------
+-- = streamMerge [streamMap s1, streamMap s2]
+
+mergeMap :: RewriteRule
+mergeMap = hoistOp Map
+
+v15 = StreamVertex 0 Source [] "Int" "Int"
+v16 = StreamVertex 1 Source [] "Int" "Int"
+v17 = StreamVertex 2 Merge []  "Int" "Int"
+v18 = StreamVertex 3 Map ["show","s"]  "Int" "String"
+v19 = StreamVertex 4 Sink [] "String" "String"
+
+mergeMapPre = overlay (path [v15,v17,v18,v19]) (path [v16,v17])
+
+v20 = StreamVertex 5 Map ["show","s"]  "Int" "String"
+v21 = StreamVertex 6 Map ["show","s"]  "Int" "String"
+v22 = StreamVertex 2 Merge [] "String" "String"
+
+mergeMapPost = overlay (path [v15,v20,v22,v19]) (path [v16,v21,v22])
+
+test_mergeMap = assertEqual (applyRule mergeMap mergeMapPre) mergeMapPost
+
+-- streamMerge [streamMap s1, streamMap s2] == streamMap (streamMerge [s1,s2])
+
+mapMerge :: RewriteRule
+mapMerge = pushOp Map
+
+pushOp op (Connect (Vertex ma@(StreamVertex i o fs t1 t2))
+                  (Vertex me@(StreamVertex j Merge _ t3 _))) =
+
+    if o /= op then Nothing
+    else Just $ \g -> let
+
+        inbound = map fst . filter ((me==) . snd) . edgeList $ g
+        -- the pattern match is not enough to be conclusive that this applies
+        in  if [op] == nub (map operator inbound) &&
+            1 == length (nub (map parameters inbound))
+            then let
+                me' = me { intype = t1, outtype = t1 }
+                ma' = ma { vertexId =  newVertexId g }
+                on  = snd . head . filter ((==me) . fst) . edgeList $ g
+                in ( removeEdge me on
+                    -- remove all the inbound operators
+                    >>> mergeVertices (`elem` inbound) me
+                    >>> replaceVertex me me' -- fix Merge type
+                    >>> removeEdge me' me'
+                    -- new Operator after Merge
+                    >>> overlay (path [me', ma', on])
+                ) g
+           else g
+
+pushOp _ _ = Nothing
+
+mapMergePre  = mergeMapPost
+mapMergePost = overlay (path [v15,v17,v18 {vertexId = 7}, v19]) (path [v16,v17])
+
+test_mapMerge = assertEqual (applyRule mapMerge mapMergePre) mapMergePost
+
+-- streamMerge [streamFilter p s1, streamFilter p s2] ------------------------
+-- == streamFilter p (streamMerge [s1,s2])
+
+filterMerge :: RewriteRule
+filterMerge = pushOp Filter
+
+filterMergePre  = mergeFilterPost
+filterMergePost = overlay (path [v1,v3,v4 {vertexId=7},v5]) (path [v2,v3])
+test_filterMerge = assertEqual (applyRule filterMerge filterMergePre)
+    filterMergePost
+
+-- streamMerge [streamExpand s1, streamExpand s2] ----------------------------
+-- == streamExpand (streamMerge [s1,s2])
+
+expandMerge :: RewriteRule
+expandMerge = pushOp Expand
+
+expandMergePre  = mergeExpandPost
+expandMergePost = overlay (path [v8, v10, v11 {vertexId=7}, v5]) (path [v9, v10])
+test_expandMerge = assertEqual (applyRule expandMerge expandMergePre)
+    expandMergePost
+
+-- streamMerge merge ---------------------------------------------------------
+
+-- | fuse two Merge operators. The order-preserving transformation is strictly
+-- right-oriented i.e. merge [s1, merge [s2,s3]] == merge [s1,s2,s3] but for
+-- non-order-preserving we can write a much more generic rule.
+mergeFuse :: RewriteRule
+mergeFuse (Connect (Vertex m1@(StreamVertex i Merge _ _ _))
+                   (Vertex m2@(StreamVertex j Merge _ _ _))) =
+    Just (removeEdge m1 m1 . mergeVertices (`elem` [m1,m2]) m1)
+
+mergeFuse _ = Nothing
+
+v23 = StreamVertex 0 Source [] "Int" "Int"
+v24 = StreamVertex 1 Source [] "Int" "Int"
+v25 = StreamVertex 2 Source [] "Int" "Int"
+v26 = StreamVertex 3 Merge []  "Int" "Int"
+v27 = StreamVertex 4 Merge []  "Int" "Int"
+v28 = StreamVertex 5 Sink []   "Int" "Int"
+
+mergeFusePre = path [v23,v26,v27,v28]
+    `Overlay`  path [v24,v26,v27]
+    `Overlay`  path [v25,v27]
+
+mergeFusePost = path [v23,v26,v28]
+    `Overlay`   path [v24,v26]
+    `Overlay`   path [v25,v26]
+
+test_mergeFuse = assertEqual (applyRule mergeFuse mergeFusePre) mergeFusePost
+
 -- utility/boilerplate -------------------------------------------------------
+
+-- | left-biased rule application via fold
+foldRules :: [Graph a -> Graph a] -> Graph a -> Graph a
+foldRules rules g = foldl (&) g rules
 
 -- generate a new vertexId which doesn't clash with any existing ones
 -- TODO this will still break the assumption that CompileIoT makes regarding
