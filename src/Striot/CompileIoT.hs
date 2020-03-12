@@ -18,6 +18,7 @@ import Algebra.Graph
 import Test.Framework
 import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
+import Data.Function ((&))
 
 import Striot.StreamGraph
 import Striot.LogicalOptimiser
@@ -34,13 +35,50 @@ type PartitionMap = [[Int]]
 -- where inter-graph links are the cut edges due to partitioning
 createPartitions :: Graph StreamVertex -> PartitionMap -> ([Graph StreamVertex], Graph StreamVertex)
 createPartitions _ [] = ([],empty)
-createPartitions g (p:ps) = ((overlay vs es):tailParts, cutEdges `overlay` tailCuts) where
-    vs        = vertices $ filter fv (vertexList g)
-    es        = edges $ filter (\(v1,v2) -> (fv v1) && (fv v2)) (edgeList g)
-    cutEdges  = edgesOut
-    fv v      = (vertexId v) `elem` p
-    edgesOut  = edges $ filter (\(v1,v2) -> (fv v1) && (not(fv v2))) (edgeList g)
-    (tailParts, tailCuts) = createPartitions g ps
+createPartitions g (p:ps) = (thisGraph:tailParts, edgesOut `overlay` tailCuts) where
+    fv v       = (vertexId v) `elem` p
+    vs         = vertices $ filter fv (vertexList g)
+    es         = edges $ filter (\(v1,v2) -> (fv v1) && (fv v2)) (edgeList g)
+    thisGraph  = overlay vs es
+    stripMerge = mkStripMerge thisGraph g
+    edgesOut   = edges $ filter (\(v1,v2) -> (fv v1) && (not(fv v2))) (edgeList (stripMerge g))
+    (tailParts, tailCuts) = createPartitions (stripMerge g) ps
+
+-- | Builds a function to remove Merges from a StreamGraph, if they are
+-- connected to from operators in another (local) graph. We remove Merges
+-- from the beginning of Partitions and use the TCP/IP machinery to merge
+-- multiple incoming streams instead.
+mkStripMerge :: StreamGraph -> StreamGraph -> (StreamGraph -> StreamGraph)
+mkStripMerge local global = let
+    -- find Merges in global Graph connected to from local Graph
+    merges = map snd
+           $ filter (\(f,t)-> f `elem` vertexList local && operator t == Merge)
+           $ edgeList global
+
+    remove m = let nextOp = snd . head . filter ((==m).fst) . edgeList $ global
+        in removeEdge nextOp nextOp . replaceVertex m nextOp
+
+    in \g -> foldl (&) g (map remove merges)
+
+global = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 1 Merge [] "Int" "Int"
+    , StreamVertex 2 Map ["show","s"] "Int" "String"
+    , StreamVertex 3 Sink ["mapM_ print"] "String" "String"
+    ]
+local = Vertex $ StreamVertex 0 Source [] "Int" "Int"
+
+stripMergePost = path
+    [ StreamVertex 0 Source [] "Int" "Int"
+    , StreamVertex 2 Map ["show","s"] "Int" "String"
+    , StreamVertex 3 Sink ["mapM_ print"] "String" "String"
+    ]
+
+test_stripMerge1 = assertEqual stripMergePost $
+    mkStripMerge local global $ global
+
+test_stripMerge2 = assertEqual stripMergePost $
+    mkStripMerge local stripMergePost $ stripMergePost
 
 unPartition :: ([Graph StreamVertex], Graph StreamVertex) -> Graph StreamVertex
 unPartition (a,b) = overlay b $ foldl overlay Empty a
@@ -109,23 +147,37 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
     (possibleSrcSinkFn sg) :
     sgTypeSignature :
     sgIntro :
-    (map ((padding++).generateCodeFromVertex) (zip [(valence+1)..] intVerts)) ++
+    sgBody ++
     [padding ++ "in " ++ lastIdentifier,"\n",
     "main :: IO ()",
     nodeFn sg] where
         nodeId = "-- node"++(show partId)
         padding = "    "
-        sgTypeSignature = "streamGraphFn ::"++(concat $ take valence $ repeat $ " Stream "++(inType sg)++" ->")++" Stream "++(outType sg)
+        pad = map (padding++)
+
+        sgTypeSignature = if startsWithJoin sg
+            then "streamGraphFn ::"
+                    ++" Stream "++inType sg++" ->"
+                    ++" Stream "++inType sg++" ->"
+                    ++" Stream "++outType sg
+            else "streamGraphFn ::"++" Stream "++inType sg++" ->"++" Stream "++outType sg
+
         sgIntro = "streamGraphFn "++sgArgs++" = let"
-        sgArgs = unwords $ map (('n':).show) [1..valence]
+        sgArgs = if startsWithJoin sg
+            then "n1 n2"
+            else "n1"
+        sgBody = pad $ case zip [(valence+1)..] intVerts of
+            [] -> ["n2 = n1"]
+            ns -> map generateCodeFromVertex ns
         imports' = (map ("import "++) (imports opts)) ++ ["\n"]
-        lastIdentifier = 'n':(show $ (length intVerts) + valence)
+        lastIdentifier = 'n':(show $ length intVerts
+            + if startsWithJoin sg then 2 else 1)
         intVerts= filter (\x-> not $ operator x `elem` [Source,Sink]) $ vertexList sg
         valence = partValence sg cuts
         nodeFn sg = case (nodeType sg) of
-            NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts
+            NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts parts
             NodeLink   -> generateNodeLink (partId + 1)
-            NodeSink   -> generateNodeSink valence
+            NodeSink   -> generateNodeSink sg
         possibleSrcSinkFn sg = case (nodeType sg) of
             NodeSource -> generateSrcFn sg
             NodeLink   -> ""
@@ -135,7 +187,7 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
 -- special-case if the terminal node is a Sink node: we want the
 -- "pure" StreamGraph type that feeds into the sink function.
 outType :: StreamGraph -> String
-outType sg = let node = (head . reverse . vertexList) sg
+outType sg = let node = (last . vertexList) sg
         in if operator node == Sink
            then intype node
            else outtype node
@@ -187,11 +239,17 @@ generateNodeLink n = "main = nodeLink (defaultLink \"9001\" \"node"++(show n)++"
 
 -- warts:
 --  we accept a list of onward nodes but nodeSource only accepts one anyway
-generateNodeSrc :: Integer -> [Integer] -> GenerateOpts -> String
-generateNodeSrc partId nodes opts = let
+generateNodeSrc :: Integer -> [Integer] -> GenerateOpts -> [(Integer, StreamGraph)] -> String
+generateNodeSrc partId nodes opts parts = let
     node = head nodes
     host = "node" ++ (show node)
-    port = 9001 + partId -1 -- XXX Unlikely to always be correct
+
+    port = case lookup node parts of
+        Just sg -> if startsWithJoin sg
+                   then 9001 + partId -1 -- XXX Unlikely to always be correct
+                   else 9001
+        Nothing -> 9001
+
     pref = case preSource opts of
        Nothing -> ""
        Just f  -> f
@@ -200,11 +258,26 @@ generateNodeSrc partId nodes opts = let
 \       "++pref++"\n\
 \       nodeSource (defaultSource \""++host++"\" \""++(show port)++"\") src1 streamGraphFn"
 
-generateNodeSink :: Int -> String
-generateNodeSink v = case v of
-    1 -> "main = nodeSink (defaultSink \"9001\") streamGraphFn sink1"
-    2 -> "main = nodeSink2 streamGraphFn sink1 \"9001\" \"9002\""
-    v -> error "generateNodeSink: unhandled valence " ++ (show v)
+-- | does this StreamGraph start with a Join operator?
+startsWithJoin :: StreamGraph -> Bool
+startsWithJoin sg = let
+    joinOps   = filter ((==Join).operator) . vertexList $ sg
+    hasInputs = map snd . edgeList $ sg
+    in length joinOps > 0 && (not . or . map (`elem` hasInputs) $ joinOps)
+
+test_startsWithJoin_1 = assertBool . startsWithJoin . path $
+    [StreamVertex 1 Join [] "" "", StreamVertex 0 Merge [] "" ""]
+
+test_startsWithJoin_2 = assertBool . not . startsWithJoin . path $
+    [StreamVertex 0 Merge [] "" "", StreamVertex 1 Join [] "" ""]
+
+test_startsWithJoin_3 = assertBool . not . startsWithJoin $ empty
+
+generateNodeSink :: StreamGraph -> String
+generateNodeSink sg =
+    if startsWithJoin sg
+    then "main = nodeSink2 streamGraphFn sink1 \"9001\" \"9002\""
+    else "main = nodeSink (defaultSink \"9001\") streamGraphFn sink1"
 
 -- generateCodeFromVertex:  generates Haskell code to be included in a
 -- let expression, corresponding to the supplied StreamVertex. The Int
