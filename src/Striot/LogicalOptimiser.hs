@@ -3,7 +3,6 @@
 module Striot.LogicalOptimiser ( applyRules
                                , costModel
                                , optimise
-                               , optimiseWriteOut
 
                                , htf_thisModulesTests
                                ) where
@@ -62,20 +61,6 @@ optimise sg = let
     in if score > base
        then candidate
        else sg
-
--- | Optimise a StreamGraph and write the result out as Haskell source
--- code to the supplied FilePath, along with some of the necessary
--- supporting code.
-optimiseWriteOut :: FilePath -> StreamGraph -> IO ()
-optimiseWriteOut fn =
-    writeFile fn . template . show . simplify . optimise
-
-template g = intercalate "\n"
-    [ "import Striot.StreamGraph"
-    , "import Algebra.Graph"
-    , "\n"
-    , "graph = " ++ g
-    ]
 
 ------------------------------------------------------------------------------
 

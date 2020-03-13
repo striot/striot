@@ -9,22 +9,28 @@ module Striot.CompileIoT ( createPartitions
                          , genDockerfile
                          , partitionGraph
                          , simpleStream
+                         , optimiseWriteOutAll
 
                          , htf_thisModulesTests
                          ) where
 
-import Data.List (intercalate)
+import Data.List (intercalate, nub)
 import Algebra.Graph
 import Test.Framework
 import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
 import Data.Function ((&))
+import Data.List.Match (compareLength)
 
 import Striot.StreamGraph
 import Striot.LogicalOptimiser
 
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
+
+-- |eventually, this might include properties about the partition (Catalogue).
+-- For now we just need a way of enumerating them.
+type Partition = Int
 
 -- |The user's desired partitioning of the input Graph.
 -- Each element in the outer-most list corresponds to a distinct partition.
@@ -317,6 +323,8 @@ partValence g cuts = let
 ------------------------------------------------------------------------------
 -- tests / test data
 
+main = htfMain htf_thisModulesTests
+
 -- Source -> Sink
 s0 = connect (Vertex (StreamVertex 0 (Source) [] "String" "String"))
     (Vertex (StreamVertex 1 (Sink) [] "String" "String"))
@@ -375,3 +383,82 @@ simpleStream tupes = path lst
         tupes3 = zip3 [1..] intypes tupes
         lst = map (\ (i,intype,(op,params,outtype)) ->
             StreamVertex i op params intype outtype) tupes3
+
+------------------------------------------------------------------------------
+
+-- | Derive a partition map.
+-- Eventually, derive all possible partition maps.
+partitionings :: StreamGraph -> [Partition] -> PartitionMap
+partitionings sg parts = let
+    vIds = map vertexId . vertexList $ sg
+    in case compareLength vIds parts of
+        EQ -> map (:[]) vIds
+
+        GT -> let
+            diff         = length vIds - length parts
+            (first,rest) = splitAt (diff + 1) vIds
+            in [first] ++ map (:[]) rest
+
+        LT -> error "cannot partition a graph over more partitions than there are nodes"
+
+partTestGraph = path
+    [ StreamVertex 0 Source []        "Int" "Int"
+    , StreamVertex 1 Map ["show","s"] "Int" "String"
+    , StreamVertex 2 Filter ["<3"]    "Int" "Int"
+    , StreamVertex 3 Window []        "String" "[String]"
+    , StreamVertex 4 Sink []          "String" "String"
+    ]
+
+test_partitionings_1 = assertEqual [[x]|x <- [0..4]] $
+    partitionings partTestGraph [0..4]
+
+test_partitionings_2 = assertEqual 3 $ length $
+    partitionings partTestGraph [0..2]
+
+test_partitionings_3 = assertEqual 3 $ length $ head $
+    partitionings partTestGraph [0..2]
+
+-- | placeholder
+allPartitionings :: StreamGraph -> [Partition] -> [PartitionMap]
+allPartitionings sg = (:[]) . partitionings sg
+------------------------------------------------------------------------------
+
+-- | write out all rewritten versions of the input StreamGraph, along with some
+-- of the necessary supporting code.
+-- TODO: rename this to something more intuitive
+optimiseWriteOutAll :: FilePath -> [Partition] -> StreamGraph -> IO ()
+optimiseWriteOutAll fn parts =
+    writeFile fn
+        . template
+        . intercalate "\n    , "
+        . map show
+        . deriveStreamGraphOptions parts
+
+-- | Apply the Logical Optimiser to the supplied StreamGraph and then return a
+-- list of all possible pairings of StreamGraphs and Partition Maps
+-- TODO tests for this pure bit
+deriveStreamGraphOptions :: [Partition] -> StreamGraph -> [(StreamGraph, PartitionMap)]
+deriveStreamGraphOptions parts sg =
+    [ (x,y) | x <- optimise' sg, y <- allPartitionings x parts ]
+
+optimise' :: StreamGraph -> [StreamGraph]
+optimise' = nub . map simplify . applyRules 5
+
+-- first ensure that the Logical Optimiser produces at least one rewritten graph
+-- for this test input
+test_ensureOptimised' = assertBool $ length (optimise' partTestGraph) > 1
+
+-- we must have at least as many options after considering partition mapping as
+-- we have StreamGraphs
+test_deriveStreamGraphOptions = assertBool $
+    length (optimise' partTestGraph) <= length (deriveStreamGraphOptions [0..4] partTestGraph)
+
+
+template g = intercalate "\n"
+    [ "import Striot.StreamGraph"
+    , "import Algebra.Graph"
+    , "\n"
+    , "graphs = "
+    , "    [ "++g
+    , "    ]\n"
+    ]
