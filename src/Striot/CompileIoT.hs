@@ -95,7 +95,7 @@ unPartition (a,b) = overlay b $ foldl overlay Empty a
         is entirely connected?
         ...
     a well-formed partition spec:
-        has ≥ 1 partition
+        has >= 1 partition
         references node IDs that exist
         covers all node IDs?
         passes some kind of connectedness test?
