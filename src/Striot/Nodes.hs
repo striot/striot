@@ -5,6 +5,8 @@ module Striot.Nodes ( nodeSource
                     , nodeLink2
                     , nodeSink
                     , nodeSink2
+                    , nodeSimple
+
                     , defaultConfig
                     , defaultSource
                     , defaultLink
@@ -151,6 +153,10 @@ nodeSink2 streamOp iofn inputPort1 inputPort2 = do
     let result = streamOp stream1 stream2
     iofn result
 
+-- | a simple source-sink combined function for single-Node
+-- deployments.
+nodeSimple :: (IO a) -> (Stream a -> Stream b) -> (Stream b -> IO()) -> IO ()
+nodeSimple src proc sink = sink . proc =<< readListFromSource src
 
 --- CONFIG FUNCTIONS ---
 
