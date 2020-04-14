@@ -11,6 +11,10 @@ module Striot.Nodes ( nodeSource
                     , defaultSource
                     , defaultLink
                     , defaultSink
+
+                    , mkStream
+                    , unStream
+
                     ) where
 
 import           Control.Concurrent.Async                      (async)
@@ -328,3 +332,14 @@ startPrometheus name = do
         <*> rg "striot_egress_connection"
         <*> rc "striot_egress_bytes_total"
         <*> rc "striot_egress_events_total"
+
+--------------------------------------------------------------------
+-- simple routines for pure streams
+
+-- | Convenience function for creating a pure Stream.
+mkStream :: [a] -> Stream a
+mkStream = map $ Event Nothing . Just
+
+-- | A convenience function to extract a list of values from a Stream.
+unStream :: Stream a -> [a]
+unStream = catMaybes . map value
