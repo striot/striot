@@ -60,7 +60,8 @@ nodeSource' :: (Store alpha, Store beta,
 nodeSource' iofn streamOp = do
     c <- ask
     metrics <- liftIO $ startPrometheus (c ^. nodeName)
-    stream <- liftIO $ readListFromSource iofn metrics
+    let iofnAndMetrics = PC.inc (_ingressEvents metrics) >> iofn
+    stream <- liftIO $ readListFromSource iofnAndMetrics
     let result = streamOp stream
     sendStream metrics result
 
@@ -291,13 +292,12 @@ sendDispatch name (ConnKafkaConfig cc) met stream = liftIO $ sendStreamKafka nam
 sendDispatch name (ConnMQTTConfig  cc) met stream = liftIO $ sendStreamMQTT  name cc met stream
 
 
-readListFromSource :: IO alpha -> Metrics -> IO (Stream alpha)
+readListFromSource :: IO alpha -> IO (Stream alpha)
 readListFromSource = go
   where
-    go pay met = unsafeInterleaveIO $ do
+    go pay = unsafeInterleaveIO $ do
         x  <- msg
-        PC.inc (_ingressEvents met)
-        xs <- go pay met
+        xs <- go pay
         return (x : xs)
       where
         msg = do
