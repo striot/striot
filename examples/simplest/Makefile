@@ -1,7 +1,3 @@
+RUNGHC := stack runghc --
 run:
-	docker-compose up --build
-
-clean:
-	rm -f client/Client server/Server
-
-.PHONY: run clean
+	$(RUNGHC) -i../../src Simple.hs
