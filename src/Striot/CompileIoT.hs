@@ -16,6 +16,7 @@ module Striot.CompileIoT ( createPartitions
 
 import Data.List (intercalate, nub)
 import Algebra.Graph
+import Algebra.Graph.ToGraph (reachable)
 import Test.Framework
 import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
@@ -144,8 +145,9 @@ nodeType sg = if operator (head (vertexList sg)) == Source
                    then NodeSink
                    else NodeLink
 
--- vertexList outputs *sorted*. That corresponds to the Id value for
+-- vertexList outputs *sorted* (By Ord a =>). That corresponds to the Id value for
 -- our StreamVertex type
+-- TODO consider Difference Lists here
 generateCodeFromStreamGraph :: GenerateOpts -> [(Integer, StreamGraph)] -> StreamGraph -> (Integer,StreamGraph) -> String
 generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
     nodeId : -- convenience comment labelling the node/partition ID
@@ -178,7 +180,7 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
         imports' = (map ("import "++) (imports opts)) ++ ["\n"]
         lastIdentifier = 'n':(show $ length intVerts
             + if startsWithJoin sg then 2 else 1)
-        intVerts= filter (\x-> not $ operator x `elem` [Source,Sink]) $ vertexList sg
+        intVerts= filter (not . singleton) $ vertexList sg
         valence = partValence sg cuts
         nodeFn sg = case (nodeType sg) of
             NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts parts
@@ -420,7 +422,10 @@ test_partitionings_3 = assertEqual 3 $ length $ head $
 
 -- | placeholder
 allPartitionings :: StreamGraph -> [Partition] -> [PartitionMap]
-allPartitionings sg = (:[]) . partitionings sg
+allPartitionings sg pt = let
+    count = length pt
+    in filter ((==count) . length) (allPartitions sg)
+
 ------------------------------------------------------------------------------
 
 -- | write out all rewritten versions of the input StreamGraph, along with some
@@ -462,3 +467,119 @@ template g = intercalate "\n"
     , "    [ "++g
     , "    ]\n"
     ]
+
+------------------------------------------------------------------------------
+
+allPartitions :: StreamGraph -> [[[Int]]]
+allPartitions = (map.map.map) vertexId . foldgl fun [] . transpose
+    where
+        fun []      n = [[[n]]]
+        fun choices n = concatMap (extendPartitioning n) choices
+
+-- | A left-fold over Graphs. Unlike 'foldg', the traversal order follows
+-- edges from a root node.
+--
+-- XXX could we rework this in terms of subGraph, instead of subGraphs?
+-- Caveat: when the incoming graph is e.g. overlay x y, getRoot returns
+-- one of x or y, and subGraphs returns [], so we lose the other branch
+foldgl :: Eq a => Ord a =>
+               (b -> a -> b) -> b -> Graph a -> b
+foldgl f z g =
+    if isEmpty g then z
+    else let x  = getRoot g     -- :: a
+             xs = subGraphs x g -- [Graph a]
+         in foldl (\b g -> foldgl f b g) (f z x) xs
+
+test_foldgl1 = assertEqual "ABC" $
+    foldgl (\b a -> b++[a]) "" (path "ABC")
+test_foldgl2 = assertEqual "ABCD" $
+    foldgl (\b a -> b++[a]) "" (overlay (path "ABC") (path "BD"))
+
+getRoots :: Eq a => Ord a =>
+            Graph a -> [a]
+getRoots g = let
+    edges = edgeList g
+    dests = map snd edges
+    roots = filter (not.(`elem`dests)) (vertexList g)
+    in roots
+
+getRoot :: Eq a => Ord a =>
+           Graph a -> a
+getRoot = head . getRoots
+
+subGraphs :: Ord a =>
+             a -> Graph a -> [Graph a]
+subGraphs n g = map (\k -> subGraph k g) (childrenOf n g)
+
+test_subGraphs1 = assertEqual (subGraphs 2 t2) [Vertex v | v <- [3,4]]
+test_subGraphs2 = assertEqual (subGraphs 3 t2) []
+test_subGraphs3 = assertEqual (subGraphs 1 t1) [path [2,3]]
+test_subGraphs4 = assertEqual (subGraphs 1 t2) [removeVertex 1 t2]
+
+v0 = StreamVertex 0 Source [] "" ""
+v1 = StreamVertex 1 Map [] "" ""
+v2 = StreamVertex 2 Sink [] "" ""
+v3 = StreamVertex 3 Source [] "" ""
+v4 = StreamVertex 4 Merge [] "" ""
+v5 = StreamVertex 5 Map [] "" ""
+g3 = overlay (path [v0, v1, v4, v2]) (path [v3, v5, v4])
+g4 = transpose g3
+
+test_subGraphs5 = let
+    g = head $ subGraphs (getRoot g4) g4
+    in assertBool $ v0 `elem` (vertexList g)
+
+subGraph :: Eq a => Ord a =>
+            a -> Graph a -> Graph a
+subGraph n g = induce (`elem` reachable n g) g
+
+t1 = path [1,2,3]
+test_subGraph1 = assertEqual (subGraph 1 t1) $ t1
+test_subGraph2 = assertEqual (subGraph 2 t1) $ path [2,3]
+test_subGraph3 = assertEqual (subGraph 3 t1) $ Vertex 3
+
+t2 = t1 + path [2,4]
+test_subGraph4 = assertEqual (subGraph 4 t2) $ Vertex 4
+test_subGraph5 = assertEqual (subGraph 2 t2) $ path [2,4] + path [2,3]
+
+childrenOf :: Ord a =>
+              a -> Graph a -> [a]
+childrenOf n = map snd . filter ((==n).fst) . edgeList
+
+-- | Given an existing partitioning and a new operator to consider: We can
+-- start a new partition; in some circumstances we can also append the operator
+-- to the last partition.
+extendPartitioning :: StreamVertex -> [[StreamVertex]] -> [[[StreamVertex]]]
+extendPartitioning n choice = let
+  lastNode = last . last $ choice
+  in if 1 < (length (filter singleton (n:(last choice))))
+     || operator lastNode `elem` [Merge,Source]
+     then [ choice ++ [[n]] ]
+     else [ choice ++ [[n]]
+          , init choice ++ [last choice ++ [n]]
+          ]
+
+singleton v = operator v `elem` [Source,Sink]
+
+g' = path [ v0 , v1 , v2 ]
+test_g' = assertEqual [ [[2],[1],[0]]
+                      , [[2],[1,0]]
+                      , [[2,1],[0]]]
+    $ allPartitions g'
+
+g2 = overlay (path [v0, v4, v2]) (path [v3, v4])
+
+test_g2 = assertEqual [ [[2],[4],[0],[3]]
+                      , [[2,4],[0],[3]]]
+    $ allPartitions g2
+
+test_g3 = assertEqual
+    [ [[2],[4],[1],[0],[5],[3]]
+    , [[2],[4],[1],[0],[5,3]]
+    , [[2],[4],[1,0],[5],[3]]
+    , [[2],[4],[1,0],[5,3]]
+    , [[2,4],[1],[0],[5],[3]]
+    , [[2,4],[1],[0],[5,3]]
+    , [[2,4],[1,0],[5],[3]]
+    , [[2,4],[1,0],[5,3]]
+    ] $ allPartitions g3
