@@ -5,10 +5,16 @@ module Striot.Nodes ( nodeSource
                     , nodeLink2
                     , nodeSink
                     , nodeSink2
+                    , nodeSimple
+
                     , defaultConfig
                     , defaultSource
                     , defaultLink
                     , defaultSink
+
+                    , mkStream
+                    , unStream
+
                     ) where
 
 import           Control.Concurrent.Async                      (async)
@@ -60,7 +66,8 @@ nodeSource' :: (Store alpha, Store beta,
 nodeSource' iofn streamOp = do
     c <- ask
     metrics <- liftIO $ startPrometheus (c ^. nodeName)
-    stream <- liftIO $ readListFromSource iofn metrics
+    let iofnAndMetrics = PC.inc (_ingressEvents metrics) >> iofn
+    stream <- liftIO $ readListFromSource iofnAndMetrics
     let result = streamOp stream
     sendStream metrics result
 
@@ -150,6 +157,10 @@ nodeSink2 streamOp iofn inputPort1 inputPort2 = do
     let result = streamOp stream1 stream2
     iofn result
 
+-- | a simple source-sink combined function for single-Node
+-- deployments.
+nodeSimple :: (IO a) -> (Stream a -> Stream b) -> (Stream b -> IO()) -> IO ()
+nodeSimple src proc sink = sink . proc =<< readListFromSource src
 
 --- CONFIG FUNCTIONS ---
 
@@ -291,13 +302,12 @@ sendDispatch name (ConnKafkaConfig cc) met stream = liftIO $ sendStreamKafka nam
 sendDispatch name (ConnMQTTConfig  cc) met stream = liftIO $ sendStreamMQTT  name cc met stream
 
 
-readListFromSource :: IO alpha -> Metrics -> IO (Stream alpha)
+readListFromSource :: IO alpha -> IO (Stream alpha)
 readListFromSource = go
   where
-    go pay met = unsafeInterleaveIO $ do
+    go pay = unsafeInterleaveIO $ do
         x  <- msg
-        PC.inc (_ingressEvents met)
-        xs <- go pay met
+        xs <- go pay
         return (x : xs)
       where
         msg = do
@@ -322,3 +332,14 @@ startPrometheus name = do
         <*> rg "striot_egress_connection"
         <*> rc "striot_egress_bytes_total"
         <*> rc "striot_egress_events_total"
+
+--------------------------------------------------------------------
+-- simple routines for pure streams
+
+-- | Convenience function for creating a pure Stream.
+mkStream :: [a] -> Stream a
+mkStream = map $ Event Nothing . Just
+
+-- | A convenience function to extract a list of values from a Stream.
+unStream :: Stream a -> [a]
+unStream = catMaybes . map value

@@ -152,13 +152,15 @@ generateCodeFromStreamGraph :: GenerateOpts -> [(Integer, StreamGraph)] -> Strea
 generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
     nodeId : -- convenience comment labelling the node/partition ID
     imports' ++
-    (possibleSrcSinkFn sg) :
+    (possibleSrcFn parts sg) :
+    (possibleSinkFn parts sg) :
     sgTypeSignature :
     sgIntro :
     sgBody ++
     [padding ++ "in " ++ lastIdentifier,"\n",
     "main :: IO ()",
-    nodeFn sg] where
+    nodeFn parts sg] where
+
         nodeId = "-- node"++(show partId)
         padding = "    "
         pad = map (padding++)
@@ -182,10 +184,28 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
             + if startsWithJoin sg then 2 else 1)
         intVerts= filter (not . singleton) $ vertexList sg
         valence = partValence sg cuts
-        nodeFn sg = case (nodeType sg) of
-            NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts parts
-            NodeLink   -> generateNodeLink (partId + 1)
-            NodeSink   -> generateNodeSink sg
+        nodeFn parts sg =
+            if length parts == 1
+            then "main = nodeSimple src1 streamGraphFn sink1"
+            else case (nodeType sg) of
+                NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts parts
+                NodeLink   -> generateNodeLink (partId + 1)
+                NodeSink   -> generateNodeSink sg
+
+        possibleSrcFn parts sg =
+            if   length parts == 1
+            then generateSrcFn sg
+            else case (nodeType sg) of
+                     NodeSource -> generateSrcFn sg
+                     _          -> ""
+
+        possibleSinkFn parts sg =
+            if   length parts == 1
+            then generateSinkFn sg
+            else case (nodeType sg) of
+                     NodeSink -> generateSrcFn sg
+                     _        -> ""
+
         possibleSrcSinkFn sg = case (nodeType sg) of
             NodeSource -> generateSrcFn sg
             NodeLink   -> ""
