@@ -152,8 +152,8 @@ generateCodeFromStreamGraph :: GenerateOpts -> [(Integer, StreamGraph)] -> Strea
 generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
     nodeId : -- convenience comment labelling the node/partition ID
     imports' ++
-    (possibleSrcFn parts sg) :
-    (possibleSinkFn parts sg) :
+    possibleSrcFn parts sg :
+    possibleSinkFn parts sg :
     sgTypeSignature :
     sgIntro :
     sgBody ++
@@ -192,24 +192,24 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
                 NodeLink   -> generateNodeLink (partId + 1)
                 NodeSink   -> generateNodeSink sg
 
-        possibleSrcFn parts sg =
-            if   length parts == 1
-            then generateSrcFn sg
-            else case (nodeType sg) of
-                     NodeSource -> generateSrcFn sg
-                     _          -> ""
+possibleSrcFn parts sg =
+    if   length parts == 1
+    then generateSrcFn sg
+    else case (nodeType sg) of
+             NodeSource -> generateSrcFn sg
+             _          -> ""
 
-        possibleSinkFn parts sg =
-            if   length parts == 1
-            then generateSinkFn sg
-            else case (nodeType sg) of
-                     NodeSink -> generateSrcFn sg
-                     _        -> ""
+possibleSinkFn parts sg =
+    if   length parts == 1
+    then generateSinkFn sg
+    else case (nodeType sg) of
+             NodeSink -> generateSinkFn sg
+             _        -> ""
 
-        possibleSrcSinkFn sg = case (nodeType sg) of
-            NodeSource -> generateSrcFn sg
-            NodeLink   -> ""
-            NodeSink   -> generateSinkFn sg
+possibleSrcSinkFn sg = case (nodeType sg) of
+    NodeSource -> generateSrcFn sg
+    NodeLink   -> ""
+    NodeSink   -> generateSinkFn sg
 
 -- output type of a StreamGraph.
 -- special-case if the terminal node is a Sink node: we want the
