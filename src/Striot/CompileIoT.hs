@@ -203,7 +203,7 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
             if   length parts == 1
             then generateSinkFn sg
             else case (nodeType sg) of
-                     NodeSink -> generateSrcFn sg
+                     NodeSink -> generateSinkFn sg
                      _        -> ""
 
         possibleSrcSinkFn sg = case (nodeType sg) of
