@@ -11,6 +11,13 @@ module Striot.CompileIoT ( createPartitions
                          , simpleStream
                          , optimiseWriteOutAll
 
+                         , optimise
+                         , generateCodeFromStreamGraph
+                         , nodeFn
+                         , nodeType
+                         , generateNodeSrc
+                         , connectNodeId
+
                          , htf_thisModulesTests
                          ) where
 
@@ -159,7 +166,7 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
     sgBody ++
     [padding ++ "in " ++ lastIdentifier,"\n",
     "main :: IO ()",
-    nodeFn parts sg] where
+    nodeFn parts sg partId cuts opts] where
 
         nodeId = "-- node"++(show partId)
         padding = "    "
@@ -184,13 +191,14 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
             + if startsWithJoin sg then 2 else 1)
         intVerts= filter (not . singleton) $ vertexList sg
         valence = partValence sg cuts
-        nodeFn parts sg =
-            if length parts == 1
-            then "main = nodeSimple src1 streamGraphFn sink1"
-            else case (nodeType sg) of
-                NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts parts
-                NodeLink   -> generateNodeLink (partId + 1)
-                NodeSink   -> generateNodeSink sg
+
+nodeFn parts sg partId cuts opts =
+    if length parts == 1
+    then "main = nodeSimple src1 streamGraphFn sink1"
+    else case (nodeType sg) of
+        NodeSource -> generateNodeSrc partId (connectNodeId sg parts cuts) opts parts
+        NodeLink   -> generateNodeLink (partId + 1)
+        NodeSink   -> generateNodeSink sg
 
 possibleSrcFn parts sg =
     if   length parts == 1
@@ -244,6 +252,8 @@ test_inType = assertEqual "Int" $
 
 -- determine the node(s?) to connect on to from this partition
 -- XXX always 0 or 1? write quickcheck property...
+-- TODO: this breaks if the outer-edge node has been optimised away…
+-- the graph of cut edges has the pre-optimisation StreamVertex in it.
 connectNodeId :: StreamGraph -> [(Integer, StreamGraph)] -> StreamGraph -> [Integer]
 connectNodeId sg parts cuts = let
     edges = edgeList cuts
@@ -477,7 +487,6 @@ test_ensureOptimised' = assertBool $ length (optimise' partTestGraph) > 1
 -- we have StreamGraphs
 test_deriveStreamGraphOptions = assertBool $
     length (optimise' partTestGraph) <= length (deriveStreamGraphOptions [0..4] partTestGraph)
-
 
 template g = intercalate "\n"
     [ "import Striot.StreamGraph"
