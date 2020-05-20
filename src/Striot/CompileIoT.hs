@@ -133,15 +133,11 @@ defaultOpts = GenerateOpts
 -- and options specified within the supplied `GenerateOpts` and returns a list of
 -- the sub-graphs converted into source code and encoded as `String`s.
 generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
-generateCode sg pm opts = generateCode' (createPartitions sg pm) opts
-
-generateCode' :: ([StreamGraph], StreamGraph) -> GenerateOpts -> [String]
-generateCode' (sgs,cuts) opts = let
-                  sgs' = if   rewrite opts
-                         then map optimise sgs
-                         else sgs
-                  enumeratedParts = zip [1..] sgs'
-                  in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
+generateCode sg pm opts = let
+    (sgs,cuts)      = createPartitions sg pm
+    sgs'            = if rewrite opts then map optimise sgs else sgs
+    enumeratedParts = zip [1..] sgs'
+    in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
 
 data NodeType = NodeSource | NodeSink | NodeLink deriving (Show)
 
