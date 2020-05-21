@@ -40,7 +40,7 @@ type PartitionMap = [[Int]]
 
 -- createPartitions returns ([partition map], [inter-graph links])
 -- where inter-graph links are the cut edges due to partitioning
-createPartitions :: Graph StreamVertex -> PartitionMap -> ([Graph StreamVertex], Graph StreamVertex)
+createPartitions :: StreamGraph -> PartitionMap -> PartitionedGraph
 createPartitions _ [] = ([],empty)
 createPartitions g (p:ps) = (thisGraph:tailParts, edgesOut `overlay` tailCuts) where
     fv v       = (vertexId v) `elem` p
@@ -87,7 +87,7 @@ test_stripMerge1 = assertEqual stripMergePost $
 test_stripMerge2 = assertEqual stripMergePost $
     mkStripMerge local stripMergePost $ stripMergePost
 
-unPartition :: ([Graph StreamVertex], Graph StreamVertex) -> Graph StreamVertex
+unPartition :: PartitionedGraph -> Graph StreamVertex
 unPartition (a,b) = overlay b $ foldl overlay Empty a
 
 ------------------------------------------------------------------------------
