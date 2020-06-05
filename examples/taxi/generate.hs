@@ -5,44 +5,41 @@
 import Striot.CompileIoT
 import Striot.StreamGraph
 import Algebra.Graph
+import Data.Time -- UTCTime(..)
+import Data.Maybe (fromJust)
+import Data.List.Split (splitOn)
 
-opts = GenerateOpts { imports = [ "Striot.FunctionalIoTtypes"
-                                , "Striot.FunctionalProcessing"
-                                , "Striot.Nodes"
-                                , "Taxi"
-                                , "Data.Time" -- UTCTime(..)..
-                                , "Data.Maybe" -- fromJust
-                                , "Data.List.Split" -- splitOn
-                                , "Control.Concurrent"
-                                , "Control.Arrow" -- >>>
-                                ] -- threadDelay
+opts = GenerateOpts { imports = imports defaultOpts ++
+                        [ "Taxi"
+                        , "Data.Time" -- UTCTime(..)..
+                        ]
                     , packages = []
                     , preSource = Just "preSource"
                     , rewrite = True
                     }
-source = "do\n\
-\   line <- getLine;\n\
-\   return $ stringsToTrip $ splitOn \",\" line"
+source = [| getLine >>= return . stringsToTrip . splitOn "," |]
 
-topk = "(\\w -> (let lj = last w in (pickupTime lj, dropoffTime lj), topk 10 w))"
-filterDupes = ["(\\acc h -> if snd h == snd acc then acc else h)"
-                               , "(fromJust (value (head s)))"
-                               , "(\\h acc -> snd h /= snd acc)"
-                               , "(tail s)"  ]
-sink = "mapM_ (print.show.fromJust.value)"
+topk' = [| \w -> (let lj = last w in (pickupTime lj, dropoffTime lj), topk 10 w) |]
+
+filterDupes = [ [| \_ h -> Just h |]
+              , [| Nothing |]
+              , [| \h wacc -> case wacc of Nothing -> True; Just acc -> snd h /= snd acc |]
+              ]
+
+sink = [| mapM_ (print.show.fromJust.value) |]
 
 taxiQ1 :: StreamGraph
 taxiQ1 = simpleStream
-    [ (Source,    [source],                             "Trip")
-    , (Window,    ["tripTimes","s"],                    "[Trip]")
-    , (Expand,    ["s"],                                "Trip")
-    , (Map,       ["tripToJourney", "s"],               "Journey")
-    , (Filter,    ["(\\j -> inRangeQ1 (start j))", "s"],"Journey")
-    , (Filter,    ["(\\j -> inRangeQ1 (end j))", "s"],  "Journey")
-    , (Window,    ["(slidingTime 1800000)", "s"],       "[Journey]")
-    , (Map,       [topk, "s"],                          "((UTCTime,UTCTime),[(Journey,Int)])")
-    , (FilterAcc, filterDupes,                          "((UTCTime,UTCTime),[(Journey,Int)])")
-    , (Sink,      [sink],                               "((UTCTime,UTCTime),[(Journey,Int)])")
+    [ (Source,    [source],                         "Trip")
+    , (Window,    [[| tripTimes |]],                "[Trip]")
+    , (Expand,    [],                               "Trip")
+    , (Map,       [[| tripToJourney |]],            "Journey")
+    , (Filter,    [[| \j -> inRangeQ1 (start j) |]],"Journey")
+    , (Filter,    [[| \j -> inRangeQ1 (end j) |]],  "Journey")
+    , (Window,    [[| slidingTime 1800000 |]],      "[Journey]")
+    , (Map,       [topk'],                          "((UTCTime,UTCTime),[(Journey,Int)])")
+    , (FilterAcc, filterDupes,                      "((UTCTime,UTCTime),[(Journey,Int)])")
+    , (Sink,      [sink],                           "((UTCTime,UTCTime),[(Journey,Int)])")
     ]
 
 parts = [[1..7],[8],[9..10]]
