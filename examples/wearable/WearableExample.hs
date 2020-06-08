@@ -50,7 +50,8 @@ threshold :: Int
 threshold = 5000 -- made up number
 
 stepEvent :: Stream Int -> Stream Int -- input is (ed,ts)
-stepEvent s = streamMap (\[ed1,ed2]->ed1) $ streamFilter (\[ed1,ed2]-> (ed1>threshold) && (ed2<=threshold)) $ streamWindow (sliding 2) s
+stepEvent s = streamFilterAcc (\last new -> new) 0 (\new last ->(last>threshold) && (new<=threshold)) s
+
 {-
 Query 4 aggregates the input information and - based on a tumbling
 window regularly sends to Query 5 an event containing the
