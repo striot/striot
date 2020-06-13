@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Striot.VizGraph ( streamGraphToDot
                        , displayGraph
