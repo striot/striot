@@ -1,4 +1,4 @@
-GHC := stack ghc --
+GHC := stack ghc -- -XTemplateHaskell
 
 run: node1/node.hs node2/node.hs
 	docker-compose up --build

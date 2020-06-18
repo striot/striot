@@ -29,8 +29,8 @@ jobs:
       name: Build and test striot
       script:
         - cabal configure --enable-tests && cabal build && cabal test
-        - ./gen_test_makefile.sh > Makefile; make GHC="cabal exec ghc --"
-        - ./gen_test_makefile.sh > Makefile; make GHC="cabal exec ghc --"
+        - ./gen_test_makefile.sh > Makefile; make GHC="cabal exec ghc -- -XTemplateHaskell"
+        - ./gen_test_makefile.sh > Makefile; make GHC="cabal exec ghc -- -XTemplateHaskell"
     - stage: image
       install: true
       name: Build striot-base docker image

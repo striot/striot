@@ -1,4 +1,4 @@
-GHC := stack ghc --
+GHC := stack ghc -- -XTemplateHaskell
 
 run: nodes
 	docker-compose up --build

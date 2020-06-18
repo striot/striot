@@ -20,7 +20,7 @@ shopt -s nullglob
 gen()
 {
     a=()
-    echo GHC := stack ghc --
+    echo GHC := stack ghc -- -XTemplateHaskell
     echo default: default2
     echo
     for m in examples/*/generate.hs; do

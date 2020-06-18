@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-
  - Striot StreamGraph type, used for representing a stream processing program,
  - such that it can be re-written and partitioned.
@@ -6,9 +7,15 @@
 module Striot.StreamGraph ( StreamGraph(..)
                           , StreamOperator(..)
                           , StreamVertex(..)
+                          , PartitionedGraph(..)
+                          , deQ
+                          , showParam
                           ) where
 
 import Algebra.Graph
+import Data.List (intercalate)
+import Language.Haskell.TH
+import System.IO.Unsafe (unsafePerformIO)
 import Test.Framework -- Arbitrary, etc.
 
 -- |The `StreamOperator` and associated information required to encode a stream-processing
@@ -18,13 +25,40 @@ import Test.Framework -- Arbitrary, etc.
 data StreamVertex = StreamVertex
     { vertexId   :: Int
     , operator   :: StreamOperator
-    , parameters :: [String]       -- operator arguments (excluding the input stream)
+    , parameters :: [ExpQ]
     , intype     :: String
     , outtype    :: String
-    } deriving (Eq,Show)
+    }
+
+instance Eq StreamVertex where
+    a == b = and [ vertexId a == vertexId b
+                 , operator a == operator b
+                 , intype a   == intype b
+                 , outtype a  == outtype b
+                 , (map showParam (parameters a)) == (map showParam (parameters b))
+                 ]
+
+instance Show StreamVertex where
+    show (StreamVertex i o ps inT outT) =
+        "StreamVertex " ++ intercalate " "
+            [ show i
+            , show o
+            , show (map showParam ps)
+            , show inT
+            , show outT
+            ]
+
+deQ :: Q Exp -> Exp
+deQ = unsafePerformIO . runQ
+
+showParam :: Q Exp -> String
+showParam qexp = pprint (deQ qexp)
 
 -- |A graph representation of a stream-processing program.
 type StreamGraph = Graph StreamVertex
+
+-- |A collection of partitioned StreamGraphs
+type PartitionedGraph = ([StreamGraph], StreamGraph)
 
 -- |An enumeration of the possible stream operators within a stream-processing program,
 -- as well as `Source` and `Sink` to represent the ingress and egress points of programs.

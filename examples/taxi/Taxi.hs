@@ -136,8 +136,16 @@ stringsToTrip s = error ("error in input: " ++ intercalate "," s)
 
 ----------------------------------------------------------------------------------------------------------------
 
+--journeyChanges :: Stream ((UTCTime, UTCTime),[(Journey, Int)]) -> Stream ((UTCTime, UTCTime),[(Journey, Int)])
+--journeyChanges (Event _ (Just val):r) = streamFilterAcc (\acc h -> if snd h == snd acc then acc else h) val (\h acc -> snd h /= snd acc) r
+
 journeyChanges :: Stream ((UTCTime, UTCTime),[(Journey, Int)]) -> Stream ((UTCTime, UTCTime),[(Journey, Int)])
-journeyChanges (Event _ (Just val):r) = streamFilterAcc (\acc h -> if snd h == snd acc then acc else h) val (\h acc -> snd h /= snd acc) r
+journeyChanges s = streamFilterAcc (\_ h -> (False,h)) (True,undefined) testSndChange s
+                    where testSndChange :: ((UTCTime, UTCTime),[(Journey, Int)]) -> (Bool,((UTCTime, UTCTime),[(Journey, Int)])) -> Bool
+                          testSndChange newVal     (True ,_         ) = True
+                          testSndChange (_,newSnd) (False,(_,oldSnd)) = newSnd /= oldSnd
+
+
 
 --- removes consecutive repeated values from a stream, leaving only the changes
 changes :: Eq alpha => Stream alpha -> Stream alpha

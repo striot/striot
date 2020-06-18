@@ -5,19 +5,22 @@
 import Striot.CompileIoT
 import Striot.StreamGraph
 import Algebra.Graph
+import Language.Haskell.TH
 
-source x y = "do\n\
-\    threadDelay ("++y++")\n\
-\    putStrLn \"sending '"++x++"'\"\n\
-\    return \""++x++"\""
+source x y = [| do
+    let z = $(litE (StringL x))
+    threadDelay $(litE (IntegerL y))
+    putStrLn $ "sending "++ z
+    return z
+    |]
 
-v1 = StreamVertex 1 Source [source "foo" "1000*1000"] "String" "String"
-v2 = StreamVertex 2 Source [source "bar"  "500*1000"] "String" "String"
-v3 = StreamVertex 3 Source [source "baz"  "200*1000"] "String" "String"
+v1 = StreamVertex 1 Source [source "foo" (1000*1000)] "String" "String"
+v2 = StreamVertex 2 Source [source "bar"  (500*1000)] "String" "String"
+v3 = StreamVertex 3 Source [source "baz"  (200*1000)] "String" "String"
 
 v4 = StreamVertex 4 Merge [] "String" "String"
 -- XXX: ^ we lie about the input type here, because the generated function has split-out arguments
-v5 = StreamVertex 5 Sink ["mapM_ print"] "String" "IO ()"
+v5 = StreamVertex 5 Sink [[| mapM_ print |]] "String" "IO ()"
 
 graph = (overlays (map vertex [v1,v2,v3]) `connect` (vertex v4)) `overlay` path [v4,v5]
 
