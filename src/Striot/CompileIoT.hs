@@ -288,7 +288,9 @@ connectNodeId sg parts cuts = let
     destVs= map snd outEs
     destGs= concatMap (\v -> filter (\(n,sg) -> v `elem` (vertexList sg)) parts) destVs
 
-    in map fst destGs
+    in case map fst destGs of
+        [] -> error "connectNodeId returned an empty list, last vertex optimised away?"
+        x  -> x
 
 generateSrcFn :: StreamGraph -> String
 generateSrcFn sg = "src1 = " ++
