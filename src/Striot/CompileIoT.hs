@@ -278,7 +278,7 @@ test_inType = assertEqual "Int" $
 
 -- determine the node(s?) to connect on to from this partition
 -- XXX always 0 or 1? write quickcheck property...
--- TODO: this breaks if the outer-edge node has been optimised away…
+-- TODO: this breaks if the outer-edge node has been optimised away...
 -- the graph of cut edges has the pre-optimisation StreamVertex in it.
 connectNodeId :: StreamGraph -> [(Integer, StreamGraph)] -> StreamGraph -> [Integer]
 connectNodeId sg parts cuts = let

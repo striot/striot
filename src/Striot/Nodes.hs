@@ -41,7 +41,7 @@ import           System.IO.Unsafe
 import           System.Metrics.Prometheus.Concurrent.Registry as PR (new, registerCounter,
                                                                       registerGauge,
                                                                       sample)
-import           System.Metrics.Prometheus.Http.Scrape         (serveHttpTextMetrics)
+import           System.Metrics.Prometheus.Http.Scrape         (serveMetrics)
 import           System.Metrics.Prometheus.Metric.Counter      as PC (inc)
 import           System.Metrics.Prometheus.MetricId            (addLabel)
 
@@ -324,7 +324,7 @@ startPrometheus name = do
         registerFn fn mName = fn mName lbl reg
         rg = registerFn registerGauge
         rc = registerFn registerCounter
-    async $ serveHttpTextMetrics 8080 ["metrics"] (PR.sample reg)
+    async $ serveMetrics 8080 ["metrics"] (PR.sample reg)
     Metrics
         <$> rg "striot_ingress_connection"
         <*> rc "striot_ingress_bytes_total"

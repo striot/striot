@@ -43,7 +43,7 @@ library
                     , store
                     , store-streaming   >= 0.1.0
                     , async
-                    , prometheus        >= 2.1.2
+                    , prometheus        >= 2.2.2
                     , net-mqtt          >= 0.6.2.1
                     , text
                     , process
@@ -77,7 +77,7 @@ test-suite test-striot
                     , store
                     , store-streaming   >= 0.1.0
                     , async
-                    , prometheus        >= 2.1.2
+                    , prometheus        >= 2.2.2
                     , net-mqtt          >= 0.6.2.1
                     , text
                     , process

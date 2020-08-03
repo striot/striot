@@ -3,7 +3,7 @@ packages:
 - .
 extra-deps:
 - network-3.1.0.0
-- prometheus-2.1.2
+- prometheus-2.2.2
 - store-streaming-0.1.0.0
 - unagi-chan-0.4.1.0
 - net-mqtt-0.6.2.1
