@@ -11,6 +11,8 @@ import Data.List.Split (splitOn)
 
 opts = GenerateOpts { imports = imports defaultOpts ++
                         [ "Taxi"
+                        , "Data.Maybe"
+                        , "Data.List.Split"
                         , "Data.Time" -- UTCTime(..)..
                         ]
                     , packages = []
