@@ -4,7 +4,6 @@ import Striot.StreamGraph
 import Algebra.Graph
 import Control.Monad (replicateM)
 import System.Random
-import Data.List.Split (splitOn)
 import Language.Haskell.TH
 
 -- 40 words picked randomly from the dictionary, 20 of which are prefixed
@@ -18,9 +17,9 @@ randomWords = words "Angelica #Seine #sharpened sleeve consonance diabolically\
 
 source = [| do
     indices <- replicateM 10 (getStdRandom (randomR (0,39)) :: IO Int)
-    let words = $(listE (map (litE . StringL) randomWords))
-    let s = foldr1 (\w s -> w ++ " " ++ s)
-          $ map (words !!)
+    let randomWords' = $(listE (map (litE . StringL) randomWords))
+    let s = unwords
+          $ map (randomWords' !!)
           $ indices
     threadDelay 1000000
     putStrLn $ "sending " ++ (show s)
@@ -28,7 +27,7 @@ source = [| do
     |]
 
 v1 = StreamVertex 1 Source [source]                              "String" "String"
-v2 = StreamVertex 2 Map    [[| filter (('#'==).head) . splitOn " "|]] "String" "[String]"
+v2 = StreamVertex 2 Map    [[| filter (('#'==).head) . words |]] "String" "[String]"
 
 v5 = StreamVertex 5 Expand []                                    "[String]" "String"
 v6 = StreamVertex 6 Sink   [[| mapM_ print |]]                   "String" "String"
@@ -40,7 +39,6 @@ parts = [[1,2],[5,6]]
 opts = defaultOpts { imports = imports defaultOpts ++
     [ "Control.Monad"
     , "System.Random"
-    , "Data.List.Split"
     ]
 }
 
