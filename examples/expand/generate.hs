@@ -37,4 +37,11 @@ graph = path [v1, v2, v5, v6]
 
 parts = [[1,2],[5,6]]
 
-main = partitionGraph graph parts defaultOpts
+opts = defaultOpts { imports = imports defaultOpts ++
+    [ "Control.Monad"
+    , "System.Random"
+    , "Data.List.Split"
+    ]
+}
+
+main = partitionGraph graph parts opts
