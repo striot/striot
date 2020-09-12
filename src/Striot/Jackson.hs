@@ -163,21 +163,23 @@ data OperatorInfo = OperatorInfo { opId        :: Int
                                  deriving (Show)
                                  
 calcAll:: Array (Int,Int) Double -> Array Int Double -> Double -> Array Int Double -> [OperatorInfo]
-calcAll connections inputs alpha meanServiceTimes = let arrivalRates             = arrivalRate connections inputs alpha in
-                                                    let utilisations             = utilisation arrivalRates meanServiceTimes                in
-                                                    let stability                = stable      arrivalRates meanServiceTimes                in
-                                                    let avgeNumberOfCustInSystem = avgeNumberOfCustomersInSystem utilisations               in
-                                                    let avgeResponseTimes        = avgeResponseTime arrivalRates meanServiceTimes           in
-                                                    let avgeTimesInQueue         = avgeTimeInQueue  arrivalRates meanServiceTimes           in
-                                                           map (\id -> OperatorInfo id (arrivalRates             Data.Array.! id)
-                                                                                       (meanServiceTimes         Data.Array.! id)
-                                                                                       (utilisations             Data.Array.! id)
-                                                                                       (stability                Data.Array.! id)
-                                                                                       (avgeNumberOfCustInSystem Data.Array.! id)                                                                                               
-                                                                                       (avgeResponseTimes        Data.Array.! id)
-                                                                                       (avgeTimesInQueue         Data.Array.! id))
-                                                               [1.. (snd $ bounds arrivalRates)]
-                                                                              
+calcAll connections inputs alpha meanServiceTimes = let
+    arrivalRates             = arrivalRate connections inputs alpha
+    utilisations             = utilisation arrivalRates meanServiceTimes
+    stability                = stable arrivalRates meanServiceTimes
+    avgeNumberOfCustInSystem = avgeNumberOfCustomersInSystem utilisations
+    avgeResponseTimes        = avgeResponseTime arrivalRates meanServiceTimes
+    avgeTimesInQueue         = avgeTimeInQueue  arrivalRates meanServiceTimes
+
+    in map (\id -> OperatorInfo id (arrivalRates             ! id)
+                                   (meanServiceTimes         ! id)
+                                   (utilisations             ! id)
+                                   (stability                ! id)
+                                   (avgeNumberOfCustInSystem ! id)
+                                   (avgeResponseTimes        ! id)
+                                   (avgeTimesInQueue         ! id))
+           [1.. (snd $ bounds arrivalRates)]
+                              
 taxiQ1Calc:: [OperatorInfo]
 taxiQ1Calc = calcAll taxiQ1Array taxiQ1Inputs 1.2 taxiQ1meanServiceTimes
 
