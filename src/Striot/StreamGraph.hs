@@ -80,13 +80,13 @@ type PartitionedGraph = ([StreamGraph], StreamGraph)
 -- |An enumeration of the possible stream operators within a stream-processing program,
 -- as well as `Source` and `Sink` to represent the ingress and egress points of programs.
 data StreamOperator = Map
-                    | Filter
+                    | Filter Double -- selectivity
                     | Expand
                     | Window
                     | Merge
                     | Join
                     | Scan
-                    | FilterAcc
+                    | FilterAcc Double -- selectivity
                     | Source
                     | Sink
                     deriving (Show,Ord,Eq)
@@ -98,8 +98,10 @@ instance Ord StreamVertex where
 -- quickcheck experiment
 
 instance Arbitrary StreamOperator where
-    arbitrary = elements [ Map , Filter, Expand , Window , Merge , Join , Scan
-                         , FilterAcc, Source , Sink ]
+    arbitrary = do
+        d <- arbitrary
+        elements [ Map , Filter d, Expand , Window , Merge , Join , Scan
+                       , FilterAcc d, Source , Sink ]
 
 instance Arbitrary StreamVertex where
     arbitrary = do
