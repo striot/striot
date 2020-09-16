@@ -91,9 +91,10 @@ rules = [ filterFuse
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
 
 filterFuse :: RewriteRule
-filterFuse (Connect (Vertex a@(StreamVertex i Filter (p:_) ty _))
-                    (Vertex b@(StreamVertex _ Filter (q:_) _ _))) =
-    let c = a { parameters = [[| (\p q x -> p x && q x) $(p) $(q) |]] }
+filterFuse (Connect (Vertex a@(StreamVertex i Filter (p:_) ty _ s1))
+                    (Vertex b@(StreamVertex _ Filter (q:_) _ _ s2))) =
+    let c = a { parameters  = [[| (\p q x -> p x && q x) $(p) $(q) |]]
+              , serviceTime = s1 + s2 }
     in Just (removeEdge c c . mergeVertices (`elem` [a,b]) c)
 
 filterFuse _ = Nothing
@@ -101,17 +102,17 @@ filterFuse _ = Nothing
 gt3 = [| (>3) |]
 lt5 = [| (<5) |]
 
-so' = StreamVertex 0 Source []    "String" "String"
-f3  = StreamVertex 1 Filter [gt3] "String" "String"
-f4  = StreamVertex 2 Filter [lt5] "String" "String"
-si' = StreamVertex 3 Sink   []    "String" "String"
+so' = StreamVertex 0 Source []    "String" "String" 1
+f3  = StreamVertex 1 Filter [gt3] "String" "String" 1
+f4  = StreamVertex 2 Filter [lt5] "String" "String" 1
+si' = StreamVertex 3 Sink   []    "String" "String" 1
 
 fused = [| (\p q x -> p x && q x) (>3) (<5) |]
 
 filterFusePre = path [so', f3, f4, si']
 
 filterFusePost = path [ so'
-    , StreamVertex 1 Filter [fused] "String" "String"
+    , StreamVertex 1 Filter [fused] "String" "String" 2
     , si' ]
 
 test_filterFuse = assertEqual (applyRule filterFuse filterFusePre)
@@ -120,23 +121,23 @@ test_filterFuse = assertEqual (applyRule filterFuse filterFusePre)
 -- streamMap f >>> streamFilter p = streamFilter (f >>> p) >>> streamMap f ---
 
 mapFilter :: RewriteRule
-mapFilter (Connect (Vertex m@(StreamVertex i Map (f:_) intype _))
-                   (Vertex f1@(StreamVertex j Filter (p:_) _ _))) =
+mapFilter (Connect (Vertex m@(StreamVertex i Map (f:_) intype _ sm))
+                   (Vertex f1@(StreamVertex j Filter (p:_) _ _ sf))) =
 
-    let f2 = StreamVertex i Filter [[| $(p) . $(f) |]] intype intype
+    let f2 = StreamVertex i Filter [[| $(p) . $(f) |]] intype intype (sm+sf)
         m2 = m { vertexId = j }
     in  Just (replaceVertex f1 m2 . replaceVertex m f2)
 
 mapFilter _ = Nothing
 
-m1 = StreamVertex 1 Map [[| show |]] "Int" "String"
-f1 = StreamVertex 2 Filter [[| \x -> length x <3 |]] "String" "String"
+m1 = StreamVertex 1 Map [[| show |]] "Int" "String" 1
+f1 = StreamVertex 2 Filter [[| \x -> length x <3 |]] "String" "String" 1
 
-f2 = StreamVertex 1 Filter [[| (\x -> length x <3) . (show) |]] "Int" "Int"
-m2 = StreamVertex 2 Map [[| show |]] "Int" "String"
+f2 = StreamVertex 1 Filter [[| (\x -> length x <3) . (show) |]] "Int" "Int" 2
+m2 = StreamVertex 2 Map [[| show |]] "Int" "String" 1
 
-so = StreamVertex 0 Source [] "Int" "Int"
-si = StreamVertex 3 Sink [] "String" "String"
+so = StreamVertex 0 Source [] "Int" "Int" 1
+si = StreamVertex 3 Sink [] "String" "String" 1
 
 mapFilterPre  = path [ so, m1, f1, si ]
 mapFilterPost = path [ so, f2, m2, si ]
@@ -165,20 +166,20 @@ sorted (x:y:zz) = (x <= y) && sorted (y:zz)
 -- streamFilter >>> streamFilterAcc f a q ------------------------------------
 
 filterFilterAcc :: RewriteRule
-filterFilterAcc (Connect (Vertex v1@(StreamVertex i Filter (p:_) ty _))
-                         (Vertex v2@(StreamVertex _ FilterAcc (f:a:q:_) _ _))) =
+filterFilterAcc (Connect (Vertex v1@(StreamVertex i Filter (p:_) ty _ s1))
+                         (Vertex v2@(StreamVertex _ FilterAcc (f:a:q:_) _ _ s2))) =
     let v3 = StreamVertex i FilterAcc
           [ [| \a v -> if $(p) v then $(f) a v else a |]
           , a
-          , [| \v a -> $(p) v && $(q) v a |] ] ty ty
+          , [| \v a -> $(p) v && $(q) v a |] ] ty ty (s1+s2)
     in  Just (removeEdge v3 v3 . mergeVertices (`elem` [v1,v2]) v3)
 filterFilterAcc _ = Nothing
 
 filterFilterAccPre = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 Filter [p] "Int" "Int"
-    , StreamVertex 2 FilterAcc [f , a , q] "Int" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
+    , StreamVertex 1 Filter [p] "Int" "Int" 1
+    , StreamVertex 2 FilterAcc [f , a , q] "Int" "Int" 1
+    , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where p = [| (>3) |]
           f = [| (\_ h -> (False, h)) |]
@@ -186,12 +187,12 @@ filterFilterAccPre = path
           q = [| \new (b,old) -> b || old /= new |]
 
 filterFilterAccPost = path
-    [ StreamVertex 0 Source [] "Int" "Int"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
     , StreamVertex 1 FilterAcc [ [| \a v -> if $(p) v then $(f) a v else a |]
                                , a
                                , [| \v a -> $(p) v && $(q) v a |]
-                               ] "Int" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+                               ] "Int" "Int" 2
+    , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where p = [| (>3) |]
           f = [| (\_ h -> (False, h)) |]
@@ -204,18 +205,18 @@ test_filterFilterAcc = assertEqual (applyRule filterFilterAcc filterFilterAccPre
 -- streamFilterAcc >>> streamFilter ------------------------------------------
 
 filterAccFilter :: RewriteRule
-filterAccFilter (Connect (Vertex v1@(StreamVertex i FilterAcc (f:a:p:_) ty _))
-                         (Vertex v2@(StreamVertex _ Filter (q:_) _ _))) =
+filterAccFilter (Connect (Vertex v1@(StreamVertex i FilterAcc (f:a:p:_) ty _ s1))
+                         (Vertex v2@(StreamVertex _ Filter (q:_) _ _ s2))) =
     let p' = [| \v a -> $(p) v a && $(q) v |]
-        v  = StreamVertex i FilterAcc [f,a,p'] ty ty
+        v  = StreamVertex i FilterAcc [f,a,p'] ty ty (s1+s2)
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 filterAccFilter _ = Nothing
 
 filterAccFilterPre = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 FilterAcc [f,a,p] "Int" "Int"
-    , StreamVertex 2 Filter [q] "Int" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
+    , StreamVertex 1 FilterAcc [f,a,p] "Int" "Int" 1
+    , StreamVertex 2 Filter [q] "Int" "Int" 1
+    , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where f = [| (\_ h -> (False, h)) |]
           a = [| (True, undefined) |]
@@ -223,9 +224,9 @@ filterAccFilterPre = path
           q = [| (>3) |]
 
 filterAccFilterPost = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 FilterAcc [f, a, p'] "Int" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
+    , StreamVertex 1 FilterAcc [f, a, p'] "Int" "Int" 2
+    , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where f = [| (\_ h -> (False, h)) |]
           a = [| (True, undefined) |]
@@ -241,20 +242,20 @@ test_filterAccFilter = assertEqual (applyRule filterAccFilter filterAccFilterPre
 
 
 filterAccFilterAcc :: RewriteRule
-filterAccFilterAcc (Connect (Vertex v1@(StreamVertex i FilterAcc (f:a:p:ss) ty _))
-                            (Vertex v2@(StreamVertex _ FilterAcc (g:b:q:_) _ _))) =
+filterAccFilterAcc (Connect (Vertex v1@(StreamVertex i FilterAcc (f:a:p:ss) ty _ s1))
+                            (Vertex v2@(StreamVertex _ FilterAcc (g:b:q:_) _ _ s2))) =
     let f' = [| \ (a,b) v -> ($(f) a v, if $(p) v a then $(g) b v else b) |]
         a' = [| ($(a), $(b)) |]
         q' = [| \v (y,z) -> $(p) v y && $(q) v z |]
-        v  = StreamVertex i FilterAcc (f':a':q':ss) ty ty
+        v  = StreamVertex i FilterAcc (f':a':q':ss) ty ty (s1+s2)
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 filterAccFilterAcc _ = Nothing
 
 filterAccFilterAccPre = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 FilterAcc [f,a,p] "Int" "Int"
-    , StreamVertex 2 FilterAcc [g,b,q] "Int" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
+    , StreamVertex 1 FilterAcc [f,a,p] "Int" "Int" 1
+    , StreamVertex 2 FilterAcc [g,b,q] "Int" "Int" 1
+    , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where
         -- remove repeating elements
@@ -267,12 +268,12 @@ filterAccFilterAccPre = path
         q = [| (>=) |]
 
 filterAccFilterAccPost = path
-    [ StreamVertex 0 Source [] "Int" "Int"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
     , StreamVertex 1 FilterAcc [ [| \(a,b) v -> ($(f) a v, if $(p) v a then $(g) b v else b) |]
                                , [| ($(a),$(b)) |]
                                , [| \v (y,z) -> $(p) v y && $(q) v z |]
-                               ] "Int" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+                               ] "Int" "Int" 2
+    , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where f = [| (\_ h -> (False, h)) |]
           a = [| (True, undefined) |]
@@ -287,40 +288,40 @@ test_filterAccFilterAcc = assertEqual (applyRule filterAccFilterAcc filterAccFil
 -- streamMap >>> streamMap ---------------------------------------------------
 
 mapFuse :: RewriteRule
-mapFuse (Connect (Vertex v1@(StreamVertex i Map (f:ss) t1 _))
-                 (Vertex v2@(StreamVertex _ Map (g:_) _ t2))) =
-    let v = StreamVertex i Map ([| $(f) >>> $(g) |]:ss) t1 t2
+mapFuse (Connect (Vertex v1@(StreamVertex i Map (f:ss) t1 _ s1))
+                 (Vertex v2@(StreamVertex _ Map (g:_) _ t2 s2))) =
+    let v = StreamVertex i Map ([| $(f) >>> $(g) |]:ss) t1 t2 (s1+s2)
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 mapFuse _ = Nothing
 
 mapFusePre = path
-    [ StreamVertex 0 Source [] "String" "String"
-    , StreamVertex 1 Map [[| show |]] "Int" "String"
-    , StreamVertex 2 Map [[| length |]] "String" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+    [ StreamVertex 0 Source [] "String" "String" 1
+    , StreamVertex 1 Map [[| show |]] "Int" "String" 1
+    , StreamVertex 2 Map [[| length |]] "String" "Int" 1
+    , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
 
 mapFusePost = path
-    [ StreamVertex 0 Source [] "String" "String"
-    , StreamVertex 1 Map [[| show >>> length |]] "Int" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+    [ StreamVertex 0 Source [] "String" "String" 1
+    , StreamVertex 1 Map [[| show >>> length |]] "Int" "Int" 2
+    , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
 test_mapFuse = assertEqual (applyRule mapFuse mapFusePre) mapFusePost
 
 -- streamMap >>> streamScan --------------------------------------------------
 
 mapScan :: RewriteRule
-mapScan (Connect (Vertex v1@(StreamVertex i Map (f:ss) t1 _))
-                 (Vertex v2@(StreamVertex _ Scan (g:a:_) _ t2))) =
-    let v = StreamVertex i Scan ([| flip (flip $(f) >>> $(g)) |]:a:ss) t1 t2
+mapScan (Connect (Vertex v1@(StreamVertex i Map (f:ss) t1 _ s1))
+                 (Vertex v2@(StreamVertex _ Scan (g:a:_) _ t2 s2))) =
+    let v = StreamVertex i Scan ([| flip (flip $(f) >>> $(g)) |]:a:ss) t1 t2 (s1+s2)
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 mapScan _ = Nothing
 
 mapScanPre = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 Map [f] "Int" "Int"
-    , StreamVertex 2 Scan [g,a] "Int" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
+    , StreamVertex 1 Map [f] "Int" "Int" 1
+    , StreamVertex 2 Scan [g,a] "Int" "Int" 1
+    , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where
         f = [| (+1) |]
@@ -328,9 +329,9 @@ mapScanPre = path
         a = [| 0 |]
 
 mapScanPost = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 Scan [[| flip (flip $(f) >>> $(g))|], [| $(a) |]] "Int" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
+    , StreamVertex 1 Scan [[| flip (flip $(f) >>> $(g))|], [| $(a) |]] "Int" "Int" 2
+    , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where
         f = [| (+1) |]
@@ -340,29 +341,30 @@ mapScanPost = path
 test_mapScan = assertEqual (applyRule mapScan mapScanPre) mapScanPost
 
 -- streamExpand >>> streamFilter f == streamMap (filter f) >>> streamExpand --
+-- TODO: assuming that the serviceTime for the new map matches the old filter
 
 expandFilter :: RewriteRule
-expandFilter (Connect (Vertex e@(StreamVertex j Expand _ t1 t2))
-                      (Vertex f@(StreamVertex i Filter (p:_) _ _))) =
-    let m = StreamVertex j Map [[| filter $(p) |]] t1 t1
-        e'= StreamVertex i Expand [] t1 t2
+expandFilter (Connect (Vertex e@(StreamVertex j Expand _ t1 t2 se))
+                      (Vertex f@(StreamVertex i Filter (p:_) _ _ sf))) =
+    let m = StreamVertex j Map [[| filter $(p) |]] t1 t1 sf
+        e'= StreamVertex i Expand [] t1 t2 se
     in  Just (replaceVertex f e' . replaceVertex e m)
 expandFilter _ = Nothing
 
 expandFilterPre = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]"
-    , StreamVertex 1 Expand [] "[Int]" "Int"
-    , StreamVertex 2 Filter [[|$(p)|]] "Int" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    , StreamVertex 1 Expand [] "[Int]" "Int" 2
+    , StreamVertex 2 Filter [[|$(p)|]] "Int" "Int" 3
+    , StreamVertex 3 Sink [] "Int" "Int" 4
     ]
     where
         p = [| (>3) |]
 
 expandFilterPost = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]"
-    , StreamVertex 1 Map [[|filter $(p) |]] "[Int]" "[Int]"
-    , StreamVertex 2 Expand [] "[Int]" "Int"
-    , StreamVertex 3 Sink [] "Int" "Int"
+    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    , StreamVertex 1 Map [[|filter $(p) |]] "[Int]" "[Int]" 3
+    , StreamVertex 2 Expand [] "[Int]" "Int" 2
+    , StreamVertex 3 Sink [] "Int" "Int" 4
     ]
     where
         p = [| (>3) |]
@@ -372,20 +374,20 @@ test_expandFilter = assertEqual (applyRule expandFilter expandFilterPre) expandF
 -- streamMap f >>> streamFilterAcc g a p == streamFilterAcc g a (f >>> p) >>> streamMap f
 
 mapFilterAcc :: RewriteRule
-mapFilterAcc (Connect (Vertex m@(StreamVertex i Map (f:_) t1 _))
-                      (Vertex f1@(StreamVertex j FilterAcc (g:a:p:_) _ _))) =
+mapFilterAcc (Connect (Vertex m@(StreamVertex i Map (f:_) t1 _ sm))
+                      (Vertex f1@(StreamVertex j FilterAcc (g:a:p:_) _ _ sf))) =
 
-    let f2 = StreamVertex i FilterAcc [g, a, [| ($f) >>> $(p) |]] t1 t1
+    let f2 = StreamVertex i FilterAcc [g, a, [| ($f) >>> $(p) |]] t1 t1 (sm+sf)
         m2 = m { vertexId = j }
     in  Just (replaceVertex f1 m2 . replaceVertex m f2)
 
 mapFilterAcc _ = Nothing
 
 mapFilterAccPre = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 Map [f] "Int" "String"
-    , StreamVertex 2 FilterAcc [g,a,p] "String" "String"
-    , StreamVertex 3 Sink [] "String" "String"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
+    , StreamVertex 1 Map [f] "Int" "String" 1
+    , StreamVertex 2 FilterAcc [g,a,p] "String" "String" 1
+    , StreamVertex 3 Sink [] "String" "String" 1
     ]
     where
         f = [| (+1) |]
@@ -394,10 +396,10 @@ mapFilterAccPre = path
         p = [| \new (b,old) -> b || old /= new |]
 
 mapFilterAccPost = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 FilterAcc [g,a, [| $(f) >>> $(p) |]] "Int" "Int"
-    , StreamVertex 2 Map [f] "Int" "String"
-    , StreamVertex 3 Sink [] "String" "String"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
+    , StreamVertex 1 FilterAcc [g,a, [| $(f) >>> $(p) |]] "Int" "Int" 2
+    , StreamVertex 2 Map [f] "Int" "String" 1
+    , StreamVertex 3 Sink [] "String" "String" 1
     ]
     where
         f = [| (+1) |]
@@ -408,58 +410,60 @@ mapFilterAccPost = path
 test_mapFilterAcc = assertEqual (applyRule mapFilterAcc mapFilterAccPre) mapFilterAccPost
 
 -- streamMap f >>> streamWindow wm == streamWindow wm >>> streamMap (map f) --
+-- TODO: assuming serviceTime for map is the same
 
 mapWindow :: RewriteRule
-mapWindow (Connect (Vertex m@(StreamVertex i Map (f:_) t1 _))
-                   (Vertex w@(StreamVertex j Window (wm:_) _ t2))) =
+mapWindow (Connect (Vertex m@(StreamVertex i Map (f:_) t1 _ sm))
+                   (Vertex w@(StreamVertex j Window (wm:_) _ t2 sw))) =
     let t3 = "[" ++ t1 ++ "]"
-        w2 = StreamVertex i Window [wm] t1 t3
-        m2 = StreamVertex j Map [[| map $(f) |]] t3 t2
+        w2 = StreamVertex i Window [wm] t1 t3 sw
+        m2 = StreamVertex j Map [[| map $(f) |]] t3 t2 sm
     in  Just (replaceVertex m w2 . replaceVertex w m2)
 
 mapWindow _ = Nothing
 
 mapWindowPre = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 Map    [[| show |]] "Int" "String"
-    , StreamVertex 2 Window [[| chop 2 |]] "String" "[String]"
-    , StreamVertex 3 Sink   [] "[String]" "[String]"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
+    , StreamVertex 1 Map    [[| show |]] "Int" "String" 2
+    , StreamVertex 2 Window [[| chop 2 |]] "String" "[String]" 3
+    , StreamVertex 3 Sink   [] "[String]" "[String]" 4
     ]
 
 mapWindowPost = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 Window [[| chop 2 |]] "Int" "[Int]"
-    , StreamVertex 2 Map    [[| map show |]] "[Int]" "[String]"
-    , StreamVertex 3 Sink   [] "[String]" "[String]"
+    [ StreamVertex 0 Source [] "Int" "Int" 1
+    , StreamVertex 1 Window [[| chop 2 |]] "Int" "[Int]" 3
+    , StreamVertex 2 Map    [[| map show |]] "[Int]" "[String]" 2
+    , StreamVertex 3 Sink   [] "[String]" "[String]" 4
     ]
 
 test_mapWindow = assertEqual (applyRule mapWindow mapWindowPre) mapWindowPost
 
 -- streamExpand >>> streamMap f == streamMap (map f) >>> streamExpand --------
 -- [a]           a            b   [a]               [b]               b
+-- TODO: assuming serviceTime for map unaffected
 
 expandMap :: RewriteRule
-expandMap (Connect (Vertex e@(StreamVertex i Expand _ t1 _))
-                   (Vertex m@(StreamVertex j Map (f:_) _ t4))) =
+expandMap (Connect (Vertex e@(StreamVertex i Expand _ t1 _ se))
+                   (Vertex m@(StreamVertex j Map (f:_) _ t4 sm))) =
     let t5 = "[" ++ t4 ++ "]"
-        m2 = StreamVertex i Map [[| map $(f) |]] t1 t5
-        e2 = StreamVertex j Expand [] t5 t4
+        m2 = StreamVertex i Map [[| map $(f) |]] t1 t5 sm
+        e2 = StreamVertex j Expand [] t5 t4 se
     in  Just (replaceVertex m e2 . replaceVertex e m2)
 
 expandMap _ = Nothing
 
 expandMapPre = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]"
-    , StreamVertex 1 Expand [] "[Int]" "Int"
-    , StreamVertex 2 Map [[| show |]] "Int" "String"
-    , StreamVertex 3 Sink [] "String" "String"
+    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    , StreamVertex 1 Expand [] "[Int]" "Int" 2
+    , StreamVertex 2 Map [[| show |]] "Int" "String" 3
+    , StreamVertex 3 Sink [] "String" "String" 4
     ]
 
 expandMapPost = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]"
-    , StreamVertex 1 Map [[| map (show) |]] "[Int]" "[String]"
-    , StreamVertex 2 Expand [] "[String]" "String"
-    , StreamVertex 3 Sink [] "String" "String"
+    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    , StreamVertex 1 Map [[| map (show) |]] "[Int]" "[String]" 3
+    , StreamVertex 2 Expand [] "[String]" "String" 2
+    , StreamVertex 3 Sink [] "String" "String" 4
     ]
 
 test_expandMap = assertEqual (applyRule expandMap expandMapPre) expandMapPost
@@ -469,17 +473,19 @@ test_expandMap = assertEqual (applyRule expandMap expandMapPre) expandMapPost
 --         >>> streamScan (\b a' -> tail $ scanl f (last b) a') [a]
 --         >>> streamExpand
 
+-- TODO: assuming zero service time for the new filter, and the same for the
+-- two scans
 expandScan :: RewriteRule
-expandScan (Connect (Vertex  e@(StreamVertex i Expand (_)     t1 t2))
-                    (Vertex sc@(StreamVertex j Scan   (f:a:_) _  t3))) =
+expandScan (Connect (Vertex  e@(StreamVertex i Expand (_)     t1 t2 se))
+                    (Vertex sc@(StreamVertex j Scan   (f:a:_) _  t3 ss))) =
     Just $ \g ->
         let t4 = "[" ++ t3 ++ "]"
             k  = newVertexId g
             p  = [| \b a' -> tail $ scanl $(f) (last b) a' |]
 
-            f' = StreamVertex i Filter [[| not.null |]]  t1 t1
-            sc'= StreamVertex j Scan   [p, [| [$(a)] |]] t1 t4
-            e' = StreamVertex k Expand []                t4 t3
+            f' = StreamVertex i Filter [[| not.null |]]  t1 t1 0
+            sc'= StreamVertex j Scan   [p, [| [$(a)] |]] t1 t4 ss
+            e' = StreamVertex k Expand []                t4 t3 se
 
         in  overlay (path [f',sc',e']) $
             (removeEdge f' e' . replaceVertex e f' . replaceVertex sc e') g
@@ -487,21 +493,21 @@ expandScan (Connect (Vertex  e@(StreamVertex i Expand (_)     t1 t2))
 expandScan _ = Nothing
 
 expandScanPre = path
-    [ StreamVertex 0 Source []    "[Int]" "[Int]"
-    , StreamVertex 1 Expand []    "[Int]" "Int"
-    , StreamVertex 2 Scan   [f,a] "Int"   "Int"
-    , StreamVertex 3 Sink   []    "Int"   "Int"
+    [ StreamVertex 0 Source []    "[Int]" "[Int]" 1
+    , StreamVertex 1 Expand []    "[Int]" "Int" 2
+    , StreamVertex 2 Scan   [f,a] "Int"   "Int" 3
+    , StreamVertex 3 Sink   []    "Int"   "Int" 4
     ]
     where
         f = [| \c _ -> c + 1 |]
         a = [| 0 |]
 
 expandScanPost = path
-    [ StreamVertex 0 Source []     "[Int]" "[Int]"
-    , StreamVertex 1 Filter [p]    "[Int]" "[Int]"
-    , StreamVertex 2 Scan   [g,as] "[Int]" "[Int]"
-    , StreamVertex 4 Expand []     "[Int]" "Int"
-    , StreamVertex 3 Sink   []     "Int"   "Int"
+    [ StreamVertex 0 Source []     "[Int]" "[Int]" 1
+    , StreamVertex 1 Filter [p]    "[Int]" "[Int]" 0
+    , StreamVertex 2 Scan   [g,as] "[Int]" "[Int]" 3
+    , StreamVertex 4 Expand []     "[Int]" "Int" 2
+    , StreamVertex 3 Sink   []     "Int"   "Int" 4
     ]
     where
         p  = [| not . null |]
@@ -516,25 +522,25 @@ test_expandScan = assertEqual (simplify $ applyRule expandScan expandScanPre) ex
 -- [[a]]        [a]             a  [[a]]            [a]              a
 
 expandExpand :: RewriteRule
-expandExpand (Connect (Vertex e@(StreamVertex i Expand _ t1 t2))
-                      (Vertex   (StreamVertex j Expand _ _ _))) =
-    let m = StreamVertex i Map [[| concat |]] t1 t2
+expandExpand (Connect (Vertex e@(StreamVertex i Expand _ t1 t2 s))
+                      (Vertex   (StreamVertex j Expand _ _ _ _))) =
+    let m = StreamVertex i Map [[| concat |]] t1 t2 s
     in  Just (replaceVertex e m)
 
 expandExpand _ = Nothing
 
 expandExpandPre = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]"
-    , StreamVertex 1 Expand [] "[[Int]]" "[Int]"
-    , StreamVertex 2 Expand [] "[Int]" "Int"
-    , StreamVertex 3 Sink   [] "Int" "[Int]"
+    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    , StreamVertex 1 Expand [] "[[Int]]" "[Int]" 2
+    , StreamVertex 2 Expand [] "[Int]" "Int" 3
+    , StreamVertex 3 Sink   [] "Int" "[Int]" 4
     ]
 
 expandExpandPost = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]"
-    , StreamVertex 1 Map [[| concat |]] "[[Int]]" "[Int]"
-    , StreamVertex 2 Expand [] "[Int]" "Int"
-    , StreamVertex 3 Sink   [] "Int" "[Int]"
+    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    , StreamVertex 1 Map [[| concat |]] "[[Int]]" "[Int]" 2
+    , StreamVertex 2 Expand [] "[Int]" "Int" 3
+    , StreamVertex 3 Sink   [] "Int" "[Int]" 4
     ]
 
 test_expandExpand = assertEqual (applyRule expandExpand expandExpandPre)
@@ -547,13 +553,13 @@ mergeFilter :: RewriteRule
 mergeFilter = hoistOp Filter
 
 -- | "hoist" an Operator (such as a Filter) upstream through a Merge operator.
-hoistOp op (Connect (Vertex m@(StreamVertex i Merge _ _ ty))
-                      (Vertex f@(StreamVertex j o pred _ ty'))) =
+hoistOp op (Connect (Vertex m@(StreamVertex i Merge _ _ ty _))
+                      (Vertex f@(StreamVertex j o pred _ ty' s))) =
 
     if o /= op then Nothing
     else Just $ \g -> let
 
-        mkOp g = StreamVertex (newVertexId g) op pred ty ty'
+        mkOp g = StreamVertex (newVertexId g) op pred ty ty' s
 
         -- for each NODE that connects to Merge: (:: [StreamVertex])
         inbound    = map fst . filter ((m==) . snd) . edgeList $ g
@@ -574,16 +580,16 @@ hoistOp op (Connect (Vertex m@(StreamVertex i Merge _ _ ty))
 
 hoistOp _ _ = Nothing
 
-v1 = StreamVertex 0 Source []           "Int" "Int"
-v2 = StreamVertex 1 Source []           "Int" "Int"
-v3 = StreamVertex 2 Merge  []           "Int" "Int"
-v4 = StreamVertex 3 Filter [[| (>3) |]] "Int" "Int"
-v5 = StreamVertex 4 Sink   []           "Int" "Int"
+v1 = StreamVertex 0 Source []           "Int" "Int" 1
+v2 = StreamVertex 1 Source []           "Int" "Int" 2
+v3 = StreamVertex 2 Merge  []           "Int" "Int" 3
+v4 = StreamVertex 3 Filter [[| (>3) |]] "Int" "Int" 4
+v5 = StreamVertex 4 Sink   []           "Int" "Int" 5
 
 mergeFilterPre = overlay (path [v1,v3,v4,v5]) (path [v2,v3])
 
-v6 = StreamVertex 5 Filter [[| (>3) |]] "Int" "Int"
-v7 = StreamVertex 6 Filter [[| (>3) |]] "Int" "Int"
+v6 = StreamVertex 5 Filter [[| (>3) |]] "Int" "Int" 4
+v7 = StreamVertex 6 Filter [[| (>3) |]] "Int" "Int" 4
 
 mergeFilterPost = overlay (path [v1,v6,v3,v5]) (path [v2,v7,v3])
 
@@ -596,16 +602,16 @@ test_mergeFilter = assertEqual (applyRule mergeFilter mergeFilterPre)
 mergeExpand :: RewriteRule
 mergeExpand = hoistOp Expand
 
-v8  = StreamVertex 0 Source [] "[Int]" "[Int]"
-v9  = StreamVertex 1 Source [] "[Int]" "[Int]"
-v10 = StreamVertex 2 Merge  [] "[Int]" "[Int]"
-v11 = StreamVertex 3 Expand [] "[Int]" "Int"
+v8  = StreamVertex 0 Source [] "[Int]" "[Int]" 1
+v9  = StreamVertex 1 Source [] "[Int]" "[Int]" 2
+v10 = StreamVertex 2 Merge  [] "[Int]" "[Int]" 3
+v11 = StreamVertex 3 Expand [] "[Int]" "Int"   4
 
 mergeExpandPre  = overlay (path [v8, v10, v11, v5]) (path [v9, v10])
 
-v12 = StreamVertex 2 Merge  [] "Int" "Int"
-v13 = StreamVertex 5 Expand [] "[Int]" "Int"
-v14 = StreamVertex 6 Expand [] "[Int]" "Int"
+v12 = StreamVertex 2 Merge  [] "Int" "Int" 3
+v13 = StreamVertex 5 Expand [] "[Int]" "Int" 4
+v14 = StreamVertex 6 Expand [] "[Int]" "Int" 4
 
 mergeExpandPost = overlay (path [v8, v13, v12, v5]) (path [v9, v14, v12])
 
@@ -618,17 +624,17 @@ test_mergeExpand = assertEqual (applyRule mergeExpand mergeExpandPre)
 mergeMap :: RewriteRule
 mergeMap = hoistOp Map
 
-v15 = StreamVertex 0 Source [] "Int" "Int"
-v16 = StreamVertex 1 Source [] "Int" "Int"
-v17 = StreamVertex 2 Merge []  "Int" "Int"
-v18 = StreamVertex 3 Map [[| show |]]  "Int" "String"
-v19 = StreamVertex 4 Sink [] "String" "String"
+v15 = StreamVertex 0 Source [] "Int" "Int" 1
+v16 = StreamVertex 1 Source [] "Int" "Int" 2
+v17 = StreamVertex 2 Merge []  "Int" "Int" 3
+v18 = StreamVertex 3 Map [[| show |]]  "Int" "String" 4
+v19 = StreamVertex 4 Sink [] "String" "String" 5
 
 mergeMapPre = overlay (path [v15,v17,v18,v19]) (path [v16,v17])
 
-v20 = StreamVertex 5 Map [[| show |]]  "Int" "String"
-v21 = StreamVertex 6 Map [[| show |]]  "Int" "String"
-v22 = StreamVertex 2 Merge [] "String" "String"
+v20 = StreamVertex 5 Map [[| show |]]  "Int" "String" 4
+v21 = StreamVertex 6 Map [[| show |]]  "Int" "String" 4
+v22 = StreamVertex 2 Merge [] "String" "String" 3
 
 mergeMapPost = overlay (path [v15,v20,v22,v19]) (path [v16,v21,v22])
 
@@ -645,8 +651,8 @@ identicalParams inbound =
 mapMerge :: RewriteRule
 mapMerge = pushOp Map
 
-pushOp op (Connect (Vertex ma@(StreamVertex i o fs t1 t2))
-                  (Vertex me@(StreamVertex j Merge _ t3 _))) =
+pushOp op (Connect (Vertex ma@(StreamVertex i o fs t1 t2 sma))
+                   (Vertex me@(StreamVertex j Merge _ t3 _ sme))) =
 
     if o /= op then Nothing
     else Just $ \g -> let
@@ -703,18 +709,18 @@ test_expandMerge = assertEqual (applyRule expandMerge expandMergePre)
 -- right-oriented i.e. merge [s1, merge [s2,s3]] == merge [s1,s2,s3] but for
 -- non-order-preserving we can write a much more generic rule.
 mergeFuse :: RewriteRule
-mergeFuse (Connect (Vertex m1@(StreamVertex i Merge _ _ _))
-                   (Vertex m2@(StreamVertex j Merge _ _ _))) =
+mergeFuse (Connect (Vertex m1@(StreamVertex i Merge _ _ _ _))
+                   (Vertex m2@(StreamVertex j Merge _ _ _ _))) =
     Just (removeEdge m1 m1 . mergeVertices (`elem` [m1,m2]) m1)
 
 mergeFuse _ = Nothing
 
-v23 = StreamVertex 0 Source [] "Int" "Int"
-v24 = StreamVertex 1 Source [] "Int" "Int"
-v25 = StreamVertex 2 Source [] "Int" "Int"
-v26 = StreamVertex 3 Merge []  "Int" "Int"
-v27 = StreamVertex 4 Merge []  "Int" "Int"
-v28 = StreamVertex 5 Sink []   "Int" "Int"
+v23 = StreamVertex 0 Source [] "Int" "Int" 1
+v24 = StreamVertex 1 Source [] "Int" "Int" 2
+v25 = StreamVertex 2 Source [] "Int" "Int" 3
+v26 = StreamVertex 3 Merge []  "Int" "Int" 4
+v27 = StreamVertex 4 Merge []  "Int" "Int" 5
+v28 = StreamVertex 5 Sink []   "Int" "Int" 6
 
 mergeFusePre = path [v23,v26,v27,v28]
     `Overlay`  path [v24,v26,v27]
