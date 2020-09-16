@@ -34,6 +34,7 @@ data StreamVertex = StreamVertex
     , parameters :: [ExpQ]
     , intype     :: String
     , outtype    :: String
+    , serviceTime:: Double
     }
 
 instance Eq StreamVertex where
@@ -45,13 +46,14 @@ instance Eq StreamVertex where
                  ]
 
 instance Show StreamVertex where
-    show (StreamVertex i o ps inT outT) =
+    show (StreamVertex i o ps inT outT s) =
         "StreamVertex " ++ intercalate " "
             [ show i
             , show o
             , show (map showParam ps)
             , show inT
             , show outT
+            , show s
             ]
 
 deQ :: Q Exp -> Exp
@@ -96,16 +98,17 @@ instance Ord StreamVertex where
 -- quickcheck experiment
 
 instance Arbitrary StreamOperator where
-    arbitrary = elements [ Map , Filter , Expand , Window , Merge , Join , Scan
-                         , FilterAcc , Source , Sink ]
+    arbitrary = elements [ Map , Filter, Expand , Window , Merge , Join , Scan
+                         , FilterAcc, Source , Sink ]
 
 instance Arbitrary StreamVertex where
     arbitrary = do
         vertexId <- arbitrary
         operator <- arbitrary
+        serviceT <- arbitrary
         let parameters = []
             ty = "String" in
-            return $ StreamVertex vertexId operator parameters ty ty
+            return $ StreamVertex vertexId operator parameters ty ty serviceT
 
 streamgraph :: Gen StreamGraph
 streamgraph = sized streamgraph'
