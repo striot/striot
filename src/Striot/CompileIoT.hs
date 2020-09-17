@@ -355,7 +355,9 @@ paren :: String -> String
 paren s = "("++s++")"
 
 printOp :: StreamOperator -> String
-printOp = (++) "stream" . show
+printOp (Filter _) = "streamFilter"
+printOp (FilterAcc _) = "streamFilterAcc"
+printOp op = "stream" ++ (show op)
 
 -- how many incoming edges to this partition?
 -- + how many source nodes
@@ -378,7 +380,7 @@ s0 = connect (Vertex (StreamVertex 0 (Source) [] "String" "String" 1))
 
 -- Source -> Filter -> Sink
 s1 = path [ StreamVertex 0 (Source) [] "String" "String" 3
-          , StreamVertex 1 Filter [] "String" "String" 4
+          , StreamVertex 1 (Filter 0.5) [] "String" "String" 4
           , StreamVertex 2 (Sink) [] "String" "String" 5
           ]
 
@@ -451,7 +453,7 @@ partitionings sg parts = let
 partTestGraph = path
     [ StreamVertex 0 Source []        "Int" "Int" 1
     , StreamVertex 1 Map [[| show |]] "Int" "String" 2
-    , StreamVertex 2 Filter [[| (<3) |]]    "Int" "Int" 3
+    , StreamVertex 2 (Filter 0.5) [[| (<3) |]]    "Int" "Int" 3
     , StreamVertex 3 Window []        "String" "[String]" 4
     , StreamVertex 4 Sink []          "String" "String" 5
     ]
