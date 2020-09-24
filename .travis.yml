@@ -19,7 +19,7 @@ before_install:
   - sudo apt-get update && sudo apt-get install librdkafka-dev
 
 install:
-  - cabal install happy alex
+  - cabal install happy-1.19.12 alex
   - cabal install c2hs
   - cabal install --only-dependencies --enable-tests --extra-include-dirs=/usr/local/include --extra-lib-dirs=/usr/local/lib
 
