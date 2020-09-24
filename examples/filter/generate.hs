@@ -9,7 +9,7 @@ import Language.Haskell.TH
 import Control.Concurrent
 import System.Random
 
-opts = defaultOpts { rewrite = True }
+opts = defaultOpts { imports = imports defaultOpts ++ [ "System.Random" ] }
 
 source = [| do
     i <- getStdRandom (randomR (1,10)) :: IO Int
@@ -31,5 +31,4 @@ graph = simpleStream ssi
 
 parts = [[1,2,3,4],[5,6]]
 
-main = do
-    partitionGraph graph parts opts
+main = partitionGraph graph parts opts

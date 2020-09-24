@@ -18,6 +18,12 @@ import Language.Haskell.TH
 import System.IO.Unsafe (unsafePerformIO)
 import Test.Framework -- Arbitrary, etc.
 
+import Data.List.Split (splitOn)
+-- SYB generic programming
+import Data.Data
+import Data.Generics.Schemes (everywhere)
+import Data.Generics.Aliases (mkT)
+
 -- |The `StreamOperator` and associated information required to encode a stream-processing
 -- program into a Graph. Each distinct `StreamVertex` within a `StreamGraph` should have a
 -- unique `vertexId` to ensure that they can be distinguished. For simple path-style graphs,
@@ -52,7 +58,16 @@ deQ :: Q Exp -> Exp
 deQ = unsafePerformIO . runQ
 
 showParam :: Q Exp -> String
-showParam qexp = pprint (deQ qexp)
+showParam = pprint . unQualifyNames . deQ
+
+-- | Walk over an Exp expression and replace all embedded Names with unqualified versions.
+-- E.g. GHC.List.last => last. Special-handling for composition (.).
+unQualifyNames :: Exp -> Exp
+unQualifyNames = everywhere (\a -> mkT f a)
+     where f :: Name -> Name
+           f n = if n == '(.)
+            then mkName "."
+            else (mkName . last . splitOn "." . pprint) n
 
 -- |A graph representation of a stream-processing program.
 type StreamGraph = Graph StreamVertex
