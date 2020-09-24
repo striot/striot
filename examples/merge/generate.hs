@@ -14,13 +14,13 @@ source x y = [| do
     return z
     |]
 
-v1 = StreamVertex 1 Source [source "foo" (1000*1000)] "String" "String"
-v2 = StreamVertex 2 Source [source "bar"  (500*1000)] "String" "String"
-v3 = StreamVertex 3 Source [source "baz"  (200*1000)] "String" "String"
+v1 = StreamVertex 1 Source [source "foo" (1000*1000)] "String" "String" 0
+v2 = StreamVertex 2 Source [source "bar"  (500*1000)] "String" "String" 0
+v3 = StreamVertex 3 Source [source "baz"  (200*1000)] "String" "String" 0
 
-v4 = StreamVertex 4 Merge [] "String" "String"
+v4 = StreamVertex 4 Merge [] "String" "String" 1
 -- XXX: ^ we lie about the input type here, because the generated function has split-out arguments
-v5 = StreamVertex 5 Sink [[| mapM_ print |]] "String" "IO ()"
+v5 = StreamVertex 5 Sink [[| mapM_ print |]] "String" "IO ()" 0
 
 graph = (overlays (map vertex [v1,v2,v3]) `connect` (vertex v4)) `overlay` path [v4,v5]
 

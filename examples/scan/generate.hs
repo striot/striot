@@ -10,11 +10,11 @@ source x = [| do
     return x'
     |]
 
-v1 = StreamVertex 1 Source [source "foo"] "String" "String"
-v2 = StreamVertex 2 Map    [[| id |]] "String" "String"
+v1 = StreamVertex 1 Source [source "foo"] "String" "String" 0
+v2 = StreamVertex 2 Map    [[| id |]] "String" "String" 1
 
-v5 = StreamVertex 5 Scan   [[| \old _ -> old + 1 |], [|0|]] "String" "Int"
-v6 = StreamVertex 6 Sink   [[| mapM_ print |]] "Int" "IO ()"
+v5 = StreamVertex 5 Scan   [[| \old _ -> old + 1 |], [|0|]] "String" "Int" 1
+v6 = StreamVertex 6 Sink   [[| mapM_ print |]] "Int" "IO ()" 0
 
 graph = path [v1, v2, v5, v6]
 

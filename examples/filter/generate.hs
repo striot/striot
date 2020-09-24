@@ -19,12 +19,12 @@ source = [| do
     |]
 
 ssi =
- [ (Source , [source], "Int")
- , (Filter , [[| (>5) |]], "Int")
- , (Filter , [[| (<8) |]], "Int")
- , (Map    , [[| id   |]], "Int") -- work around bug #88
- , (Window , [[| chop 1 |]], "[Int]")
- , (Sink   , [[| mapM_ $ putStrLn . ("receiving "++) . show . value |]], "[String]")
+ [ (Source , [source], "Int", 0)
+ , ((Filter 0.5), [[| (>5) |]], "Int", 1)
+ , ((Filter 0.5), [[| (<8) |]], "Int", 1)
+ , (Map    , [[| id   |]], "Int", 1) -- work around bug #88
+ , (Window , [[| chop 1 |]], "[Int]", 1)
+ , (Sink   , [[| mapM_ $ putStrLn . ("receiving "++) . show . value |]], "[String]", 0)
  ]
 
 graph = simpleStream ssi

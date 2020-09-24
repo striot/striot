@@ -26,11 +26,11 @@ source = [| do
     return s
     |]
 
-v1 = StreamVertex 1 Source [source]                              "String" "String"
-v2 = StreamVertex 2 Map    [[| filter (('#'==).head) . words |]] "String" "[String]"
+v1 = StreamVertex 1 Source [source]                              "String" "String" 0
+v2 = StreamVertex 2 Map    [[| filter (('#'==).head) . words |]] "String" "[String]" 1
 
-v5 = StreamVertex 5 Expand []                                    "[String]" "String"
-v6 = StreamVertex 6 Sink   [[| mapM_ print |]]                   "String" "String"
+v5 = StreamVertex 5 Expand []                                    "[String]" "String" 1
+v6 = StreamVertex 6 Sink   [[| mapM_ print |]]                   "String" "String" 0
 
 graph = path [v1, v2, v5, v6]
 
