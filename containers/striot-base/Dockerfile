@@ -20,7 +20,7 @@ WORKDIR /opt/striot
 # Install all dependencies defined in cabal file - we must install happy
 # separately for HTF, as the image has a bootstrapping problem
 RUN cabal v1-update && \
-    cabal v1-install happy alex && \
+    cabal v1-install happy-1.19.12 alex && \
     cabal v1-install c2hs && \
     cabal v1-install --only-dependencies --extra-include-dirs=/usr/local/include --extra-lib-dirs=/usr/local/lib
 
