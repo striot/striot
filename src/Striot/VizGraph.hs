@@ -27,7 +27,10 @@ show' :: StreamVertex -> String
 show' v = intercalate " " $ ((printOp . operator) v) : ((map (\s->"("++s++")")) . map showParam . parameters) v
 
 printOp :: StreamOperator -> String
-printOp = (++) "stream" . show
+printOp (Filter _)        = "streamFilter"
+printOp (FilterAcc _)     = "streamFilterAcc"
+printOp (Source _)        = "streamSource"
+printOp x                 = "stream" ++ (show x)
 
 myStyle :: Style StreamVertex String
 myStyle = Style
