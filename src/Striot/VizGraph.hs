@@ -3,6 +3,7 @@
 
 module Striot.VizGraph ( streamGraphToDot
                        , displayGraph
+                       , displayGraphKitty
                        , htf_thisModulesTests) where
 
 import Striot.StreamGraph
@@ -11,10 +12,11 @@ import Algebra.Graph.Export.Dot
 import Data.String
 import Test.Framework
 import Data.List (intercalate)
+import Data.List.Split
 import Language.Haskell.TH
 
 import System.Process
-import System.IO (openTempFile, hPutStr, hClose)
+import System.IO (openTempFile, hPutStr, hGetContents, hClose)
 
 streamGraphToDot :: StreamGraph -> String
 streamGraphToDot = export myStyle
@@ -81,3 +83,17 @@ displayGraph g = do
 
     hPutStr hin (streamGraphToDot g)
     hClose hin
+
+displayGraphKitty :: StreamGraph -> IO ()
+displayGraphKitty g = do
+    (Just hin, Just hout, _, _)   <- createProcess (proc "dot" ["-Tpng"])
+      { std_out = CreatePipe, std_in = CreatePipe }
+    (_, Just hout2, _, _) <- createProcess (proc "base64" ["-w0"])
+      { std_in = UseHandle hout , std_out = CreatePipe }
+
+    hPutStr hin (streamGraphToDot g)
+    hClose hin
+    foo <- hGetContents hout2
+    let bar = chunksOf 4096 foo
+    mapM_ (\c -> putStr $ "\ESC_Gf=100,a=T,m=1;" ++ c ++ "\ESC\\") (init bar)
+    putStrLn $ "\ESC_Gf=100,a=T,m=0;" ++ (last bar) ++ "\ESC\\"
