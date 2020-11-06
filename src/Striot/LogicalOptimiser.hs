@@ -7,6 +7,7 @@ module Striot.LogicalOptimiser ( applyRules
 
                                , firstMatch
                                , filterMerge
+                               , mapFuse
 
                                , htf_thisModulesTests
                                ) where
@@ -98,7 +99,7 @@ filterFuse (Connect (Vertex a@(StreamVertex i (Filter sel1) (p:_) ty _ s1))
                     (Vertex b@(StreamVertex _ (Filter sel2) (q:_) _ _ s2))) =
     let c = a { operator    = Filter (sel1 * sel2)
               , parameters  = [[| (\p q x -> p x && q x) $(p) $(q) |]]
-              , serviceTime = s1 + s2
+              , serviceTime = sumTimes s1 sel1 s2
               }
     in Just (removeEdge c c . mergeVertices (`elem` [a,b]) c)
 
@@ -124,6 +125,7 @@ test_filterFuse = assertEqual (applyRule filterFuse filterFusePre)
     filterFusePost
 
 -- streamMap f >>> streamFilter p = streamFilter (f >>> p) >>> streamMap f ---
+-- TODO: should we decrease the service rate of the filter?
 
 mapFilter :: RewriteRule
 mapFilter (Connect (Vertex m@(StreamVertex i Map (f:_) intype _ sm))
@@ -176,7 +178,7 @@ filterFilterAcc (Connect (Vertex v1@(StreamVertex i (Filter sel1) (p:_) ty _ s1)
     let v3 = StreamVertex i (FilterAcc (sel1*sel2))
           [ [| \a v -> if $(p) v then $(f) a v else a |]
           , a
-          , [| \v a -> $(p) v && $(q) v a |] ] ty ty (s1+s2)
+          , [| \v a -> $(p) v && $(q) v a |] ] ty ty (sumTimes s1 sel1 s2)
     in  Just (removeEdge v3 v3 . mergeVertices (`elem` [v1,v2]) v3)
 filterFilterAcc _ = Nothing
 
@@ -214,7 +216,7 @@ filterAccFilter :: RewriteRule
 filterAccFilter (Connect (Vertex v1@(StreamVertex i (FilterAcc sel1) (f:a:p:_) ty _ s1))
                          (Vertex v2@(StreamVertex _ (Filter sel2) (q:_) _ _ s2))) =
     let p' = [| \v a -> $(p) v a && $(q) v |]
-        v  = StreamVertex i (FilterAcc (sel1*sel2)) [f,a,p'] ty ty (s1+s2)
+        v  = StreamVertex i (FilterAcc (sel1*sel2)) [f,a,p'] ty ty (sumTimes s1 sel1 s2)
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 filterAccFilter _ = Nothing
 
@@ -253,7 +255,7 @@ filterAccFilterAcc (Connect (Vertex v1@(StreamVertex i (FilterAcc sel1) (f:a:p:s
     let f' = [| \ (a,b) v -> ($(f) a v, if $(p) v a then $(g) b v else b) |]
         a' = [| ($(a), $(b)) |]
         q' = [| \v (y,z) -> $(p) v y && $(q) v z |]
-        v  = StreamVertex i (FilterAcc (sel1*sel2)) (f':a':q':ss) ty ty (s1+s2)
+        v  = StreamVertex i (FilterAcc (sel1*sel2)) (f':a':q':ss) ty ty (sumTimes s1 sel1 s2)
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 filterAccFilterAcc _ = Nothing
 
@@ -297,7 +299,7 @@ test_filterAccFilterAcc = assertEqual (applyRule filterAccFilterAcc filterAccFil
 mapFuse :: RewriteRule
 mapFuse (Connect (Vertex v1@(StreamVertex i Map (f:ss) t1 _ s1))
                  (Vertex v2@(StreamVertex _ Map (g:_) _ t2 s2))) =
-    let v = StreamVertex i Map ([| $(f) >>> $(g) |]:ss) t1 t2 (s1+s2)
+    let v = StreamVertex i Map ([| $(f) >>> $(g) |]:ss) t1 t2 (sumTimes s1 1 s2)
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 mapFuse _ = Nothing
 
@@ -320,7 +322,7 @@ test_mapFuse = assertEqual (applyRule mapFuse mapFusePre) mapFusePost
 mapScan :: RewriteRule
 mapScan (Connect (Vertex v1@(StreamVertex i Map (f:ss) t1 _ s1))
                  (Vertex v2@(StreamVertex _ Scan (g:a:_) _ t2 s2))) =
-    let v = StreamVertex i Scan ([| flip (flip $(f) >>> $(g)) |]:a:ss) t1 t2 (s1+s2)
+    let v = StreamVertex i Scan ([| flip (flip $(f) >>> $(g)) |]:a:ss) t1 t2 (sumTimes s1 1 s2) 
     in  Just (removeEdge v v . mergeVertices (`elem` [v1,v2]) v)
 mapScan _ = Nothing
 
@@ -385,7 +387,7 @@ mapFilterAcc :: RewriteRule
 mapFilterAcc (Connect (Vertex m@(StreamVertex i Map (f:_) t1 _ sm))
                       (Vertex f1@(StreamVertex j (FilterAcc sel) (g:a:p:_) _ _ sf))) =
 
-    let f2 = StreamVertex i (FilterAcc sel) [g, a, [| ($f) >>> $(p) |]] t1 t1 (sm+sf)
+    let f2 = StreamVertex i (FilterAcc sel) [g, a, [| ($f) >>> $(p) |]] t1 t1 (sumTimes sm 1 sf)
         m2 = m { vertexId = j }
     in  Just (replaceVertex f1 m2 . replaceVertex m f2)
 
@@ -658,20 +660,10 @@ identicalParams inbound =
     let params = (map.map) deQ (map parameters inbound)
     in  and (map (==(head params)) (tail params))
 
--- compare operators, ignoring filter selectivity
-cmpOps :: StreamOperator -> StreamOperator -> Bool
-cmpOps (Filter _) (Filter _) = True
-cmpOps (FilterAcc _) (FilterAcc _) = True
-cmpOps x y = x == y
-
--- this will only match filter operators with the same selectivity
-identicalOperators :: [StreamVertex] -> Bool
-identicalOperators = (==1) . length . nub . map operator
-
 -- TODO: for filters, this will only match when all the upstream filters
 -- have the same selectivity. An alternative would be to average them.
-pushOp op (Connect (Vertex ma@(StreamVertex i o fs t1 t2 sma))
-                   (Vertex me@(StreamVertex j Merge _ t3 _ sme))) =
+pushOp op (Connect (Vertex ma@(StreamVertex i o fs t1 t2 _))
+                   (Vertex me@(StreamVertex j Merge _ t3 _ _))) =
 
     if not(cmpOps o op) then Nothing
     else Just $ \g -> let
@@ -757,6 +749,22 @@ mergeFusePost = path [v23,v26,v28]
 test_mergeFuse = assertEqual (applyRule mergeFuse mergeFusePre) mergeFusePost
 
 -- utility/boilerplate -------------------------------------------------------
+
+sumTimes :: Double -> Double -> Double -> Double
+sumTimes a f b = a + (f * b)
+
+test_sumTimes1 = assertEqual 1 $ sumTimes (1/2) 1 (1/2)
+test_sumTimes2 = assertEqual (1/2) $ sumTimes (1/4) 1 (1/4)
+
+-- compare operators, ignoring filter selectivity
+cmpOps :: StreamOperator -> StreamOperator -> Bool
+cmpOps (Filter _) (Filter _) = True
+cmpOps (FilterAcc _) (FilterAcc _) = True
+cmpOps x y = x == y
+
+-- this will only match filter operators with the same selectivity
+identicalOperators :: [StreamVertex] -> Bool
+identicalOperators = (==1) . length . nub . map operator
 
 -- | left-biased rule application via fold
 foldRules :: [Graph a -> Graph a] -> Graph a -> Graph a
