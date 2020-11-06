@@ -5,6 +5,9 @@ module Striot.LogicalOptimiser ( applyRules
                                , costModel
                                , optimise
 
+                               , firstMatch
+                               , filterMerge
+
                                , htf_thisModulesTests
                                ) where
 
