@@ -39,7 +39,14 @@ myStyle = Style
 
 -- escape a string, suitable for inclusion in a .dot file
 escape [] = []
-escape (x:xs) = if x == '"' then '\\':'"':(escape xs) else x:(escape xs)
+escape (x:xs) = case x of
+    '"'  -> '\\':'"' : escape xs
+    '\\' -> '\\':'\\': escape xs
+    _    -> x        : escape xs
+
+test_escape_1 = assertEqual "no escaping"        $ escape ("no escaping")
+test_escape_2 = assertEqual "escaped \\\" quote" $ escape ("escaped \" quote")
+test_escape_3 = assertEqual "escaped \\\\ backslash" $ escape ("escaped \\ backslash")
 
 -- test data
 
