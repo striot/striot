@@ -150,28 +150,29 @@ Node, InputFrom, Input Rate, Selectivity, Output Rate
 This is represented as follows:      
 -}
        
-taxiQ1Array:: Array (Int,Int) Double
-taxiQ1Array = listArray ((1,1),(6,6)) $
+taxiQ1Array :: Array (Int,Int) Double
+taxiQ1Array  = listArray ((1,1),(7,7)) $
               -- Output Node
-              --  1    2    3    4    5     6
-               [  0   ,1   ,0   ,0   ,0    ,0  ,     -- node 1 streamMap
-                  0   ,0   ,0.95,0   ,0    ,0  ,     -- node 2 streamFilter
-                  0   ,0   ,0   ,1   ,0    ,0  ,     -- node 3 streamWindow
-                  0   ,0   ,0   ,0   ,1    ,0  ,     -- node 4 streamMap
-                  0   ,0   ,0   ,0   ,0    ,0.1,     -- node 5 streamFilterAcc
-                  0   ,0   ,0   ,0   ,0    ,0  ]     -- node 6 the output of Q1
+              --  0   ,1    2    3    4    5     6
+               [  0   ,1   ,0   ,0   ,0   ,0    ,0  ,     -- node 1 Source
+                  0   ,0   ,1   ,0   ,0   ,0    ,0  ,     -- node 2 streamMap
+                  0   ,0   ,0   ,0.95,0   ,0    ,0  ,     -- node 3 streamFilter
+                  0   ,0   ,0   ,0   ,1   ,0    ,0  ,     -- node 4 streamWindow
+                  0   ,0   ,0   ,0   ,0   ,1    ,0  ,     -- node 5 streamMap
+                  0   ,0   ,0   ,0   ,0   ,0    ,0.1,     -- node 6 streamFilterAcc
+                  0   ,0   ,0   ,0   ,0   ,0    ,0  ]     -- node 7 the output of Q1
 
  
-taxiQ1Inputs = listArray (1,6) $ [1,0,0,0,0,0] -- all events in the input stream are sent to node 1
+taxiQ1Inputs = listArray (1,7) $ [1,0,0,0,0,0,0] -- all events in the input stream are sent to node 1
 
 taxiQ1meanServiceTimes:: Array Int Double
-taxiQ1meanServiceTimes = listArray (1,6) [0.0001,0.0001,0.0001,0.01,0.0001,0.0001]
-
+taxiQ1meanServiceTimes = listArray (1,7) [0,0.0001,0.0001,0.0001,0.01,0.0001,0.0001]
  
 taxiQ1arrivalRates:: Array Int Double
 taxiQ1arrivalRates = arrivalRate taxiQ1Array taxiQ1Inputs 1.2 -- the 1.2 is the arrival rate (in events per second) into the system
 
-
+test_taxiQ1arrivalRates = assertEqual taxiQ1arrivalRates $
+    array (1,7) [(1,1.2),(2,1.2),(3,1.2),(4,1.14),(5,1.14),(6,1.14),(7,0.11399999999999999)]
 
 taxiQ1utilisation = utilisation taxiQ1arrivalRates taxiQ1meanServiceTimes 
 
@@ -211,7 +212,6 @@ calcAll connections arrivalRates meanServiceTimes = let
                               
 taxiQ1Calc:: [OperatorInfo]
 taxiQ1Calc = calcAll taxiQ1Array (arrivalRate taxiQ1Array taxiQ1Inputs 1.2) taxiQ1meanServiceTimes
-
 
 -- basic tests
 ex1   = listArray ((1,1),(3,3)) $ [1,0,0,-0.5,1,0,-0.5,0,1]                    
