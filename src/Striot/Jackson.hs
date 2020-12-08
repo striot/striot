@@ -1,11 +1,27 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 
-module Striot.Jackson ( arrivalRate
-                      , utilisation
-                      , avgeResponseTime
-                      , avgeTimeInQueue
-                      , avgeNumberOfCustomersInSystem
-                      ) where
+module Striot.Jackson ( OperatorInfo(..)
+                      , calcAll
+
+                      , arrivalRate
+                      , arrivalRate'
+
+                      , derivePropagationArray
+                      , deriveServiceTimes
+                      , deriveInputsArray
+                      , calcAllSg
+
+                      -- defined
+                      , taxiQ1Array
+                      , taxiQ1Inputs
+                      , taxiQ1meanServiceTimes
+                      -- calculated
+                      , taxiQ1arrivalRates
+                      , taxiQ1utilisation
+                      , taxiQ1Calc
+
+
+                      , htf_thisModulesTests) where
 
 -- import FunctionalIoTtypes
 -- import FunctionalProcessing
