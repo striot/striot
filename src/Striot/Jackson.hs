@@ -45,15 +45,36 @@ import Algebra.Graph
 
 -- |Derive the identity matrix from a 2D Array
 identity:: (Ix a, Integral a, Num b) => Array (a,a) b -> Array (a,a) b
-identity p = listArray (bounds p) $ [if row==column then 1 else 0| row<-[1..size],column<-[1..size]]
-                        where size = fst $ snd $ bounds p
+identity p = listArray (bounds p) $ [if row==column then 1 else 0| row<-[xfrom..xto],column<-[yfrom..yto]]
+                        where ((xfrom,yfrom),(xto,yto)) = bounds p
                         
+test_identity = assertEqual (identity (listArray ((1,1),(3,3)) $ [0 | x <- [1..9]])) $
+    (array ((1,1),(3,3)) [((1,1),1.0), ((1,2),0.0), ((1,3),0.0),
+                          ((2,1),0.0), ((2,2),1.0), ((2,3),0.0),
+                          ((3,1),0.0), ((3,2),0.0), ((3,3),1.0)] :: Array (Int,Int) Double)
+
+test_identity2= assertEqual (identity (listArray ((0,0),(2,2)) $ [0 | x <- [1..9]])) $
+    (array ((0,0),(2,2)) [((0,0),1.0), ((0,1),0.0), ((0,2),0.0),
+                          ((1,0),0.0), ((1,1),1.0), ((1,2),0.0),
+                          ((2,0),0.0), ((2,1),0.0), ((2,2),1.0)] :: Array (Int,Int) Double)
+
 -- |Matrix subtraction.
--- The indexes must begin at 1.
 mm_subtract:: (Ix a, Integral a, Num b) => Array (a, a) b -> Array (a, a) b -> Array (a, a) b
-mm_subtract x y = listArray (bounds x) $ [(x Data.Array.! (row,column))-(y Data.Array.! (row,column))| row<-[1..size],column<-[1..size]] 
-                          where size = fst $ snd $ bounds x
-                          
+mm_subtract x y = listArray (bounds x) $ [(x Data.Array.! (row,column))-(y Data.Array.! (row,column))| row<-[xfrom..xto],column<-[yfrom..yto]]
+                        where ((xfrom,yfrom),(xto,yto)) = bounds x
+
+test_mm_subtract1 = assertEqual (mm_subtract a b) c
+    where
+        a = listArray ((1,1),(3,3)) [3.0::Double | x <- [1..9]]
+        b = listArray ((1,1),(3,3)) [2.0::Double | x <- [1..9]]
+        c = listArray ((1,1),(3,3)) [1.0::Double | x <- [1..9]]
+
+test_mm_subtract2 = assertEqual (mm_subtract a b) c
+    where
+        a = listArray ((0,0),(2,2)) [3.0::Double | x <- [1..9]]
+        b = listArray ((0,0),(2,2)) [2.0::Double | x <- [1..9]]
+        c = listArray ((0,0),(2,2)) [1.0::Double | x <- [1..9]]
+
 -- | Matrix multiplication.
 -- The indexes must begin at 1.
 ma_mult:: (Ix a, Integral a, Num b) => Array (a, a) b -> b -> Array (a, a) b 
@@ -61,11 +82,10 @@ ma_mult x v   = listArray (bounds x) $ [v*(x Data.Array.! (row,column))| row<-[1
                           where size = fst $ snd $ bounds x
                           
 -- | Vector (1D Array) multiplication by value.
--- The indexes must begin at 1.
 va_mult:: (Ix a, Integral a, Num b) => Array a b -> b -> Array a b 
-va_mult x val   = listArray (bounds x) $ [val*(x Data.Array.! row)| row<-[1..size]] 
-                          where size = snd $ bounds x
-                          
+va_mult x val   = listArray (bounds x) [val*(x ! row) | row <- [from..to]]
+                          where (from,to) = bounds x
+
 -- | Vector (1D Array) multiplication.
 -- The indexes must begin at 1.
 vv_mult:: (Ix a, Integral a, Num b) => Array a b -> Array a b -> Array a b
