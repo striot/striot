@@ -19,6 +19,8 @@ module Striot.CompileIoT ( createPartitions
                          , generateNodeSrc
                          , connectNodeId
 
+                         , allOptimisations
+
                          , htf_thisModulesTests
                          ) where
 
@@ -36,6 +38,7 @@ import Language.Haskell.TH
 
 import Striot.StreamGraph
 import Striot.LogicalOptimiser
+import Striot.Jackson
 
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
@@ -628,3 +631,16 @@ test_g3 = assertEqual
     , [[2,4],[1,0],[5],[3]]
     , [[2,4],[1,0],[5,3]]
     ] $ allPartitions g3
+
+------------------------------------------------------------------------------
+-- Jackson/cost model entry point functions
+-- No partitioning
+
+-- | derive all optimisations of the supplied StreamGraph, calculate all
+-- Jackson stuff from that
+
+allOptimisations :: StreamGraph -> [(StreamGraph, [OperatorInfo])]
+allOptimisations sg = let
+    sgs = nub $ applyRules 5 sg
+    out = map (\sg -> (sg, calcAllSg sg)) sgs
+    in out
