@@ -56,8 +56,11 @@ arrivalRate:: Array (Int, Int) Double -> Array Int Double -> Double -> Array Int
 -- p - selectivities of filters
 -- p0i - distribution of input events into the system (i.e. to which nodes, which are the source nodes)
 -- alpha- arrival rate into the system
-arrivalRate p p0i alpha =  mv_mult (inverse $ mm_subtract (identity p) (m_trans p)) aa
-                               where aa = va_mult p0i alpha
+arrivalRate p p0i alpha = arrivalRate' p aa
+                              where aa = va_mult p0i alpha
+
+arrivalRate' p aa = mv_mult (inverse $ mm_subtract (identity p) (m_trans p)) aa
+ 
   
 -- ρ = λ/μ is the utilization of the buffer (the average proportion of time which the server is occupied.  
 utilisation:: Array Int Double -> Array Int Double -> Array Int Double
@@ -160,11 +163,10 @@ data OperatorInfo = OperatorInfo { opId        :: Int
                                  , respTime    :: Double
                                  , queueTime   :: Double
                                  }
-                                 deriving (Show)
+                                 deriving (Show,Eq)
                                  
-calcAll:: Array (Int,Int) Double -> Array Int Double -> Double -> Array Int Double -> [OperatorInfo]
-calcAll connections inputs alpha meanServiceTimes = let
-    arrivalRates             = arrivalRate connections inputs alpha
+calcAll:: Array (Int,Int) Double -> Array Int Double -> Array Int Double -> [OperatorInfo]
+calcAll connections arrivalRates meanServiceTimes = let
     utilisations             = utilisation arrivalRates meanServiceTimes
     stability                = stable arrivalRates meanServiceTimes
     avgeNumberOfCustInSystem = avgeNumberOfCustomersInSystem utilisations
@@ -181,7 +183,7 @@ calcAll connections inputs alpha meanServiceTimes = let
            [1.. (snd $ bounds arrivalRates)]
                               
 taxiQ1Calc:: [OperatorInfo]
-taxiQ1Calc = calcAll taxiQ1Array taxiQ1Inputs 1.2 taxiQ1meanServiceTimes
+taxiQ1Calc = calcAll taxiQ1Array (arrivalRate taxiQ1Array taxiQ1Inputs 1.2) taxiQ1meanServiceTimes
 
 
 -- basic tests
