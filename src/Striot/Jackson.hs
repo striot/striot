@@ -282,7 +282,7 @@ derivePropagationArray g = let
                        _             -> 1
                else 0
 
-    in listArray ((m,m),(n,n)) $ [ prop x y | x <- [m..n], y <- [m..n]]
+    in bumpIndex2 (1 - m) $ listArray ((m,m),(n,n)) $ [ prop x y | x <- [m..n], y <- [m..n]]
 
 -- | calculate an array of external input arrival probabilities
 deriveInputsArray :: StreamGraph -> Double -> Array Int Double
@@ -297,7 +297,7 @@ deriveInputsArray sg totalArrivalRate = let
                 Source x -> x / totalArrivalRate
                 _        -> 0
 
-    in listArray (m,n) $ map srcProp [m..n]
+    in bumpIndex (1 - m) $ listArray (m,n) $ map srcProp [m..n]
 
 
 -- | derive an Array of service times from a StreamGraph
@@ -310,13 +310,37 @@ deriveServiceTimes sg = let
         Nothing -> 0
         Just v  -> (Striot.StreamGraph.serviceTime) v
 
-    in listArray (m,n) $ map prop [m..n]
+    in bumpIndex (1 - m) $ listArray (m,n) $ map prop [m..n]
 
 calcAllSg :: StreamGraph -> [OperatorInfo]
-calcAllSg sg = calcAll propagation arrivals services
+calcAllSg sg = deBump $ calcAll propagation arrivals services
     where
         propagation      = derivePropagationArray sg
         totalArrivalRate = sum $ map (\(Source x) -> x) $ filter isSource $ map operator $ vertexList sg
         inputs           = deriveInputsArray sg totalArrivalRate
         services         = deriveServiceTimes sg
         arrivals         = arrivalRate propagation inputs totalArrivalRate
+
+        -- re-adjust vertexIds down to the original range if it began <1
+        -- and filter out any dummy vertices that were added to fill the range
+        vIds             = map vertexId (vertexList sg)
+        m                = head vIds
+        adj              = 1 - m
+        deBump           = filter (\oi -> opId oi `elem` vIds) . map (\oi -> oi { opId = opId oi - adj })
+
+------------------------------------------------------------------------------
+-- Matrix.LU.inverse fails with 0-indexed arrays. bumpIndex and bumpIndex2 are
+-- used to adjust the indexing of matrices so they begin at 1 in all dimensions.
+
+both f (x,y) = (f x, f y)
+
+-- 1D bumpIndex
+bumpIndex  n a = ixmap (both (+n) (bounds a)) (\i -> i - n) a
+
+-- 2D bumpIndex
+bumpIndex2 n a = ixmap (both (both (+n)) (bounds a)) (both (\i -> i - n)) a
+
+-- fails if NaN creeps in since NaN ≠ NaN
+test_bumpInverse = assertEqual (inverse b) (inverse (bumpIndex2 1 a))
+    where a = listArray ((0,0),(1,1)) [4,7,2,6]
+          b = listArray ((1,1),(2,2)) [4,7,2,6]
