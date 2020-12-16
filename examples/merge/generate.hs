@@ -14,9 +14,9 @@ source x y = [| do
     return z
     |]
 
-v1 = StreamVertex 1 Source [source "foo" (1000*1000)] "String" "String" 0
-v2 = StreamVertex 2 Source [source "bar"  (500*1000)] "String" "String" 0
-v3 = StreamVertex 3 Source [source "baz"  (200*1000)] "String" "String" 0
+v1 = StreamVertex 1 (Source 1) [source "foo" (1000*1000)] "String" "String" 0
+v2 = StreamVertex 2 (Source 1) [source "bar"  (500*1000)] "String" "String" 0
+v3 = StreamVertex 3 (Source 1) [source "baz"  (200*1000)] "String" "String" 0
 
 v4 = StreamVertex 4 Merge [] "String" "String" 1
 -- XXX: ^ we lie about the input type here, because the generated function has split-out arguments

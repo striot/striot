@@ -9,6 +9,7 @@ module Striot.StreamGraph ( StreamGraph(..)
                           , StreamVertex(..)
                           , PartitionedGraph(..)
                           , deQ
+                          , isSource
                           , showParam
                           ) where
 
@@ -87,12 +88,16 @@ data StreamOperator = Map
                     | Join
                     | Scan
                     | FilterAcc Double -- selectivity
-                    | Source
+                    | Source Double -- arrival rate
                     | Sink
                     deriving (Show,Ord,Eq)
 
 instance Ord StreamVertex where
     compare x y = compare (vertexId x) (vertexId y)
+
+isSource :: StreamOperator -> Bool
+isSource (Source _) = True
+isSource _ = False
 
 ------------------------------------------------------------------------------
 -- quickcheck experiment
@@ -101,7 +106,7 @@ instance Arbitrary StreamOperator where
     arbitrary = do
         d <- arbitrary
         elements [ Map , Filter d, Expand , Window , Merge , Join , Scan
-                       , FilterAcc d, Source , Sink ]
+                       , FilterAcc d, Source d, Sink ]
 
 instance Arbitrary StreamVertex where
     arbitrary = do

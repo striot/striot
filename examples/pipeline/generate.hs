@@ -9,7 +9,7 @@ import Algebra.Graph
 opts = defaultOpts { rewrite = False }
 
 graph = path
-    [ StreamVertex 1 Source [[| do
+    [ StreamVertex 1 (Source 1) [[| do
             threadDelay (1000*1000)
             return "Hello from Client!"
         |]] "String" "String" 0

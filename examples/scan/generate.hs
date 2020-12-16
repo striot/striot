@@ -10,7 +10,7 @@ source x = [| do
     return x'
     |]
 
-v1 = StreamVertex 1 Source [source "foo"] "String" "String" 0
+v1 = StreamVertex 1 (Source 1) [source "foo"] "String" "String" 0
 v2 = StreamVertex 2 Map    [[| id |]] "String" "String" 1
 
 v5 = StreamVertex 5 Scan   [[| \old _ -> old + 1 |], [|0|]] "String" "Int" 1

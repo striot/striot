@@ -18,7 +18,7 @@ source = [| do
         return s
     |]
 
-v1 = StreamVertex 1 Source    [source]                                 "String" "String" 0
+v1 = StreamVertex 1 (Source 1)    [source]                                 "String" "String" 0
 v2 = StreamVertex 2 Map       [[| id |]]                               "String" "String" 1
 v3 = StreamVertex 3 (FilterAcc 1) [[| \_ e -> e |], [| "0" |], [| (/=) |]] "String" "String" 1
 v4 = StreamVertex 4 Window    [[| chop 1 |]]                           "String" "[String]" 1

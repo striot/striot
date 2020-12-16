@@ -10,9 +10,9 @@ source x = [| do
     return x'
     |]
 
-v1 = StreamVertex 1 Source [source "foo"]    "String" "String" 0
+v1 = StreamVertex 1 (Source 1) [source "foo"]    "String" "String" 0
 v2 = StreamVertex 2 Map    [[| id |]]        "String" "String" 1
-v3 = StreamVertex 3 Source [source "bar"]    "String" "String" 0
+v3 = StreamVertex 3 (Source 1) [source "bar"]    "String" "String" 0
 v4 = StreamVertex 4 Map    [[| id |]]        "String" "String" 1
 v5 = StreamVertex 5 Join   []                "String" "(String, String)" 1
 v6 = StreamVertex 6 Sink   [[|mapM_ print|]] "(String, String)" "IO ()" 0

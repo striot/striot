@@ -104,7 +104,7 @@ filterFuse _ = Nothing
 gt3 = [| (>3) |]
 lt5 = [| (<5) |]
 
-so' = StreamVertex 0 Source       []    "String" "String" 1
+so' = StreamVertex 0 (Source 1)   []    "String" "String" 1
 f3  = StreamVertex 1 (Filter 0.5) [gt3] "String" "String" 1
 f4  = StreamVertex 2 (Filter 0.5) [lt5] "String" "String" 1
 si' = StreamVertex 3 Sink         []    "String" "String" 1
@@ -138,7 +138,7 @@ f1 = StreamVertex 2 (Filter 0.5) [[| \x -> length x <3 |]] "String" "String" 1
 f2 = StreamVertex 1 (Filter 0.5) [[| (\x -> length x <3) . (show) |]] "Int" "Int" 2
 m2 = StreamVertex 2 Map [[| show |]] "Int" "String" 1
 
-so = StreamVertex 0 Source [] "Int" "Int" 1
+so = StreamVertex 0 (Source 1) [] "Int" "Int" 1
 si = StreamVertex 3 Sink [] "String" "String" 1
 
 mapFilterPre  = path [ so, m1, f1, si ]
@@ -178,7 +178,7 @@ filterFilterAcc (Connect (Vertex v1@(StreamVertex i (Filter sel1) (p:_) ty _ s1)
 filterFilterAcc _ = Nothing
 
 filterFilterAccPre = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 (Filter 0.5) [p] "Int" "Int" 1
     , StreamVertex 2 (FilterAcc 0.5) [f , a , q] "Int" "Int" 1
     , StreamVertex 3 Sink [] "Int" "Int" 1
@@ -189,7 +189,7 @@ filterFilterAccPre = path
           q = [| \new (b,old) -> b || old /= new |]
 
 filterFilterAccPost = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 (FilterAcc 0.25)
         [ [| \a v -> if $(p) v then $(f) a v else a |]
         , a
@@ -216,7 +216,7 @@ filterAccFilter (Connect (Vertex v1@(StreamVertex i (FilterAcc sel1) (f:a:p:_) t
 filterAccFilter _ = Nothing
 
 filterAccFilterPre = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 (FilterAcc 0.5) [f,a,p] "Int" "Int" 1
     , StreamVertex 2 (Filter 0.5)    [q] "Int" "Int" 1
     , StreamVertex 3 Sink [] "Int" "Int" 1
@@ -227,7 +227,7 @@ filterAccFilterPre = path
           q = [| (>3) |]
 
 filterAccFilterPost = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 (FilterAcc 0.25) [f, a, p'] "Int" "Int" 2
     , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
@@ -255,7 +255,7 @@ filterAccFilterAcc (Connect (Vertex v1@(StreamVertex i (FilterAcc sel1) (f:a:p:s
 filterAccFilterAcc _ = Nothing
 
 filterAccFilterAccPre = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 (FilterAcc 0.5) [f,a,p] "Int" "Int" 1
     , StreamVertex 2 (FilterAcc 0.5) [g,b,q] "Int" "Int" 1
     , StreamVertex 3 Sink [] "Int" "Int" 1
@@ -271,7 +271,7 @@ filterAccFilterAccPre = path
         q = [| (>=) |]
 
 filterAccFilterAccPost = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 (FilterAcc 0.25)
         [ [| \(a,b) v -> ($(f) a v, if $(p) v a then $(g) b v else b) |]
         , [| ($(a),$(b)) |]
@@ -299,14 +299,14 @@ mapFuse (Connect (Vertex v1@(StreamVertex i Map (f:ss) t1 _ s1))
 mapFuse _ = Nothing
 
 mapFusePre = path
-    [ StreamVertex 0 Source [] "String" "String" 1
+    [ StreamVertex 0 (Source 1) [] "String" "String" 1
     , StreamVertex 1 Map [[| show |]] "Int" "String" 1
     , StreamVertex 2 Map [[| length |]] "String" "Int" 1
     , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
 
 mapFusePost = path
-    [ StreamVertex 0 Source [] "String" "String" 1
+    [ StreamVertex 0 (Source 1) [] "String" "String" 1
     , StreamVertex 1 Map [[| show >>> length |]] "Int" "Int" 2
     , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
@@ -322,7 +322,7 @@ mapScan (Connect (Vertex v1@(StreamVertex i Map (f:ss) t1 _ s1))
 mapScan _ = Nothing
 
 mapScanPre = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 Map [f] "Int" "Int" 1
     , StreamVertex 2 Scan [g,a] "Int" "Int" 1
     , StreamVertex 3 Sink [] "Int" "Int" 1
@@ -333,7 +333,7 @@ mapScanPre = path
         a = [| 0 |]
 
 mapScanPost = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 Scan [[| flip (flip $(f) >>> $(g))|], [| $(a) |]] "Int" "Int" 2
     , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
@@ -357,7 +357,7 @@ expandFilter (Connect (Vertex e@(StreamVertex j Expand _ t1 t2 se))
 expandFilter _ = Nothing
 
 expandFilterPre = path
-    [ StreamVertex 0 Source       [] "[Int]" "[Int]" 1
+    [ StreamVertex 0 (Source 1)       [] "[Int]" "[Int]" 1
     , StreamVertex 1 Expand       [] "[Int]" "Int" 2
     , StreamVertex 2 (Filter 0.5) [[|$(p)|]] "Int" "Int" 3
     , StreamVertex 3 Sink         [] "Int" "Int" 4
@@ -366,7 +366,7 @@ expandFilterPre = path
         p = [| (>3) |]
 
 expandFilterPost = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    [ StreamVertex 0 (Source 1) [] "[Int]" "[Int]" 1
     , StreamVertex 1 Map [[|filter $(p) |]] "[Int]" "[Int]" 3
     , StreamVertex 2 Expand [] "[Int]" "Int" 2
     , StreamVertex 3 Sink [] "Int" "Int" 4
@@ -389,7 +389,7 @@ mapFilterAcc (Connect (Vertex m@(StreamVertex i Map (f:_) t1 _ sm))
 mapFilterAcc _ = Nothing
 
 mapFilterAccPre = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 Map [f] "Int" "String" 1
     , StreamVertex 2 (FilterAcc 0.5) [g,a,p] "String" "String" 1
     , StreamVertex 3 Sink [] "String" "String" 1
@@ -401,7 +401,7 @@ mapFilterAccPre = path
         p = [| \new (b,old) -> b || old /= new |]
 
 mapFilterAccPost = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 (FilterAcc 0.5) [g,a, [| $(f) >>> $(p) |]] "Int" "Int" 2
     , StreamVertex 2 Map [f] "Int" "String" 1
     , StreamVertex 3 Sink [] "String" "String" 1
@@ -428,14 +428,14 @@ mapWindow (Connect (Vertex m@(StreamVertex i Map (f:_) t1 _ sm))
 mapWindow _ = Nothing
 
 mapWindowPre = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 Map    [[| show |]] "Int" "String" 2
     , StreamVertex 2 Window [[| chop 2 |]] "String" "[String]" 3
     , StreamVertex 3 Sink   [] "[String]" "[String]" 4
     ]
 
 mapWindowPost = path
-    [ StreamVertex 0 Source [] "Int" "Int" 1
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 Window [[| chop 2 |]] "Int" "[Int]" 3
     , StreamVertex 2 Map    [[| map show |]] "[Int]" "[String]" 2
     , StreamVertex 3 Sink   [] "[String]" "[String]" 4
@@ -458,14 +458,14 @@ expandMap (Connect (Vertex e@(StreamVertex i Expand _ t1 _ se))
 expandMap _ = Nothing
 
 expandMapPre = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    [ StreamVertex 0 (Source 1) [] "[Int]" "[Int]" 1
     , StreamVertex 1 Expand [] "[Int]" "Int" 2
     , StreamVertex 2 Map [[| show |]] "Int" "String" 3
     , StreamVertex 3 Sink [] "String" "String" 4
     ]
 
 expandMapPost = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    [ StreamVertex 0 (Source 1) [] "[Int]" "[Int]" 1
     , StreamVertex 1 Map [[| map (show) |]] "[Int]" "[String]" 3
     , StreamVertex 2 Expand [] "[String]" "String" 2
     , StreamVertex 3 Sink [] "String" "String" 4
@@ -499,7 +499,7 @@ expandScan (Connect (Vertex  e@(StreamVertex i Expand (_)     t1 t2 se))
 expandScan _ = Nothing
 
 expandScanPre = path
-    [ StreamVertex 0 Source []    "[Int]" "[Int]" 1
+    [ StreamVertex 0 (Source 1) []    "[Int]" "[Int]" 1
     , StreamVertex 1 Expand []    "[Int]" "Int" 2
     , StreamVertex 2 Scan   [f,a] "Int"   "Int" 3
     , StreamVertex 3 Sink   []    "Int"   "Int" 4
@@ -509,7 +509,7 @@ expandScanPre = path
         a = [| 0 |]
 
 expandScanPost = path
-    [ StreamVertex 0 Source       []     "[Int]" "[Int]" 1
+    [ StreamVertex 0 (Source 1)       []     "[Int]" "[Int]" 1
     , StreamVertex 1 (Filter 0.5) [p]    "[Int]" "[Int]" 0
     , StreamVertex 2 Scan         [g,as] "[Int]" "[Int]" 3
     , StreamVertex 4 Expand       []     "[Int]" "Int" 2
@@ -536,14 +536,14 @@ expandExpand (Connect (Vertex e@(StreamVertex i Expand _ t1 t2 s))
 expandExpand _ = Nothing
 
 expandExpandPre = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    [ StreamVertex 0 (Source 1) [] "[Int]" "[Int]" 1
     , StreamVertex 1 Expand [] "[[Int]]" "[Int]" 2
     , StreamVertex 2 Expand [] "[Int]" "Int" 3
     , StreamVertex 3 Sink   [] "Int" "[Int]" 4
     ]
 
 expandExpandPost = path
-    [ StreamVertex 0 Source [] "[Int]" "[Int]" 1
+    [ StreamVertex 0 (Source 1) [] "[Int]" "[Int]" 1
     , StreamVertex 1 Map [[| concat |]] "[[Int]]" "[Int]" 2
     , StreamVertex 2 Expand [] "[Int]" "Int" 3
     , StreamVertex 3 Sink   [] "Int" "[Int]" 4
@@ -587,8 +587,8 @@ hoistOp op (Connect (Vertex m@(StreamVertex i Merge _ _ ty _))
 
 hoistOp _ _ = Nothing
 
-v1 = StreamVertex 0 Source       []           "Int" "Int" 1
-v2 = StreamVertex 1 Source       []           "Int" "Int" 2
+v1 = StreamVertex 0 (Source 1)       []           "Int" "Int" 1
+v2 = StreamVertex 1 (Source 1)       []           "Int" "Int" 2
 v3 = StreamVertex 2 Merge        []           "Int" "Int" 3
 v4 = StreamVertex 3 (Filter 0.5) [[| (>3) |]] "Int" "Int" 4
 v5 = StreamVertex 4 Sink         []           "Int" "Int" 5
@@ -609,8 +609,8 @@ test_mergeFilter = assertEqual (applyRule mergeFilter mergeFilterPre)
 mergeExpand :: RewriteRule
 mergeExpand = hoistOp Expand
 
-v8  = StreamVertex 0 Source [] "[Int]" "[Int]" 1
-v9  = StreamVertex 1 Source [] "[Int]" "[Int]" 2
+v8  = StreamVertex 0 (Source 1) [] "[Int]" "[Int]" 1
+v9  = StreamVertex 1 (Source 1) [] "[Int]" "[Int]" 2
 v10 = StreamVertex 2 Merge  [] "[Int]" "[Int]" 3
 v11 = StreamVertex 3 Expand [] "[Int]" "Int"   4
 
@@ -631,8 +631,8 @@ test_mergeExpand = assertEqual (applyRule mergeExpand mergeExpandPre)
 mergeMap :: RewriteRule
 mergeMap = hoistOp Map
 
-v15 = StreamVertex 0 Source [] "Int" "Int" 1
-v16 = StreamVertex 1 Source [] "Int" "Int" 2
+v15 = StreamVertex 0 (Source 1) [] "Int" "Int" 1
+v16 = StreamVertex 1 (Source 1) [] "Int" "Int" 2
 v17 = StreamVertex 2 Merge []  "Int" "Int" 3
 v18 = StreamVertex 3 Map [[| show |]]  "Int" "String" 4
 v19 = StreamVertex 4 Sink [] "String" "String" 5
@@ -736,9 +736,9 @@ mergeFuse (Connect (Vertex m1@(StreamVertex i Merge _ _ _ _))
 
 mergeFuse _ = Nothing
 
-v23 = StreamVertex 0 Source [] "Int" "Int" 1
-v24 = StreamVertex 1 Source [] "Int" "Int" 2
-v25 = StreamVertex 2 Source [] "Int" "Int" 3
+v23 = StreamVertex 0 (Source 1) [] "Int" "Int" 1
+v24 = StreamVertex 1 (Source 1) [] "Int" "Int" 2
+v25 = StreamVertex 2 (Source 1) [] "Int" "Int" 3
 v26 = StreamVertex 3 Merge []  "Int" "Int" 4
 v27 = StreamVertex 4 Merge []  "Int" "Int" 5
 v28 = StreamVertex 5 Sink []   "Int" "Int" 6

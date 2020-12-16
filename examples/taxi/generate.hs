@@ -32,7 +32,7 @@ sink = [| mapM_ (print.show.fromJust.value) |]
 
 taxiQ1 :: StreamGraph
 taxiQ1 = simpleStream
-    [ (Source,    [source],                         "Trip", 0)
+    [ ((Source 1.2), [source],                         "Trip", 0)
     , (Window,    [[| tripTimes |]],                "[Trip]", 0.0001)
     , (Expand,    [],                               "Trip", 0.0001)
     , (Map,       [[| tripToJourney |]],            "Journey", 0.0001)

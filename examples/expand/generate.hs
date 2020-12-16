@@ -26,7 +26,7 @@ source = [| do
     return s
     |]
 
-v1 = StreamVertex 1 Source [source]                              "String" "String" 0
+v1 = StreamVertex 1 (Source 1) [source]                              "String" "String" 0
 v2 = StreamVertex 2 Map    [[| filter (('#'==).head) . words |]] "String" "[String]" 1
 
 v5 = StreamVertex 5 Expand []                                    "[String]" "String" 1

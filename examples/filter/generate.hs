@@ -19,7 +19,7 @@ source = [| do
     |]
 
 ssi =
- [ (Source , [source], "Int", 0)
+ [ ((Source 1) , [source], "Int", 0)
  , ((Filter 0.5), [[| (>5) |]], "Int", 1)
  , ((Filter 0.5), [[| (<8) |]], "Int", 1)
  , (Map    , [[| id   |]], "Int", 1) -- work around bug #88
