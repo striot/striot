@@ -26,7 +26,7 @@ module Striot.FunctionalProcessing ( streamFilter
                                    , htf_thisModulesTests) where
 
 import Striot.FunctionalIoTtypes
-import Data.Time (UTCTime,addUTCTime,diffUTCTime,NominalDiffTime)
+import Data.Time (UTCTime (..),addUTCTime,diffUTCTime,NominalDiffTime,picosecondsToDiffTime, Day (..))
 import Test.Framework
 
 -- Define the Basic IoT Stream Functions
@@ -167,10 +167,17 @@ streamScan _  _   []                       = []
 streamScan mf acc (Event t (Just v):r) = Event t (Just newacc):streamScan mf newacc r where newacc = mf acc v
 streamScan mf acc (Event t Nothing :r) = Event t Nothing      :streamScan mf acc    r -- allow events without data to pass through
 
+instance Arbitrary UTCTime where
+    arbitrary = do
+        NonNegative d <- arbitrary :: Gen (NonNegative Integer)
+        NonNegative i <- arbitrary :: Gen (NonNegative Integer)
+        return $ UTCTime (ModifiedJulianDay d) (picosecondsToDiffTime i)
+
 instance Arbitrary a => Arbitrary (Event a) where
     arbitrary = do
         i <- arbitrary
-        return $ Event Nothing (Just i)
+        t <- arbitrary
+        return $ Event (Just t) (Just i)
 
 prop_streamScan_samelength :: Stream Int -> Bool
 prop_streamScan_samelength s = length s == length (streamScan (\_ x-> x) 0 s)

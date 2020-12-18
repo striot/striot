@@ -3,6 +3,9 @@
 
 module Striot.VizGraph ( streamGraphToDot
                        , displayGraph
+                       , displayGraphKitty
+                       , displayGraphDebug
+
                        , htf_thisModulesTests) where
 
 import Striot.StreamGraph
@@ -11,10 +14,11 @@ import Algebra.Graph.Export.Dot
 import Data.String
 import Test.Framework
 import Data.List (intercalate)
+import Data.List.Split
 import Language.Haskell.TH
 
 import System.Process
-import System.IO (openTempFile, hPutStr, hClose)
+import System.IO (openTempFile, hPutStr, hGetContents, hClose)
 
 streamGraphToDot :: StreamGraph -> String
 streamGraphToDot = export myStyle
@@ -73,11 +77,33 @@ v10 = StreamVertex 6 Sink   [[|mapM_ print|]] "String" "IO ()"
 expandEx :: StreamGraph
 expandEx = path [v7, v8, v9, v10]
 
+-- | display a graph using GraphViz and "display" from ImageMagick
 displayGraph :: StreamGraph -> IO ()
-displayGraph g = do
+displayGraph = displayGraph' streamGraphToDot
+
+displayGraph' toDot g = do
     (Just hin,Just hout,_, _) <- createProcess (proc "dot" ["-Tpng"])
       { std_out = CreatePipe, std_in = CreatePipe }
     _ <- createProcess (proc "display" []){ std_in = UseHandle hout }
 
+    hPutStr hin (toDot g)
+    hClose hin
+
+-- | display a graph inline in the Kitty terminal emulator
+displayGraphKitty :: StreamGraph -> IO ()
+displayGraphKitty g = do
+    (Just hin, Just hout, _, _)   <- createProcess (proc "dot" ["-Tpng"])
+      { std_out = CreatePipe, std_in = CreatePipe }
+    (_, Just hout2, _, _) <- createProcess (proc "base64" ["-w0"])
+      { std_in = UseHandle hout , std_out = CreatePipe }
+
     hPutStr hin (streamGraphToDot g)
     hClose hin
+    foo <- hGetContents hout2
+    let bar = chunksOf 4096 foo
+    mapM_ (\c -> putStr $ "\ESC_Gf=100,a=T,m=1;" ++ c ++ "\ESC\\") (init bar)
+    putStrLn $ "\ESC_Gf=100,a=T,m=0;" ++ (last bar) ++ "\ESC\\"
+
+-- | display a debug graph using GraphViz and ImageMagick
+displayGraphDebug = displayGraph' (export debugStyle :: StreamGraph -> String)
+debugStyle        = myStyle { vertexAttributes = (\v -> ["label":=(escape . show) v]) }
