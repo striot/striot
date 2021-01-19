@@ -27,7 +27,10 @@ show' :: StreamVertex -> String
 show' v = intercalate " " $ ((printOp . operator) v) : ((map (\s->"("++s++")")) . map showParam . parameters) v
 
 printOp :: StreamOperator -> String
-printOp = (++) "stream" . show
+printOp (Filter _)        = "streamFilter"
+printOp (FilterAcc _)     = "streamFilterAcc"
+printOp (Source _)        = "streamSource"
+printOp x                 = "stream" ++ (show x)
 
 myStyle :: Style StreamVertex String
 myStyle = Style
@@ -61,19 +64,19 @@ source x = [| do
     return x'
     |]
 
-v1 = StreamVertex 1 Source [source "foo"]    "String" "String"
-v2 = StreamVertex 2 Map    [[| id |]]        "String" "String"
-v3 = StreamVertex 3 Source [source "bar"]    "String" "String"
-v4 = StreamVertex 4 Map    [[| id |]]        "String" "String"
-v5 = StreamVertex 5 Merge  []                "[String]" "String"
-v6 = StreamVertex 6 Sink   [[| mapM_ print|]] "String" "IO ()"
+v1 = StreamVertex 1 (Source 1) [source "foo"]    "String" "String" 0
+v2 = StreamVertex 2 Map    [[| id |]]        "String" "String" 1
+v3 = StreamVertex 3 (Source 1) [source "bar"]    "String" "String" 2
+v4 = StreamVertex 4 Map    [[| id |]]        "String" "String" 3
+v5 = StreamVertex 5 Merge  []                "[String]" "String" 4
+v6 = StreamVertex 6 Sink   [[| mapM_ print|]] "String" "IO ()" 5
 mergeEx :: StreamGraph
 mergeEx = overlay (path [v3, v4, v5]) (path [v1, v2, v5, v6])
 
-v7 = StreamVertex  1 Source [[| sourceOfRandomTweets |]] "String" "String"
-v8 = StreamVertex  2 Map    [[| filter (('#'==).head) . words |]] "String" "[String]"
-v9 = StreamVertex  5 Expand [] "[String]" "String"
-v10 = StreamVertex 6 Sink   [[|mapM_ print|]] "String" "IO ()"
+v7 = StreamVertex  1 (Source 1) [[| sourceOfRandomTweets |]] "String" "String" 0
+v8 = StreamVertex  2 Map    [[| filter (('#'==).head) . words |]] "String" "[String]" 1
+v9 = StreamVertex  5 Expand [] "[String]" "String" 2
+v10 = StreamVertex 6 Sink   [[|mapM_ print|]] "String" "IO ()" 3
 expandEx :: StreamGraph
 expandEx = path [v7, v8, v9, v10]
 

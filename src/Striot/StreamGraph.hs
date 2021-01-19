@@ -9,6 +9,7 @@ module Striot.StreamGraph ( StreamGraph(..)
                           , StreamVertex(..)
                           , PartitionedGraph(..)
                           , deQ
+                          , isSource
                           , showParam
                           ) where
 
@@ -34,6 +35,7 @@ data StreamVertex = StreamVertex
     , parameters :: [ExpQ]
     , intype     :: String
     , outtype    :: String
+    , serviceTime:: Double
     }
 
 instance Eq StreamVertex where
@@ -45,13 +47,14 @@ instance Eq StreamVertex where
                  ]
 
 instance Show StreamVertex where
-    show (StreamVertex i o ps inT outT) =
+    show (StreamVertex i o ps inT outT s) =
         "StreamVertex " ++ intercalate " "
             [ show i
             , show o
             , show (map showParam ps)
             , show inT
             , show outT
+            , show s
             ]
 
 deQ :: Q Exp -> Exp
@@ -78,34 +81,41 @@ type PartitionedGraph = ([StreamGraph], StreamGraph)
 -- |An enumeration of the possible stream operators within a stream-processing program,
 -- as well as `Source` and `Sink` to represent the ingress and egress points of programs.
 data StreamOperator = Map
-                    | Filter
+                    | Filter Double -- selectivity
                     | Expand
                     | Window
                     | Merge
                     | Join
                     | Scan
-                    | FilterAcc
-                    | Source
+                    | FilterAcc Double -- selectivity
+                    | Source Double -- arrival rate
                     | Sink
                     deriving (Show,Ord,Eq)
 
 instance Ord StreamVertex where
     compare x y = compare (vertexId x) (vertexId y)
 
+isSource :: StreamOperator -> Bool
+isSource (Source _) = True
+isSource _ = False
+
 ------------------------------------------------------------------------------
 -- quickcheck experiment
 
 instance Arbitrary StreamOperator where
-    arbitrary = elements [ Map , Filter , Expand , Window , Merge , Join , Scan
-                         , FilterAcc , Source , Sink ]
+    arbitrary = do
+        d <- arbitrary
+        elements [ Map , Filter d, Expand , Window , Merge , Join , Scan
+                       , FilterAcc d, Source d, Sink ]
 
 instance Arbitrary StreamVertex where
     arbitrary = do
         vertexId <- arbitrary
         operator <- arbitrary
+        serviceT <- arbitrary
         let parameters = []
             ty = "String" in
-            return $ StreamVertex vertexId operator parameters ty ty
+            return $ StreamVertex vertexId operator parameters ty ty serviceT
 
 streamgraph :: Gen StreamGraph
 streamgraph = sized streamgraph'

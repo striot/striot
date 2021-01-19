@@ -19,6 +19,8 @@ module Striot.CompileIoT ( createPartitions
                          , generateNodeSrc
                          , connectNodeId
 
+                         , allOptimisations
+
                          , htf_thisModulesTests
                          ) where
 
@@ -36,6 +38,7 @@ import Language.Haskell.TH
 
 import Striot.StreamGraph
 import Striot.LogicalOptimiser
+import Striot.Jackson
 
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
@@ -79,17 +82,17 @@ mkStripMerge local global = let
     in \g -> foldl (&) g (map remove merges)
 
 global = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 1 Merge [] "Int" "Int"
-    , StreamVertex 2 Map [[| show |]] "Int" "String"
-    , StreamVertex 3 Sink [[| mapM_ print |]] "String" "String"
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
+    , StreamVertex 1 Merge [] "Int" "Int" 2
+    , StreamVertex 2 Map [[| show |]] "Int" "String" 3
+    , StreamVertex 3 Sink [[| mapM_ print |]] "String" "String" 4
     ]
-local = Vertex $ StreamVertex 0 Source [] "Int" "Int"
+local = Vertex $ StreamVertex 0 (Source 1) [] "Int" "Int" 1
 
 stripMergePost = path
-    [ StreamVertex 0 Source [] "Int" "Int"
-    , StreamVertex 2 Map [[| show |]] "Int" "String"
-    , StreamVertex 3 Sink [[| mapM_ print |]] "String" "String"
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
+    , StreamVertex 2 Map [[| show |]] "Int" "String" 3
+    , StreamVertex 3 Sink [[| mapM_ print |]] "String" "String" 4
     ]
 
 test_stripMerge1 = assertEqual stripMergePost $
@@ -107,7 +110,6 @@ unPartition (a,b) = overlay b $ foldl overlay Empty a
 {-
     a well-formed streamgraph:
         always starts with a Source?
-        always has just one Source?
         always ends with a Sink?
         always has just one Sink?
         is entirely connected?
@@ -151,7 +153,7 @@ generateCode sg pm opts = let
 data NodeType = NodeSource | NodeSink | NodeLink deriving (Show)
 
 nodeType :: StreamGraph -> NodeType
-nodeType sg = if operator (head (vertexList sg)) == Source
+nodeType sg = if isSource $ operator (head (vertexList sg))
               then NodeSource
               else if (operator.head.reverse.vertexList) sg == Sink
                    then NodeSink
@@ -239,13 +241,13 @@ outType sg = let node = (last . vertexList) sg
 -- see outType for rationale
 inType :: StreamGraph -> String
 inType sg = let node = (head  . vertexList) sg
-            in if operator node == Source
+            in if isSource $ operator node
                then outtype node
                else intype node
 
-t = path [ StreamVertex 0 Source [[| return 0 |]]       "IO Int" "Int"
-         , StreamVertex 1 Map    [[| show |]]       "Int" "String"
-         , StreamVertex 2 Sink   [[| mapM_ putStrLn |]] "String" "IO ()"
+t = path [ StreamVertex 0 (Source 1) [[| return 0 |]]       "IO Int" "Int" 1
+         , StreamVertex 1 Map    [[| show |]]       "Int" "String" 2
+         , StreamVertex 2 Sink   [[| mapM_ putStrLn |]] "String" "IO ()" 3
          ]
 
 test_outType = assertEqual "String" $
@@ -315,10 +317,10 @@ startsWithJoin sg = let
     in length joinOps > 0 && (not . or . map (`elem` hasInputs) $ joinOps)
 
 test_startsWithJoin_1 = assertBool . startsWithJoin . path $
-    [StreamVertex 1 Join [] "" "", StreamVertex 0 Merge [] "" ""]
+    [StreamVertex 1 Join [] "" "" 1, StreamVertex 0 Merge [] "" "" 2]
 
 test_startsWithJoin_2 = assertBool . not . startsWithJoin . path $
-    [StreamVertex 0 Merge [] "" "", StreamVertex 1 Join [] "" ""]
+    [StreamVertex 0 Merge [] "" "" 3, StreamVertex 1 Join [] "" "" 4]
 
 test_startsWithJoin_3 = assertBool . not . startsWithJoin $ empty
 
@@ -355,7 +357,9 @@ paren :: String -> String
 paren s = "("++s++")"
 
 printOp :: StreamOperator -> String
-printOp = (++) "stream" . show
+printOp (Filter _) = "streamFilter"
+printOp (FilterAcc _) = "streamFilterAcc"
+printOp op = "stream" ++ (show op)
 
 -- how many incoming edges to this partition?
 -- + how many source nodes
@@ -363,7 +367,7 @@ partValence :: StreamGraph -> StreamGraph -> Int
 partValence g cuts = let
     verts = vertexList g
     inEdges = filter (\e -> (snd e) `elem` verts) (edgeList cuts)
-    sourceNodes = filter (\v -> Source == operator v) (vertexList g)
+    sourceNodes = filter (isSource . operator) (vertexList g)
     in
         (length sourceNodes) + (length inEdges)
 
@@ -373,13 +377,13 @@ partValence g cuts = let
 main = htfMain htf_thisModulesTests
 
 -- Source -> Sink
-s0 = connect (Vertex (StreamVertex 0 (Source) [] "String" "String"))
-    (Vertex (StreamVertex 1 (Sink) [] "String" "String"))
+s0 = connect (Vertex (StreamVertex 0 ((Source 1)) [] "String" "String" 1))
+             (Vertex (StreamVertex 1 (Sink) [] "String" "String" 2))
 
 -- Source -> Filter -> Sink
-s1 = path [ StreamVertex 0 (Source) [] "String" "String"
-          , StreamVertex 1 Filter [] "String" "String"
-          , StreamVertex 2 (Sink) [] "String" "String"
+s1 = path [ StreamVertex 0 ((Source 1)) [] "String" "String" 3
+          , StreamVertex 1 (Filter 0.5) [] "String" "String" 4
+          , StreamVertex 2 (Sink) [] "String" "String" 5
           ]
 
 test_reform_s0 = assertEqual s0 (unPartition $ createPartitions s0 [[0],[1]])
@@ -422,14 +426,14 @@ partitionGraph graph partitions opts = do
 -- the relevant `StreamOperator` for the node; the parameters and the *output*
 -- type. The other parameters to `StreamVertex` are inferred from the neighbouring
 -- tuples. Unique and ascending `vertexId` values are assigned.
-simpleStream :: [(StreamOperator, [ExpQ], String)] -> Graph StreamVertex
+simpleStream :: [(StreamOperator, [ExpQ], String, Double)] -> Graph StreamVertex
 simpleStream tupes = path lst
 
     where
-        intypes = "IO ()" : (map (\(_,_,ty) -> ty) (init tupes))
+        intypes = "IO ()" : (map (\(_,_,ty,_) -> ty) (init tupes))
         tupes3 = zip3 [1..] intypes tupes
-        lst = map (\ (i,intype,(op,params,outtype)) ->
-            StreamVertex i op params intype outtype) tupes3
+        lst = map (\ (i,intype,(op,params,outtype,sTime)) ->
+            StreamVertex i op params intype outtype sTime) tupes3
 
 ------------------------------------------------------------------------------
 
@@ -449,11 +453,11 @@ partitionings sg parts = let
         LT -> error "cannot partition a graph over more partitions than there are nodes"
 
 partTestGraph = path
-    [ StreamVertex 0 Source []        "Int" "Int"
-    , StreamVertex 1 Map [[| show |]] "Int" "String"
-    , StreamVertex 2 Filter [[| (<3) |]]    "Int" "Int"
-    , StreamVertex 3 Window []        "String" "[String]"
-    , StreamVertex 4 Sink []          "String" "String"
+    [ StreamVertex 0 (Source 1) []        "Int" "Int" 1
+    , StreamVertex 1 Map [[| show |]] "Int" "String" 2
+    , StreamVertex 2 (Filter 0.5) [[| (<3) |]]    "Int" "Int" 3
+    , StreamVertex 3 Window []        "String" "[String]" 4
+    , StreamVertex 4 Sink []          "String" "String" 5
     ]
 
 test_partitionings_1 = assertEqual [[x]|x <- [0..4]] $
@@ -560,12 +564,12 @@ test_subGraphs2 = assertEqual (subGraphs 3 t2) []
 test_subGraphs3 = assertEqual (subGraphs 1 t1) [path [2,3]]
 test_subGraphs4 = assertEqual (subGraphs 1 t2) [removeVertex 1 t2]
 
-v0 = StreamVertex 0 Source [] "" ""
-v1 = StreamVertex 1 Map [] "" ""
-v2 = StreamVertex 2 Sink [] "" ""
-v3 = StreamVertex 3 Source [] "" ""
-v4 = StreamVertex 4 Merge [] "" ""
-v5 = StreamVertex 5 Map [] "" ""
+v0 = StreamVertex 0 (Source 1) [] "" "" 0
+v1 = StreamVertex 1 Map [] "" "" 1
+v2 = StreamVertex 2 Sink [] "" "" 2 
+v3 = StreamVertex 3 (Source 1) [] "" "" 3
+v4 = StreamVertex 4 Merge [] "" "" 4
+v5 = StreamVertex 5 Map [] "" "" 5
 g3 = overlay (path [v0, v1, v4, v2]) (path [v3, v5, v4])
 g4 = transpose g3
 
@@ -597,13 +601,13 @@ extendPartitioning :: StreamVertex -> [[StreamVertex]] -> [[[StreamVertex]]]
 extendPartitioning n choice = let
   lastNode = last . last $ choice
   in if 1 < (length (filter singleton (n:(last choice))))
-     || operator lastNode `elem` [Merge,Source]
+     || (operator lastNode == Merge || isSource (operator lastNode))
      then [ choice ++ [[n]] ]
      else [ choice ++ [[n]]
           , init choice ++ [last choice ++ [n]]
           ]
 
-singleton v = operator v `elem` [Source,Sink]
+singleton v = operator v == Sink || isSource (operator v)
 
 g' = path [ v0 , v1 , v2 ]
 test_g' = assertEqual [ [[2],[1],[0]]
@@ -627,3 +631,16 @@ test_g3 = assertEqual
     , [[2,4],[1,0],[5],[3]]
     , [[2,4],[1,0],[5,3]]
     ] $ allPartitions g3
+
+------------------------------------------------------------------------------
+-- Jackson/cost model entry point functions
+-- No partitioning
+
+-- | derive all optimisations of the supplied StreamGraph, calculate all
+-- Jackson stuff from that
+
+allOptimisations :: StreamGraph -> [(StreamGraph, [OperatorInfo])]
+allOptimisations sg = let
+    sgs = nub $ applyRules 5 sg
+    out = map (\sg -> (sg, calcAllSg sg)) sgs
+    in out

@@ -12,4 +12,6 @@ import Striot.Nodes
 
 import {-@ HTF_TESTS @-} Striot.LogicalOptimiser
 
+import {-@ HTF_TESTS @-} Striot.Jackson
+
 main = htfMain htf_importedTests
