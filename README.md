@@ -1,6 +1,6 @@
 # StrIoT — functional stream processing for IoT
 
-[![Travis CI Build Status](https://api.travis-ci.com/striot/striot.svg?branch=master)](https://travis-ci.org/striot/striot)
+[![Travis CI Build Status](https://travis-ci.com/striot/striot.svg?branch=main)](https://travis-ci.com/striot/striot)
 
 **StrIoT** is a stream-processing engine for IoT workloads, implemented as a
 [Haskell](https://www.haskell.org) library. A user defines a stream-processing
