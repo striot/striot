@@ -10,7 +10,7 @@ stages:
   - install
   - build
   - name: image
-    if: branch = master AND type = push
+    if: branch = main AND type = push
 
 before_install:
   # install librdkafka-dev
