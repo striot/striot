@@ -3,6 +3,9 @@ language: haskell
 ghc:
   - "8.6"
 
+env:
+ - LANG="C.UTF-8"
+
 services:
   - docker
 
