@@ -1,7 +1,16 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-
- - Striot StreamGraph type, used for representing a stream processing program,
- - such that it can be re-written and partitioned.
+{-|
+Module      : Striot.StreamGraph
+Description : StrIoT StreamGraph
+Copyright   : © Jonathan Dowland, 2020
+License     : Apache 2.0
+Maintainer  : jon@dow.land
+Stability   : experimental
+
+StrIoT `StreamGraph` type, used for representing a stream-processing program,
+such that it can be re-written, partitioned and translated into code in terms
+of `Striot.FunctionalIoTTypes` for execution on distributed nodes.
+
  -}
 
 module Striot.StreamGraph ( StreamGraph(..)

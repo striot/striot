@@ -1,29 +1,48 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
+{-|
+Module      : Striot.FunctionalProcessing
+Description : StrIoT operators for processing Streams
+Copyright   : © StrIoT maintainers, 2021
+License     : Apache 2.0
+Maintainer  : StrIoT maintainers
+Stability   : experimental
 
-module Striot.FunctionalProcessing ( streamFilter
-                                   , streamMap
-                                   , streamWindow
-                                   , streamWindowAggregate
-                                   , streamMerge
-                                   , streamJoin
-                                   , streamJoinE
-                                   , streamJoinW
-                                   , streamFilterAcc
-                                   , streamScan
-                                   , streamExpand
-                                   , WindowMaker
-                                   , WindowAggregator
-                                   , sliding
-                                   , slidingTime
-                                   , chop
-                                   , chopTime
-                                   , complete
-                                   , EventFilter
-                                   , EventMap
-                                   , JoinFilter
-                                   , JoinMap
+The eight StrIoT low-level operators and related functions, as
+well as some composite operators.
+-}
 
-                                   , htf_thisModulesTests) where
+module Striot.FunctionalProcessing (
+    -- * The eight fundamental operators
+     streamFilter
+   , streamFilterAcc
+   , streamMap
+   , streamScan
+   , streamWindow
+   , streamExpand
+   , streamMerge
+   , streamJoin
+
+   -- * Utility functions and convenience types
+   , WindowMaker
+   , WindowAggregator
+   , sliding
+   , slidingTime
+   , chop
+   , chopTime
+
+   -- * Example composite operators
+   , streamWindowAggregate
+   , streamJoinE
+   , streamJoinW
+
+   -- * ???
+   , complete
+   , EventFilter
+   , EventMap
+   , JoinFilter
+   , JoinMap
+
+   , htf_thisModulesTests) where
 
 import Striot.FunctionalIoTtypes
 import Data.Time (UTCTime (..),addUTCTime,diffUTCTime,NominalDiffTime,picosecondsToDiffTime, Day (..))

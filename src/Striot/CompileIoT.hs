@@ -12,7 +12,7 @@ module Striot.CompileIoT ( createPartitions
                          , simpleStream
                          , optimiseWriteOutAll
 
-                         , optimise
+                         , optimise -- XXX we are re-exporting this from LogicalOptimiser
                          , generateCodeFromStreamGraph
                          , nodeFn
                          , nodeType
@@ -52,7 +52,7 @@ type Partition = Int
 -- The inner-lists are the IDs of Operators to include in that partition.
 type PartitionMap = [[Int]]
 
--- createPartitions returns ([partition map], [inter-graph links])
+-- `createPartitions` returns ([partitions], [inter-graph links])
 -- where inter-graph links are the cut edges due to partitioning
 createPartitions :: StreamGraph -> PartitionMap -> PartitionedGraph
 createPartitions _ [] = ([],empty)
@@ -420,12 +420,13 @@ partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
 partitionGraph graph partitions opts = do
     mapM_ (writePart opts) $ zip [1..] $ generateCode graph partitions opts
 
--- |Convenience function for specifying a simple path-style of stream processing
--- program, with no merge or join operations. The list of tuples are converted
--- into a series of connected Stream Vertices in a Graph. The tuple arguments are
--- the relevant `StreamOperator` for the node; the parameters and the *output*
--- type. The other parameters to `StreamVertex` are inferred from the neighbouring
--- tuples. Unique and ascending `vertexId` values are assigned.
+-- |Convenience function for specifying a simple path-style of stream
+-- processing program, with no merge or join operations. The list of tuples are
+-- converted into a series of connected Stream Vertices in a Graph. The tuple
+-- arguments are the relevant `StreamOperator` for the node; the parameters;the
+-- *output* type and the service time. The other parameters to `StreamVertex`
+-- are inferred from the neighbouring tuples. Unique and ascending `vertexId`
+-- values are assigned.
 simpleStream :: [(StreamOperator, [ExpQ], String, Double)] -> Graph StreamVertex
 simpleStream tupes = path lst
 
@@ -518,6 +519,15 @@ template g = intercalate "\n"
 
 ------------------------------------------------------------------------------
 
+-- | Return a list of all possible valid partitionings of the `StreamGraph`.
+-- A partitioning is a list of groupings of `Int`s corresponding to `vertexID`s
+-- for the `StreamGraph`.
+--
+-- A valid partitioning is any which does not violate the following constraints:
+--  * only one `Source` or `Sink` node can exist in each partition
+--  * `Merge` operators must be the first in their partition
+--
+-- The validity rules are encoded in the `extendPartitioning` function.
 allPartitions :: StreamGraph -> [[[Int]]]
 allPartitions = (map.map.map) vertexId . foldgl fun [] . transpose
     where
