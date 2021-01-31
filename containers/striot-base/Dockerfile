@@ -4,6 +4,7 @@ FROM haskell:8.6
 RUN apt-get update && apt-get upgrade -y
 
 ENV LD_LIBRARY_PATH="/usr/local/lib"
+ENV LANG="C.UTF-8"
 
 # Install the librdkafka library for Kafka
 RUN git clone https://github.com/edenhill/librdkafka && \
