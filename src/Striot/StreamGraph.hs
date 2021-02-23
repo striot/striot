@@ -44,6 +44,7 @@ instance Eq StreamVertex where
                  , intype a   == intype b
                  , outtype a  == outtype b
                  , (map showParam (parameters a)) == (map showParam (parameters b))
+                 , serviceTime a == serviceTime b
                  ]
 
 instance Show StreamVertex where
