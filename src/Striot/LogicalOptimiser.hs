@@ -109,8 +109,8 @@ gt3 = [| (>3) |]
 lt5 = [| (<5) |]
 
 so' = StreamVertex 0 (Source 1)   []    "String" "String" 1
-f3  = StreamVertex 1 (Filter 0.5) [gt3] "String" "String" 1
-f4  = StreamVertex 2 (Filter 0.5) [lt5] "String" "String" 1
+f3  = StreamVertex 1 (Filter 0.5) [gt3] "String" "String" 0.1
+f4  = StreamVertex 2 (Filter 0.5) [lt5] "String" "String" 0.2
 si' = StreamVertex 3 Sink         []    "String" "String" 1
 
 fused = [| (\p q x -> p x && q x) (>3) (<5) |]
@@ -118,7 +118,7 @@ fused = [| (\p q x -> p x && q x) (>3) (<5) |]
 filterFusePre = path [so', f3, f4, si']
 
 filterFusePost = path [ so'
-    , StreamVertex 1 (Filter 0.25) [fused] "String" "String" 2
+    , StreamVertex 1 (Filter 0.25) [fused] "String" "String" 0.2
     , si' ]
 
 test_filterFuse = assertEqual (applyRule filterFuse filterFusePre)
@@ -184,8 +184,8 @@ filterFilterAcc _ = Nothing
 
 filterFilterAccPre = path
     [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
-    , StreamVertex 1 (Filter 0.5) [p] "Int" "Int" 1
-    , StreamVertex 2 (FilterAcc 0.5) [f , a , q] "Int" "Int" 1
+    , StreamVertex 1 (Filter 0.5) [p] "Int" "Int" 0.1
+    , StreamVertex 2 (FilterAcc 0.5) [f , a , q] "Int" "Int" 0.2
     , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where p = [| (>3) |]
@@ -199,7 +199,7 @@ filterFilterAccPost = path
         [ [| \a v -> if $(p) v then $(f) a v else a |]
         , a
         , [| \v a -> $(p) v && $(q) v a |]
-        ] "Int" "Int" 2
+        ] "Int" "Int" 0.2
     , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where p = [| (>3) |]
@@ -222,8 +222,8 @@ filterAccFilter _ = Nothing
 
 filterAccFilterPre = path
     [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
-    , StreamVertex 1 (FilterAcc 0.5) [f,a,p] "Int" "Int" 1
-    , StreamVertex 2 (Filter 0.5)    [q] "Int" "Int" 1
+    , StreamVertex 1 (FilterAcc 0.5) [f,a,p] "Int" "Int" 0.1
+    , StreamVertex 2 (Filter 0.5)    [q] "Int" "Int" 0.2
     , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where f = [| (\_ h -> (False, h)) |]
@@ -233,7 +233,7 @@ filterAccFilterPre = path
 
 filterAccFilterPost = path
     [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
-    , StreamVertex 1 (FilterAcc 0.25) [f, a, p'] "Int" "Int" 2
+    , StreamVertex 1 (FilterAcc 0.25) [f, a, p'] "Int" "Int" 0.2
     , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where f = [| (\_ h -> (False, h)) |]
@@ -261,8 +261,8 @@ filterAccFilterAcc _ = Nothing
 
 filterAccFilterAccPre = path
     [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
-    , StreamVertex 1 (FilterAcc 0.5) [f,a,p] "Int" "Int" 1
-    , StreamVertex 2 (FilterAcc 0.5) [g,b,q] "Int" "Int" 1
+    , StreamVertex 1 (FilterAcc 0.5) [f,a,p] "Int" "Int" 0.1
+    , StreamVertex 2 (FilterAcc 0.5) [g,b,q] "Int" "Int" 0.2
     , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where
@@ -281,7 +281,7 @@ filterAccFilterAccPost = path
         [ [| \(a,b) v -> ($(f) a v, if $(p) v a then $(g) b v else b) |]
         , [| ($(a),$(b)) |]
         , [| \v (y,z) -> $(p) v y && $(q) v z |]
-        ] "Int" "Int" 2
+        ] "Int" "Int" 0.2
     , StreamVertex 3 Sink [] "Int" "Int" 1
     ]
     where f = [| (\_ h -> (False, h)) |]
