@@ -13,6 +13,7 @@ module Striot.LogicalOptimiser ( applyRules
                                ) where
 
 import Striot.StreamGraph
+import Striot.FunctionalProcessing
 import Algebra.Graph
 import Test.Framework hiding ((===))
 import Data.Maybe (mapMaybe, fromMaybe)
@@ -421,32 +422,43 @@ test_mapFilterAcc = assertEqual (applyRule mapFilterAcc mapFilterAccPre) mapFilt
 
 -- streamMap f >>> streamWindow wm == streamWindow wm >>> streamMap (map f) --
 -- TODO: assuming serviceTime for map is the same
+-- This is only applicable when the map parameter has type (a -> a)
 
 mapWindow :: RewriteRule
-mapWindow (Connect (Vertex m@(StreamVertex i Map (f:_) t1 _ sm))
-                   (Vertex w@(StreamVertex j Window (wm:_) _ t2 sw))) =
-    let t3 = "[" ++ t1 ++ "]"
-        w2 = StreamVertex i Window [wm] t1 t3 sw
-        m2 = StreamVertex j Map [[| map $(f) |]] t3 t2 sm
+mapWindow (Connect (Vertex m@(StreamVertex i Map (f:_) mapInT mapOutT sm))
+                   (Vertex w@(StreamVertex j Window (wm:_) _ windowOutT sw))) =
+
+    if   mapInT /= mapOutT
+    then Nothing
+    else let
+        w2 = StreamVertex i Window [wm] mapInT windowOutT sw
+        m2 = StreamVertex j Map [[| map $(f) |]] windowOutT windowOutT sm
     in  Just (replaceVertex m w2 . replaceVertex w m2)
 
 mapWindow _ = Nothing
 
 mapWindowPre = path
     [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
-    , StreamVertex 1 Map    [[| show |]] "Int" "String" 2
-    , StreamVertex 2 Window [[| chop 2 |]] "String" "[String]" 3
-    , StreamVertex 3 Sink   [] "[String]" "[String]" 4
+    , StreamVertex 1 Map    [[| (+1) |]] "Int" "Int" 2
+    , StreamVertex 2 Window [[| chop 2 |]] "Int" "[Int]" 3
+    , StreamVertex 3 Sink   [] "[Int]" "[Int]" 4
     ]
 
 mapWindowPost = path
     [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 Window [[| chop 2 |]] "Int" "[Int]" 3
-    , StreamVertex 2 Map    [[| map show |]] "[Int]" "[String]" 2
-    , StreamVertex 3 Sink   [] "[String]" "[String]" 4
+    , StreamVertex 2 Map    [[| map (+1) |]] "[Int]" "[Int]" 2
+    , StreamVertex 3 Sink   [] "[Int]" "[Int]" 4
     ]
 
 test_mapWindow = assertEqual (applyRule mapWindow mapWindowPre) mapWindowPost
+
+mapWindowPre2 = path
+    [ StreamVertex 0 Map    [[| read   :: String -> Int  |]] "String" "Int"   1
+    , StreamVertex 1 Window [[| chop 2 :: WindowMaker Int|]] "Int"    "[Int]" 1
+    ]
+
+test_mapWindow2 = assertNothingNoShow (mapWindow mapWindowPre2)
 
 -- streamExpand >>> streamMap f == streamMap (map f) >>> streamExpand --------
 -- [a]           a            b   [a]               [b]               b
