@@ -33,7 +33,7 @@ import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
 import Data.Function ((&))
 import Data.Maybe (catMaybes)
-import Data.List (nub)
+import Data.List (nub,sort)
 import Data.List.Match (compareLength)
 import Language.Haskell.TH
 
@@ -144,9 +144,12 @@ defaultOpts = GenerateOpts
 -- |Partitions the supplied `StreamGraph` according to the supplied `PartitionMap`
 -- and options specified within the supplied `GenerateOpts` and returns a list of
 -- the sub-graphs converted into source code and encoded as `String`s.
+--
+-- TODO: the sorting of the `PartitionMap` is a work-around for
+-- <https://github.com/striot/striot/issues/124>
 generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
 generateCode sg pm opts = let
-    (sgs,cuts)      = createPartitions sg pm
+    (sgs,cuts)      = createPartitions sg (sort (map sort pm))
     sgs'            = if rewrite opts then map optimise sgs else sgs
     enumeratedParts = zip [1..] sgs'
     in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
