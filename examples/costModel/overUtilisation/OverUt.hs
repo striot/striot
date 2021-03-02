@@ -38,9 +38,4 @@ rewritten  = graph & fromJust (firstMatch graph filterMerge)
 
 test_opIds = assertEqual [0,1,4,5] $ map opId (calcAllSg graph)
 
-isOverUtilised :: StreamGraph -> Bool
-isOverUtilised = any (>1) . map util . calcAllSg
-
-test_isOverUtilised = assertBool $ isOverUtilised rewritten
-
 main = htfMain htf_thisModulesTests

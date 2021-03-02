@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Striot.Jackson ( OperatorInfo(..)
                       , calcAll
@@ -10,6 +11,7 @@ module Striot.Jackson ( OperatorInfo(..)
                       , deriveServiceTimes
                       , deriveInputsArray
                       , calcAllSg
+                      , isOverUtilised
 
                       -- defined
                       , taxiQ1Array
@@ -327,6 +329,21 @@ calcAllSg sg = deBump $ calcAll propagation arrivals services
         m                = head vIds
         adj              = 1 - m
         deBump           = filter (\oi -> opId oi `elem` vIds) . map (\oi -> oi { opId = opId oi - adj })
+
+-- | Determine whether the supplied list of OperatorInfo describes a
+-- StreamGraph which is over-utilised: at least one node receives events faster
+-- than it can process them.
+isOverUtilised :: [OperatorInfo] -> Bool
+isOverUtilised = any (>1) . map util
+
+graph = path
+    [ StreamVertex 0 (Source 8)     [[| return 0   |]] "Int" "Int" 0
+    , StreamVertex 4 Merge          []                 "Int" "Int" (1/5)
+    , StreamVertex 1 (Filter (1/2)) [[|(>5)        |]] "Int" "Int" 0
+    , StreamVertex 5 Sink           [[|mapM_ print |]] "Int" "Int" 0
+    ]
+
+test_isOverUtilised = assertBool $ isOverUtilised (calcAllSg graph)
 
 ------------------------------------------------------------------------------
 -- Matrix.LU.inverse fails with 0-indexed arrays. bumpIndex and bumpIndex2 are
