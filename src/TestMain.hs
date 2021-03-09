@@ -14,4 +14,6 @@ import {-@ HTF_TESTS @-} Striot.LogicalOptimiser
 
 import {-@ HTF_TESTS @-} Striot.Jackson
 
+import {-@ HTF_TESTS @-} Striot.Partition
+
 main = htfMain htf_importedTests
