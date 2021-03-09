@@ -20,6 +20,7 @@ module Striot.CompileIoT ( createPartitions
                          , connectNodeId
 
                          , allOptimisations
+                         , allPartitions
 
                          , htf_thisModulesTests
                          ) where
