@@ -5,9 +5,29 @@ module Striot.LogicalOptimiser ( applyRules
                                , costModel
                                , optimise
 
+                               , applyRule
                                , firstMatch
-                               , filterMerge
+
+                               , mapFilter
+                               , filterFilterAcc
+                               , filterAccFilter
+                               , filterAccFilterAcc
+                               , filterFuse
                                , mapFuse
+                               , mapScan
+                               , expandFilter
+                               , mapFilterAcc
+                               , mapWindow
+                               , expandMap
+                               , expandScan
+                               , expandExpand
+                               , mergeFilter
+                               , mergeExpand
+                               , mergeMap
+                               , mapMerge
+                               , filterMerge
+                               , expandMerge
+                               , mergeFuse
 
                                , htf_thisModulesTests
                                ) where

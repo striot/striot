@@ -12,7 +12,7 @@ module Striot.CompileIoT ( createPartitions
                          , simpleStream
                          , optimiseWriteOutAll
 
-                         , optimise
+                         , optimise -- XXX we are re-exporting this from LogicalOptimiser
                          , generateCodeFromStreamGraph
                          , nodeFn
                          , nodeType
@@ -32,13 +32,14 @@ import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
 import Data.Function ((&))
 import Data.Maybe (catMaybes)
-import Data.List (nub)
+import Data.List (nub,sort)
 import Data.List.Match (compareLength)
 import Language.Haskell.TH
 
 import Striot.StreamGraph
 import Striot.LogicalOptimiser
 import Striot.Jackson
+import Striot.Partition
 
 ------------------------------------------------------------------------------
 -- StreamGraph Partitioning
@@ -52,7 +53,7 @@ type Partition = Int
 -- The inner-lists are the IDs of Operators to include in that partition.
 type PartitionMap = [[Int]]
 
--- createPartitions returns ([partition map], [inter-graph links])
+-- `createPartitions` returns ([partitions], [inter-graph links])
 -- where inter-graph links are the cut edges due to partitioning
 createPartitions :: StreamGraph -> PartitionMap -> PartitionedGraph
 createPartitions _ [] = ([],empty)
@@ -143,9 +144,12 @@ defaultOpts = GenerateOpts
 -- |Partitions the supplied `StreamGraph` according to the supplied `PartitionMap`
 -- and options specified within the supplied `GenerateOpts` and returns a list of
 -- the sub-graphs converted into source code and encoded as `String`s.
+--
+-- TODO: the sorting of the `PartitionMap` is a work-around for
+-- <https://github.com/striot/striot/issues/124>
 generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
 generateCode sg pm opts = let
-    (sgs,cuts)      = createPartitions sg pm
+    (sgs,cuts)      = createPartitions sg (sort (map sort pm))
     sgs'            = if rewrite opts then map optimise sgs else sgs
     enumeratedParts = zip [1..] sgs'
     in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
@@ -420,12 +424,13 @@ partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
 partitionGraph graph partitions opts = do
     mapM_ (writePart opts) $ zip [1..] $ generateCode graph partitions opts
 
--- |Convenience function for specifying a simple path-style of stream processing
--- program, with no merge or join operations. The list of tuples are converted
--- into a series of connected Stream Vertices in a Graph. The tuple arguments are
--- the relevant `StreamOperator` for the node; the parameters and the *output*
--- type. The other parameters to `StreamVertex` are inferred from the neighbouring
--- tuples. Unique and ascending `vertexId` values are assigned.
+-- |Convenience function for specifying a simple path-style of stream
+-- processing program, with no merge or join operations. The list of tuples are
+-- converted into a series of connected Stream Vertices in a Graph. The tuple
+-- arguments are the relevant `StreamOperator` for the node; the parameters;the
+-- *output* type and the service time. The other parameters to `StreamVertex`
+-- are inferred from the neighbouring tuples. Unique and ascending `vertexId`
+-- values are assigned.
 simpleStream :: [(StreamOperator, [ExpQ], String, Double)] -> Graph StreamVertex
 simpleStream tupes = path lst
 
@@ -515,122 +520,6 @@ template g = intercalate "\n"
     , "    [ "++g
     , "    ]\n"
     ]
-
-------------------------------------------------------------------------------
-
-allPartitions :: StreamGraph -> [[[Int]]]
-allPartitions = (map.map.map) vertexId . foldgl fun [] . transpose
-    where
-        fun []      n = [[[n]]]
-        fun choices n = concatMap (extendPartitioning n) choices
-
--- | A left-fold over Graphs. Unlike 'foldg', the traversal order follows
--- edges from a root node.
---
--- XXX could we rework this in terms of subGraph, instead of subGraphs?
--- Caveat: when the incoming graph is e.g. overlay x y, getRoot returns
--- one of x or y, and subGraphs returns [], so we lose the other branch
-foldgl :: Eq a => Ord a =>
-               (b -> a -> b) -> b -> Graph a -> b
-foldgl f z g =
-    if isEmpty g then z
-    else let x  = getRoot g     -- :: a
-             xs = subGraphs x g -- [Graph a]
-         in foldl (\b g -> foldgl f b g) (f z x) xs
-
-test_foldgl1 = assertEqual "ABC" $
-    foldgl (\b a -> b++[a]) "" (path "ABC")
-test_foldgl2 = assertEqual "ABCD" $
-    foldgl (\b a -> b++[a]) "" (overlay (path "ABC") (path "BD"))
-
-getRoots :: Eq a => Ord a =>
-            Graph a -> [a]
-getRoots g = let
-    edges = edgeList g
-    dests = map snd edges
-    roots = filter (not.(`elem`dests)) (vertexList g)
-    in roots
-
-getRoot :: Eq a => Ord a =>
-           Graph a -> a
-getRoot = head . getRoots
-
-subGraphs :: Ord a =>
-             a -> Graph a -> [Graph a]
-subGraphs n g = map (\k -> subGraph k g) (childrenOf n g)
-
-test_subGraphs1 = assertEqual (subGraphs 2 t2) [Vertex v | v <- [3,4]]
-test_subGraphs2 = assertEqual (subGraphs 3 t2) []
-test_subGraphs3 = assertEqual (subGraphs 1 t1) [path [2,3]]
-test_subGraphs4 = assertEqual (subGraphs 1 t2) [removeVertex 1 t2]
-
-v0 = StreamVertex 0 (Source 1) [] "" "" 0
-v1 = StreamVertex 1 Map [] "" "" 1
-v2 = StreamVertex 2 Sink [] "" "" 2 
-v3 = StreamVertex 3 (Source 1) [] "" "" 3
-v4 = StreamVertex 4 Merge [] "" "" 4
-v5 = StreamVertex 5 Map [] "" "" 5
-g3 = overlay (path [v0, v1, v4, v2]) (path [v3, v5, v4])
-g4 = transpose g3
-
-test_subGraphs5 = let
-    g = head $ subGraphs (getRoot g4) g4
-    in assertBool $ v0 `elem` (vertexList g)
-
-subGraph :: Eq a => Ord a =>
-            a -> Graph a -> Graph a
-subGraph n g = induce (`elem` reachable n g) g
-
-t1 = path [1,2,3]
-test_subGraph1 = assertEqual (subGraph 1 t1) $ t1
-test_subGraph2 = assertEqual (subGraph 2 t1) $ path [2,3]
-test_subGraph3 = assertEqual (subGraph 3 t1) $ Vertex 3
-
-t2 = t1 + path [2,4]
-test_subGraph4 = assertEqual (subGraph 4 t2) $ Vertex 4
-test_subGraph5 = assertEqual (subGraph 2 t2) $ path [2,4] + path [2,3]
-
-childrenOf :: Ord a =>
-              a -> Graph a -> [a]
-childrenOf n = map snd . filter ((==n).fst) . edgeList
-
--- | Given an existing partitioning and a new operator to consider: We can
--- start a new partition; in some circumstances we can also append the operator
--- to the last partition.
-extendPartitioning :: StreamVertex -> [[StreamVertex]] -> [[[StreamVertex]]]
-extendPartitioning n choice = let
-  lastNode = last . last $ choice
-  in if 1 < (length (filter singleton (n:(last choice))))
-     || (operator lastNode == Merge || isSource (operator lastNode))
-     then [ choice ++ [[n]] ]
-     else [ choice ++ [[n]]
-          , init choice ++ [last choice ++ [n]]
-          ]
-
-singleton v = operator v == Sink || isSource (operator v)
-
-g' = path [ v0 , v1 , v2 ]
-test_g' = assertEqual [ [[2],[1],[0]]
-                      , [[2],[1,0]]
-                      , [[2,1],[0]]]
-    $ allPartitions g'
-
-g2 = overlay (path [v0, v4, v2]) (path [v3, v4])
-
-test_g2 = assertEqual [ [[2],[4],[0],[3]]
-                      , [[2,4],[0],[3]]]
-    $ allPartitions g2
-
-test_g3 = assertEqual
-    [ [[2],[4],[1],[0],[5],[3]]
-    , [[2],[4],[1],[0],[5,3]]
-    , [[2],[4],[1,0],[5],[3]]
-    , [[2],[4],[1,0],[5,3]]
-    , [[2,4],[1],[0],[5],[3]]
-    , [[2,4],[1],[0],[5,3]]
-    , [[2,4],[1,0],[5],[3]]
-    , [[2,4],[1,0],[5,3]]
-    ] $ allPartitions g3
 
 ------------------------------------------------------------------------------
 -- Jackson/cost model entry point functions

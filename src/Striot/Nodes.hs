@@ -159,6 +159,9 @@ nodeSink2 streamOp iofn inputPort1 inputPort2 = do
 
 -- | a simple source-sink combined function for single-Node
 -- deployments.
+-- The first argument is a Source function to create data. The second is the pure
+-- stream-processing function. The third is a Sink function to operate on the
+-- processed Stream.
 nodeSimple :: (IO a) -> (Stream a -> Stream b) -> (Stream b -> IO()) -> IO ()
 nodeSimple src proc sink = sink . proc =<< readListFromSource src
 
@@ -336,10 +339,10 @@ startPrometheus name = do
 --------------------------------------------------------------------
 -- simple routines for pure streams
 
--- | Convenience function for creating a pure Stream.
+-- | Convenience function for creating a pure `Stream`.
 mkStream :: [a] -> Stream a
 mkStream = map $ Event Nothing . Just
 
--- | A convenience function to extract a list of values from a Stream.
+-- | A convenience function to extract a list of values from a `Stream`.
 unStream :: Stream a -> [a]
 unStream = catMaybes . map value
