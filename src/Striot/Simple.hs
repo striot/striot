@@ -1,6 +1,6 @@
 {-|
 Module      : Striot.Simple
-Description : StrIoT Simple interface
+Description : StrIoT Simple end-user interface
 Copyright   : © StrIoT maintainers, 2021
 License     : Apache 2.0
 Maintainer  : StrIoT maintainers
