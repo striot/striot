@@ -15,8 +15,19 @@ programs described as StreamGraphs.
 module Striot.Orchestration ( distributeProgram
                             , partitionGraph
 
+                            -- $fromCompileIoT
+                            , simpleStream
+
+                            , viableRewrites
+                            , filterViableBestUtility
+                            , bestPartitioning
+
                             , htf_thisModulesTests
                             ) where
+
+{- $fromCompileIoT
+Functions re-exported from `Striot.CompileIoT`.
+ -}
 
 import Algebra.Graph
 import Data.List (nub, sortOn)
