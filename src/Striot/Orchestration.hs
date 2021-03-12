@@ -19,7 +19,7 @@ module Striot.Orchestration ( distributeProgram
                             ) where
 
 import Algebra.Graph
-import Data.List (nub)
+import Data.List (nub, sortOn)
 import Data.Maybe (listToMaybe)
 import Test.Framework
 import Data.Function ((&))
@@ -82,7 +82,7 @@ bestPartitioning minNodes sg = let
     parts = validPartitionings minNodes sg
     in if [] == parts
        then Nothing
-       else (Just . minimum) parts
+       else (Just . head . sortOn length) parts
 
 test_bestPartitioning_result  = assertJust    $ bestPartitioning n graph
     where n = length (vertexList graph)
