@@ -16,4 +16,6 @@ import {-@ HTF_TESTS @-} Striot.Jackson
 
 import {-@ HTF_TESTS @-} Striot.Partition
 
+import {-@ HTF_TESTS @-} Striot.Orchestration
+
 main = htfMain htf_importedTests
