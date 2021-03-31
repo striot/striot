@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, FlexibleInstances #-}
 {-|
 Module      : Striot.StreamGraph
 Description : StrIoT StreamGraph
@@ -20,6 +20,11 @@ module Striot.StreamGraph ( StreamGraph(..)
                           , deQ
                           , isSource
                           , showParam
+
+                          -- QuickCheck generators
+                          , streamgraph
+                          , streamgraph'
+
                           ) where
 
 import Algebra.Graph
@@ -112,25 +117,36 @@ isSource _ = False
 ------------------------------------------------------------------------------
 -- quickcheck experiment
 
+-- never generates sources or sinks
 instance Arbitrary StreamOperator where
     arbitrary = do
-        d <- arbitrary
-        elements [ Map , Filter d, Expand , Window , Merge , Join , Scan
-                       , FilterAcc d, Source d, Sink ]
+        d <- getPositive <$> arbitrary
+        elements [Map, Filter d, Expand, Window, Merge, Join, Scan, FilterAcc d]
 
 instance Arbitrary StreamVertex where
     arbitrary = do
-        vertexId <- arbitrary
+        vertexId <- getPositive <$> arbitrary -- XXX how to avoid clashes
+        serviceT <- getPositive <$> arbitrary
         operator <- arbitrary
-        serviceT <- arbitrary
+
         let parameters = []
             ty = "String" in
             return $ StreamVertex vertexId operator parameters ty ty serviceT
 
 streamgraph :: Gen StreamGraph
 streamgraph = sized streamgraph'
-streamgraph' 0 = return g where g = empty :: StreamGraph
-streamgraph' n | n>0 = do
-    v <- arbitrary
-    t <- streamgraph' (n-1)
-    return $ connect (vertex v) t
+
+streamgraph' 0 = return empty
+streamgraph' 1 =
+    Vertex . (\x -> x { operator = Sink }) <$> arbitrary
+
+streamgraph' n | n>=2 = do
+    vs  <- vector (n-2) :: Gen [StreamVertex]
+    n   <- arbitrary
+    src <- (\x -> x { operator = Source n }) <$> arbitrary
+    snk <- (\x -> x { operator = Sink })     <$> arbitrary
+    return $ path $ (src:vs)++[snk]
+
+-- requires FlexibleInstances
+instance Arbitrary StreamGraph where
+    arbitrary = streamgraph

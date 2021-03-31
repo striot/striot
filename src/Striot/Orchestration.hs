@@ -13,10 +13,22 @@ programs described as StreamGraphs.
 
 -}
 module Striot.Orchestration ( distributeProgram
+                            , distributeProgram'
                             , partitionGraph
+
+                            -- $fromCompileIoT
+                            , simpleStream
+
+                            , viableRewrites
+                            , filterViableBestUtility
+                            , bestPartitioning
 
                             , htf_thisModulesTests
                             ) where
+
+{- $fromCompileIoT
+Functions re-exported from `Striot.CompileIoT`.
+ -}
 
 import Algebra.Graph
 import Data.List (nub, sortOn)
@@ -31,16 +43,8 @@ import Striot.Partition
 import Striot.StreamGraph
 import Striot.VizGraph
 
--- | Given a stream processing program encoded in a StreamGraph:
--- - * generate derivative programs via rewrite rules.
--- - * Apply queuing analysis to the resulting graphs,
--- - * reject any graphs which are not viable
--- - * pick a program with the lowest overall utility.
--- - * determine the lowest number of nodes the program could be deployed upon,
--- - * partition the program accordingly.
-
-distributeProgram :: StreamGraph -> GenerateOpts -> IO ()
-distributeProgram sg opts = let
+distributeProgram' :: StreamGraph -> (StreamGraph, PartitionMap)
+distributeProgram' sg = let
     (u,best) = case filterViableBestUtility sg of
         Nothing -> error "distributeProgram: no viable StreamGraphs"
         Just x  -> x
@@ -49,6 +53,18 @@ distributeProgram sg opts = let
         Nothing -> error "distributeProgram: no viable Partitionings"
         Just x  -> x
 
+    in (best,partMap)
+
+-- | Given a stream processing program encoded in a StreamGraph:
+-- - * generate derivative programs via rewrite rules.
+-- - * Apply queuing analysis to the resulting graphs,
+-- - * reject any graphs which are not viable
+-- - * pick a program with the lowest overall utility.
+-- - * determine the lowest number of nodes the program could be deployed upon,
+-- - * partition the program accordingly.
+distributeProgram :: StreamGraph -> GenerateOpts -> IO ()
+distributeProgram sg opts = let
+    (best,partMap) = distributeProgram' sg
     in partitionGraph best partMap opts
 
 -- | runs calculations over supplied streamgraphs and filters them for viability
