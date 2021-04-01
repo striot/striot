@@ -1,8 +1,9 @@
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
 {-# LANGUAGE TemplateHaskell, FlexibleInstances #-}
 {-|
 Module      : Striot.StreamGraph
 Description : StrIoT StreamGraph
-Copyright   : © Jonathan Dowland, 2020
+Copyright   : © Jonathan Dowland, 2021
 License     : Apache 2.0
 Maintainer  : jon@dow.land
 Stability   : experimental
@@ -25,6 +26,7 @@ module Striot.StreamGraph ( StreamGraph(..)
                           , streamgraph
                           , streamgraph'
 
+                          , htf_thisModulesTests
                           ) where
 
 import Algebra.Graph
@@ -38,6 +40,8 @@ import Data.List.Split (splitOn)
 import Data.Data
 import Data.Generics.Schemes (everywhere)
 import Data.Generics.Aliases (mkT)
+
+import Data.Tree
 
 -- |The `StreamOperator` and associated information required to encode a stream-processing
 -- program into a Graph. Each distinct `StreamVertex` within a `StreamGraph` should have a
@@ -125,28 +129,107 @@ instance Arbitrary StreamOperator where
 
 instance Arbitrary StreamVertex where
     arbitrary = do
-        vertexId <- getPositive <$> arbitrary -- XXX how to avoid clashes
+        vertexId <- getPositive <$> arbitrary
         serviceT <- getPositive <$> arbitrary
         operator <- arbitrary
 
         let parameters = []
-            ty = "String" in
+            ty = "?" in
             return $ StreamVertex vertexId operator parameters ty ty serviceT
 
 streamgraph :: Gen StreamGraph
 streamgraph = sized streamgraph'
 
 streamgraph' 0 = return empty
-streamgraph' 1 =
-    Vertex . (\x -> x { operator = Sink }) <$> arbitrary
 
-streamgraph' n | n>=2 = do
-    vs  <- vector (n-2) :: Gen [StreamVertex]
-    n   <- arbitrary
-    src <- (\x -> x { operator = Source n }) <$> arbitrary
-    snk <- (\x -> x { operator = Sink })     <$> arbitrary
-    return $ path $ (src:vs)++[snk]
+streamgraph' n | n>=1 =
+    treegraph' n >>= return . transpose . tree
 
 -- requires FlexibleInstances
 instance Arbitrary StreamGraph where
     arbitrary = streamgraph
+
+------------------------------------------------------------------------------
+-- Tree StreamVertex: private type for convenience of algorithms that fit Tree
+-- better than Graph.
+
+treegraph :: Gen (Tree StreamVertex)
+treegraph = sized treegraph'
+
+treegraph' :: Int -> Gen (Tree StreamVertex)
+treegraph' 0 = error "can't represent an empty tree"
+treegraph' 1 = arbitrary >>= \v ->
+    return (Node (v { operator = Sink , vertexId = 0 }) [])
+
+treegraph' n | n >1 = treegraph' 1 >>= extendTree (n-1)
+
+chOp :: StreamOperator -> StreamVertex -> StreamVertex
+chOp o x = x { operator = o }
+
+chId :: Int -> StreamVertex -> StreamVertex
+chId i x = x { vertexId = i }
+
+extendTree :: Int -> Tree StreamVertex -> Gen (Tree StreamVertex)
+extendTree 0 n = return n
+
+-- only one more Node to create; it must be a source
+extendTree 1 (Node v []) = do
+    n   <- arbitrary
+    src <- chId 1 <$> chOp (Source n) <$> arbitrary
+    return $ Node v [Node src []]
+
+extendTree n t@(Node v []) | n>1 = do
+    case operator v of
+        Join   -> extendJoin n t
+        Merge  -> extendMerge n t
+        _      -> do
+            d    <- arbitrary
+            let ops = [Map, Filter d, Expand, Window, Merge, Scan, FilterAcc d]
+                    -- Join needs at least 3 nodes (two Sources) and cannot precede
+                    -- Expand (type (a,b) ≠ [a])
+            op   <- if   n < 3 || operator v == Expand
+                    then elements ops
+                    else elements (Join:ops)
+
+            new  <- chOp op <$> chId n <$> arbitrary
+            rest <- extendTree (n-1) (Node new [])
+            return $ Node v [rest]
+
+incrId :: Int -> StreamVertex -> StreamVertex
+incrId i v = v { vertexId = vertexId v + i }
+
+-- in the specialised extend* functions below, we can't generate
+-- the branches from the real node of consideration or we'll loop
+fakeroot = Node (StreamVertex 0 Sink [] "" "" 0) []
+
+extendJoin :: Int -> Tree (StreamVertex) -> Gen (Tree StreamVertex)
+extendJoin n (Node v@(StreamVertex _ Join _ _ _ _) []) = do
+    let n1 = n `div` 2
+    let n2 = n - n1
+
+    Node _ children  <- extendTree n1 fakeroot
+    Node _ children' <- fmap (fmap (incrId n1)) (extendTree n2 fakeroot)
+
+    return $ Node v (children ++ children')
+
+extendMerge :: Int -> Tree (StreamVertex) -> Gen (Tree StreamVertex)
+extendMerge n (Node v@(StreamVertex _ Merge _ _ _ _) []) = do
+    -- XXX extend to >2 incoming streams?
+    let n1 = n `div` 2
+    let n2 = n - n1
+
+    -- XXX determine type from one child, force the other
+    Node _ children  <- extendTree n1 fakeroot
+    Node _ children' <- extendTree n2 fakeroot
+
+    return $ Node v (children ++ (map (fmap (incrId n1)) children'))
+
+-- for debugging in GHCi
+draw :: Gen (Tree StreamVertex) -> IO ()
+draw g = generate g >>= putStrLn . drawTree . fmap show
+
+prop_noShortJoin = forAll (treegraph' 3) $
+    not . elem Join . map operator . flatten
+
+prop_noJoinExpand = forAll ((fmap (chOp Expand)) <$> (treegraph' 1) >>= extendTree 3) $
+    (/=) Join . operator . rootLabel . head . subForest
