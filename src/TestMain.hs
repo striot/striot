@@ -3,6 +3,9 @@
 module Main where
 
 import Test.Framework
+
+import {-@ HTF_TESTS @-} Striot.StreamGraph
+
 import {-@ HTF_TESTS @-} Striot.CompileIoT
 import {-@ HTF_TESTS @-} Striot.VizGraph
 
