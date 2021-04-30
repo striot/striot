@@ -134,11 +134,11 @@ streamMerge []     = []
 streamMerge (x:[]) = x
 streamMerge (x:xs) = merge' x (streamMerge xs)
     where merge':: Stream alpha -> Stream alpha -> Stream alpha
-          merge' xs                               []                                           = xs
-          merge' []                               ys                                           = ys
+          merge' xs                               []                                       = xs
+          merge' []                               ys                                       = ys
           merge' s1@(e1@(Event (Just t1) _):xs) s2@(e2@(Event (Just t2) _):ys) | t1 < t2   = e1: merge' s2 xs
-                                                                                   | otherwise = e2: merge' ys s1
-          merge' (e1:xs)                          s2                                           = e1: merge' s2 xs  -- arbitrary ordering if 1 or 2 of the events aren't timed
+                                                                               | otherwise = e2: merge' ys s1
+          merge' (e1:xs)                          s2                                       = e1: merge' s2 xs  -- arbitrary ordering if 1 or 2 of the events aren't timed
                                                                                                                    -- swap order of streams so as to interleave
 
 -- Join 2 streams by combining elements
