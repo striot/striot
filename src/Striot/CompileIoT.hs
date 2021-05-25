@@ -9,7 +9,6 @@ module Striot.CompileIoT ( createPartitions
                          , writePart
                          , genDockerfile
                          , partitionGraph
-                         , simpleStream
                          , optimiseWriteOutAll
 
                          , optimise -- XXX we are re-exporting this from LogicalOptimiser
@@ -423,22 +422,6 @@ writePart opts (x,y) = let
 partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
 partitionGraph graph partitions opts = do
     mapM_ (writePart opts) $ zip [1..] $ generateCode graph partitions opts
-
--- |Convenience function for specifying a simple path-style of stream
--- processing program, with no merge or join operations. The list of tuples are
--- converted into a series of connected Stream Vertices in a Graph. The tuple
--- arguments are the relevant `StreamOperator` for the node; the parameters;the
--- *output* type and the service time. The other parameters to `StreamVertex`
--- are inferred from the neighbouring tuples. Unique and ascending `vertexId`
--- values are assigned.
-simpleStream :: [(StreamOperator, [ExpQ], String, Double)] -> Graph StreamVertex
-simpleStream tupes = path lst
-
-    where
-        intypes = "IO ()" : (map (\(_,_,ty,_) -> ty) (init tupes))
-        tupes3 = zip3 [1..] intypes tupes
-        lst = map (\ (i,intype,(op,params,outtype,sTime)) ->
-            StreamVertex i op params intype outtype sTime) tupes3
 
 ------------------------------------------------------------------------------
 
