@@ -28,6 +28,7 @@ module Striot.LogicalOptimiser ( applyRules
                                , filterMerge
                                , expandMerge
                                , mergeFuse
+                               , expandFilterAcc
 
                                , htf_thisModulesTests
                                ) where
@@ -111,6 +112,7 @@ rules = [ filterFuse
         , filterMerge
         , expandMerge
         , mergeFuse
+        , expandFilterAcc
         ]
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
@@ -779,6 +781,57 @@ mergeFusePost = path [v23,v26,v28]
     `Overlay`   path [v25,v26]
 
 test_mergeFuse = assertEqual (applyRule mergeFuse mergeFusePre) mergeFusePost
+
+-- streamExpand >>> streamFilterAcc ... = streamScan ... >>> streamExpand-----
+-- [a]           a                   a  [a]               [a]              a
+
+-- filterAcc :: (b -> a -> b) -> (a -> b -> Bool) -> b -> [a] -> ([a],b)
+filterAcc = [| \ accfn pred acc -> let
+    foldfn (list,acc) v = (if pred v acc then v:list else list, accfn acc v)
+    in foldl foldfn ([],acc)
+    |]
+
+expandFilterAcc :: RewriteRule
+expandFilterAcc (Connect (Vertex e@(StreamVertex i Expand _ t1 t2 _))
+                         (Vertex fa@(StreamVertex j (FilterAcc _) (f:a:p:_) _ _ s))) =
+    Just $ \g -> let
+        scan = StreamVertex i Scan
+            [ [| \(_,acc) a -> $(filterAcc) $(f) $(p) acc a |]
+            , [| ([],$(a)) |]
+            ] t1 t1 s
+        mapr = StreamVertex j Map [[| reverse.fst |]] t1 t1 0
+        k    = newVertexId g
+        expd = e { vertexId = k }
+
+        in g & removeEdge e fa
+             & replaceVertex e scan
+             & replaceVertex fa expd
+             & overlay (path [scan,mapr,expd])
+
+expandFilterAcc  _ = Nothing
+
+expandFilterAccPre = path
+    [ StreamVertex 0 (Source 1)      []        "[Int]" "[Int]" 1
+    , StreamVertex 1 Expand          []        "[Int]" "Int"   1
+    , StreamVertex 2 (FilterAcc 0.5) [f, a, p] "Int"   "Int"   2
+    ] where f = [| (\_ h -> (False, h)) |]
+            a = [| (True, undefined) |]
+            p = [| \new (b,old) -> b || old /= new |]
+
+expandFilterAccPost = path
+    [ StreamVertex 0 (Source 1)      []        "[Int]" "[Int]" 1
+    , StreamVertex 1 Scan            [sa, si]  "[Int]" "[Int]" 2
+    , StreamVertex 2 Map             [f']      "[Int]" "[Int]" 0
+    , StreamVertex 3 Expand          []        "[Int]" "Int"   1
+    ] where f  = [| (\_ h -> (False, h)) |]
+            a  = [| (True, undefined) |]
+            p  = [| \new (b,old) -> b || old /= new |]
+            f' = [| reverse.fst |]
+            sa = [| \(_,acc) a -> $(filterAcc) $(f) $(p) acc a |]
+            si = [| ([],$(a)) |]
+
+test_expandFilterAcc = assertEqual expandFilterAccPost
+    $ applyRule expandFilterAcc expandFilterAccPre
 
 -- utility/boilerplate -------------------------------------------------------
 
