@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-
     demonstration of generating examples/pipeline via CompileIoT
  -}

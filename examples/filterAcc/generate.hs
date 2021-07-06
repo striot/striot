@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-
     demonstration of generating examples/merge via CompileIoT
  -}

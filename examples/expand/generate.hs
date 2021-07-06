@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 import Striot.CompileIoT
 import Striot.StreamGraph
 
