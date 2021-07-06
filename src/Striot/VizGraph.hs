@@ -5,10 +5,14 @@ module Striot.VizGraph ( streamGraphToDot
                        , displayGraph
                        , displayGraphKitty
                        , displayGraphDebug
+                       , displayPartitionedGraph
+                       , partitionedGraphToDot
+                       , subGraphToPartition
 
                        , htf_thisModulesTests) where
 
 import Striot.StreamGraph
+import Striot.CompileIoT
 import Algebra.Graph
 import Algebra.Graph.Export.Dot
 import Data.String
@@ -110,3 +114,42 @@ displayGraphKitty g = do
 -- | display a debug graph using GraphViz and ImageMagick
 displayGraphDebug = displayGraph' (export debugStyle :: StreamGraph -> String)
 debugStyle        = myStyle { vertexAttributes = (\v -> ["label":=(escape . show) v]) }
+
+-- | display a `PartitionedGraph` using GraphViz and "display" from ImageMagick
+displayPartitionedGraph :: PartitionedGraph -> IO ()
+displayPartitionedGraph = displayGraph' partitionedGraphToDot
+
+-- | Convert `PartitionedGraph` into a GraphViz representation,
+-- with each sub-graph separately delineated,
+-- encoded in a `String`.
+partitionedGraphToDot :: PartitionedGraph -> String
+partitionedGraphToDot pgs@(ps,cuts) = let
+    graph = overlays (cuts:ps)
+    pre   = map (uncurry subGraphToPartition) (zip ps [0..])
+    style = myStyle
+      { preamble = pre -- without forcing shape=box, the nodes end up ellipses
+      , vertexAttributes = (\v -> [ "label":=(escape . show') v
+                                  , "shape":="box"]) }
+    in export style graph
+
+-- | generate a GraphViz subgraph definition (encoded into a `String`)c
+-- corresponding to a StreamGraph and an Int representing a label.
+--
+-- We place the Partition label at the bottom and offset it with some
+-- whitespace to reduce the likelyhood of the label being overdrawn by
+-- edges or edge labels.
+subGraphToPartition :: StreamGraph -> Int -> String
+subGraphToPartition sg i = let
+    n = show i
+    ids = intercalate "," $ map (show.vertexId) (vertexList sg)
+    in "  subgraph cluster"++n++" {\n\
+    \    color=\"#888888\"\n\
+    \    style=\"rounded,dashed\"\n\
+    \    labelloc=b\n\
+    \    label=\"                    Node "++n++"\"\n\
+    \    "++ids++"\n\
+    \  }\n"
+
+-- test data
+pgs   = createPartitions mergeEx [[1,2],[3,4],[5,6]]
+pgs'  = createPartitions expandEx [[1,2],[5],[6]]
