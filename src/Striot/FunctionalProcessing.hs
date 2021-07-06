@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
+{-# OPTIONS_HADDOCK prune #-}
 {-|
 Module      : Striot.FunctionalProcessing
 Description : StrIoT operators for processing Streams

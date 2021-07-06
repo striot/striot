@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
+{-# OPTIONS_HADDOCK prune #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Striot.Jackson ( OperatorInfo(..)

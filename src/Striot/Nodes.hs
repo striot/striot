@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds         #-}
+{-# OPTIONS_HADDOCK prune #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Striot.Nodes ( nodeSource
                     , nodeLink

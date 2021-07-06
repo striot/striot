@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -F -pgmF htfpp -Wno-overlapping-patterns #-}
+{-# OPTIONS_HADDOCK prune #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Striot.Partition ( allPartitions
