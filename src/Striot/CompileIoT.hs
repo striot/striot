@@ -53,7 +53,7 @@ type Partition = Int
 -- The inner-lists are the IDs of Operators to include in that partition.
 type PartitionMap = [[Int]]
 
--- `createPartitions` returns ([partitions], [inter-graph links])
+-- |`createPartitions` returns ([partitions], [inter-graph links])
 -- where inter-graph links are the cut edges due to partitioning
 createPartitions :: StreamGraph -> PartitionMap -> PartitionedGraph
 createPartitions _ [] = ([],empty)
