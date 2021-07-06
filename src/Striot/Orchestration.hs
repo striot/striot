@@ -14,27 +14,24 @@ programs described as StreamGraphs.
 -}
 module Striot.Orchestration ( distributeProgram
                             , distributeProgram'
-                            , partitionGraph
+                            , viableRewrites
+                            , deriveRewritesAndPartitionings
+                            , allPartitionsPaired
+                            , sumUtility
 
                             -- $fromCompileIoT
                             , simpleStream
-
-                            , viableRewrites
-                            , filterViableBestUtility
-                            , bestPartitioning
+                            , partitionGraph
 
                             , htf_thisModulesTests
                             ) where
 
-{- $fromCompileIoT
-Functions re-exported from `Striot.CompileIoT`.
- -}
-
 import Algebra.Graph
 import Data.List (nub, sortOn)
-import Data.Maybe (listToMaybe)
+import Data.Maybe (fromJust, isJust)
 import Test.Framework
 import Data.Function ((&))
+import Control.Arrow ((>>>))
 
 import Striot.CompileIoT
 import Striot.Jackson
@@ -43,85 +40,82 @@ import Striot.Partition
 import Striot.StreamGraph
 import Striot.VizGraph
 
-distributeProgram' :: StreamGraph -> (StreamGraph, PartitionMap)
-distributeProgram' sg = let
-    (u,best) = case filterViableBestUtility sg of
-        Nothing -> error "distributeProgram: no viable StreamGraphs"
-        Just x  -> x
+{- $fromCompileIoT
+Functions re-exported from `Striot.CompileIoT`.
+ -}
 
-    partMap = case bestPartitioning (ceiling u) best of
-        Nothing -> error "distributeProgram: no viable Partitionings"
-        Just x  -> x
+-- | The Score from applying a cost model (lower is better), wrapped in
+-- 'Maybe' where 'Nothing' represents when the ('StreamGraph','PartitionMap')
+-- is not viable.
+type Score = Maybe (Double, Double)
 
-    in (best,partMap)
+-- TODO: a type for ('StreamGraph','PartitionMap')?
 
--- | Given a stream processing program encoded in a StreamGraph:
--- - * generate derivative programs via rewrite rules.
--- - * Apply queuing analysis to the resulting graphs,
--- - * reject any graphs which are not viable
--- - * pick a program with the lowest overall utility.
--- - * determine the lowest number of nodes the program could be deployed upon,
--- - * partition the program accordingly.
+
+-- | Apply `distributeProgram'` to the supplied 'StreamGraph' to yield a
+-- (possibly rewritten) 'StreamGraph' and 'PartitionMap' pair; partition
+-- the graph accordingly; write out the generated source code files for
+-- deployment.
 distributeProgram :: StreamGraph -> GenerateOpts -> IO ()
 distributeProgram sg opts = let
     (best,partMap) = distributeProgram' sg
     in partitionGraph best partMap opts
 
--- | runs calculations over supplied streamgraphs and filters them for viability
-viableRewrites :: StreamGraph -> [([OperatorInfo],StreamGraph)]
-viableRewrites = filter (viableStreamGraph . fst)
-               . map (\s -> (calcAllSg s, s))
-               . nub
-               . applyRules 5
+-- | apply 'viableRewrites' to the supplied 'StreamGraph'. Throw an error if
+-- the result is an empty list. Otherwise, sort the results by their costings
+-- and return the lowest-cost ('StreamGraph','PartitionMap') pairing.
+distributeProgram' :: StreamGraph -> (StreamGraph, PartitionMap)
+distributeProgram' sg = case viableRewrites sg of
+    [] -> error "distributeProgram: no viable rewrites"
+    rs -> rs & sortOn snd & head & fst
 
-test_viableRewrites_graph = assertNotEmpty $ viableRewrites graph 
+-- | Given a stream processing program encoded in a 'StreamGraph':
+--
+--   * generate derivative graphs via rewrite rules.
+--   * generate all possible partitionings for each graph
+--   * for each of these pairs:
+--
+--       * reject any pairings which are not viable
+--       * Apply a cost model, based on queueing theory and minimising
+--       the number of partitions
+--
+--   * return the ('StreamGraph','PartitionMap') pairings, paired with
+--   with the score from applying the cost model.
+viableRewrites :: StreamGraph -> [((StreamGraph, PartitionMap), Score)]
+viableRewrites = deriveRewritesAndPartitionings
+             >>> map (toSnd (uncurry sumUtility))
+             >>> filter (isJust . snd)
+
+test_viableRewrites_graph = assertNotEmpty $ viableRewrites graph
 test_viableRewrites_tooMuch = assertEmpty  $ viableRewrites tooMuch
 
--- | Generate viable rewrites of the supplied StreamGraph. If there aren't
--- any, return Nothing. Otherwise, return the best according to our Cost
--- Model (lowest total utility), paired with its total utility.
-filterViableBestUtility :: StreamGraph -> Maybe (Double, StreamGraph)
-filterViableBestUtility sg = let
-    graphs = map (\(ois,s) -> (sumUtility ois, s)) (viableRewrites sg)
-    in if [] == graphs
-        then Nothing
-        else Just (minimum graphs)
+toSnd :: (a -> b) -> a -> (a, b)
+toSnd f a = (a, f a)
 
-test_filterViableBestUtility_graph   = assertJust    $ filterViableBestUtility graph
-test_filterViableBestUtility_tooMuch = assertNothing $ filterViableBestUtility tooMuch
+-- | given a StreamGraph, derives further graphs by applying rewrite
+-- rules and pairs them with all their potential partitionings
+deriveRewritesAndPartitionings :: StreamGraph -> [(StreamGraph,PartitionMap)]
+deriveRewritesAndPartitionings = concatMap allPartitionsPaired . nub . applyRules 5
 
--- | Given a minimum number of nodes and a StreamGraph, calculate a
--- minimum-node PartitionMap of least minNodes nodes for the supplied
--- StreamGraph.
-bestPartitioning :: Int -> StreamGraph -> Maybe PartitionMap
-bestPartitioning minNodes sg = let
-    parts = validPartitionings minNodes sg
-    in if [] == parts
+-- | given a StreamGraph, generate all partitionings of it and pair
+-- them individually with the StreamGraph.
+allPartitionsPaired :: StreamGraph -> [(StreamGraph,PartitionMap)]
+allPartitionsPaired sg = map (\pm -> (sg,pm)) (allPartitions sg)
+
+-- | Return a score for a 'StreamGraph'/'PartitionMap' pair representing a
+-- "cost" for the pair, where lower is better. The score is wrapped in
+-- a 'Maybe'. 'sumUtility' returns Nothing if the pairing is not viable.
+--
+-- TODO what about no viable partitionings?? Can this happen?
+sumUtility :: StreamGraph -> PartitionMap -> Score
+sumUtility sg pm = let
+    oi = calcAllSg sg
+    in if isOverUtilised oi
        then Nothing
-       else (Just . head . sortOn length) parts
-
-test_bestPartitioning_result  = assertJust    $ bestPartitioning n graph
-    where n = length (vertexList graph)
-test_bestPartitioning_nothing = assertNothing $ bestPartitioning (n+1) graph
-    where n = length (vertexList graph)
-
--- | given a minimum number of nodes `minNodes` and a StreamGraph, return a
--- list of possible valid partitionings that are at least `minNodes` in length.
-validPartitionings :: Int -> StreamGraph -> [PartitionMap]
-validPartitionings minNodes = filter ((<=) minNodes . length) . allPartitions
-
--- allPartitions returns at least one mapping of size <4…
-test_validPartitionings_preamble = assertNotEmpty
-    (filter (<4) . map length . allPartitions $ graph)
--- …but validPartitionings 4 does not.
-test_validPartitionings_minNodes = assertEmpty
-    (filter (<4) . map length . validPartitionings 4 $ graph)
-
--- cost model (lower is better)
-type CostModel = [OperatorInfo] -> Double
-
-sumUtility :: CostModel
-sumUtility = sum . map util
+       else let graphScore = sum . map util $ oi
+                numOps     = length oi
+                partScore  = fromIntegral (length pm) / fromIntegral numOps
+                in Just    $ (graphScore, partScore)
 
 -- | fitness function for StreamGraphs. Is this a viable program?
 viableStreamGraph :: [OperatorInfo] -> Bool
@@ -157,7 +151,4 @@ tooMuch = simpleStream
 
 test_tooMuch_notviable = assertBool (not . viableStreamGraph . calcAllSg $ tooMuch)
 
--- distributeProgram should find a rewrite which is not over-utilised,
--- and then a lowest-number-of-partitions partitioning, before performing
--- the code generation.
-main = distributeProgram graph opts
+main = htfMain htf_thisModulesTests
