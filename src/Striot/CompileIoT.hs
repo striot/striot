@@ -395,13 +395,16 @@ test_reform_s1_2 = assertEqual s1 (unPartition $ createPartitions s1 [[0],[1,2]]
 
 genDockerfile listen opts = 
     let pkgs = packages opts in concat
-    [ "FROM striot/striot-base:latest\n"
+    [ "FROM striot/striot-base:latest as builder\n"
     , "WORKDIR /opt/node\n"
     , "COPY . /opt/node\n"
     , if pkgs /= [] then "RUN cabal install " ++ (intercalate " " pkgs) else ""
-    , "\n"
     , "RUN ghc node.hs\n"
+    , "\n"
+    , "FROM striot/striot-runtime:latest\n"
+    , "COPY --from=builder /opt/node/node /opt/node/node\n"
     , if listen then "EXPOSE 9001\n" else ""
+    , "\n"
     , "CMD /opt/node/node\n"
     ]
 
