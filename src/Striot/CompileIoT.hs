@@ -61,45 +61,8 @@ createPartitions g (p:ps) = (thisGraph:tailParts, edgesOut `overlay` tailCuts) w
     vs         = vertices $ filter fv (vertexList g)
     es         = edges $ filter (\(v1,v2) -> (fv v1) && (fv v2)) (edgeList g)
     thisGraph  = overlay vs es
-    stripMerge = mkStripMerge thisGraph g
-    edgesOut   = edges $ filter (\(v1,v2) -> (fv v1) && (not(fv v2))) (edgeList (stripMerge g))
-    (tailParts, tailCuts) = createPartitions (stripMerge g) ps
-
--- | Builds a function to remove Merges from a StreamGraph, if they are
--- connected to from operators in another (local) graph. We remove Merges
--- from the beginning of Partitions and use the TCP/IP machinery to merge
--- multiple incoming streams instead.
-mkStripMerge :: StreamGraph -> StreamGraph -> (StreamGraph -> StreamGraph)
-mkStripMerge local global = let
-    -- find Merges in global Graph connected to from local Graph
-    merges = map snd
-           $ filter (\(f,t)-> f `elem` vertexList local && operator t == Merge)
-           $ edgeList global
-
-    remove m = let nextOp = snd . head . filter ((==m).fst) . edgeList $ global
-        in removeEdge nextOp nextOp . replaceVertex m nextOp
-
-    in \g -> foldl (&) g (map remove merges)
-
-global = path
-    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
-    , StreamVertex 1 Merge [] "Int" "Int" 2
-    , StreamVertex 2 Map [[| show |]] "Int" "String" 3
-    , StreamVertex 3 Sink [[| mapM_ print |]] "String" "String" 4
-    ]
-local = Vertex $ StreamVertex 0 (Source 1) [] "Int" "Int" 1
-
-stripMergePost = path
-    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
-    , StreamVertex 2 Map [[| show |]] "Int" "String" 3
-    , StreamVertex 3 Sink [[| mapM_ print |]] "String" "String" 4
-    ]
-
-test_stripMerge1 = assertEqual stripMergePost $
-    mkStripMerge local global $ global
-
-test_stripMerge2 = assertEqual stripMergePost $
-    mkStripMerge local stripMergePost $ stripMergePost
+    edgesOut   = edges $ filter (\(v1,v2) -> (fv v1) && (not(fv v2))) (edgeList g)
+    (tailParts, tailCuts) = createPartitions g ps
 
 unPartition :: PartitionedGraph -> Graph StreamVertex
 unPartition (a,b) = overlay b $ foldl overlay Empty a
@@ -184,25 +147,29 @@ generateCodeFromStreamGraph opts parts cuts (partId,sg) = intercalate "\n" $
         padding = "    "
         pad = map (padding++)
 
-        sgTypeSignature = if startsWithJoin sg
-            then "streamGraphFn ::"
-                    ++" Stream "++inType sg++" ->"
+        sgTypeSignature = "streamGraphFn ::" ++ case startsWith sg of
+            Join ->   " Stream "++inType sg++" ->"
                     ++" Stream "++inType sg++" ->"
                     ++" Stream "++outType sg
-            else "streamGraphFn ::"++" Stream "++inType sg++" ->"++" Stream "++outType sg
+            -- the merge takes place in TCP/IP prior to the streamGraphFn.
+            -- note the re-use of outType (a) instead of inType ([a])
+            Merge -> " Stream "++outType sg++" ->"++" Stream "++outType sg
+            _     -> " Stream "++inType  sg++" ->"++" Stream "++outType sg
 
         sgIntro = "streamGraphFn "++sgArgs++" = let"
         sgArgs = if startsWithJoin sg
             then "n1 n2"
             else "n1"
-        sgBody = pad $ case zip [(valence+1)..] intVerts of
+        sgBody = pad $ case intVerts of
             [] -> ["n2 = n1"]
-            ns -> map generateCodeFromVertex ns
+            ns -> if startsWithJoin sg
+                  then map generateCodeFromVertex (zip [3..] ns)
+                  else map generateCodeFromVertex (zip [2..] ns)
+
         imports' = (map ("import "++) (imports opts)) ++ ["\n"]
         lastIdentifier = 'n':(show $ length intVerts
             + if startsWithJoin sg then 2 else 1)
         intVerts= filter (not . singleton) $ vertexList sg
-        valence = partValence sg cuts
 
 nodeFn parts sg partId cuts opts =
     if length parts == 1
@@ -314,18 +281,18 @@ generateNodeSrc partId nodes opts parts = let
 
 -- | does this StreamGraph start with a Join operator?
 startsWithJoin :: StreamGraph -> Bool
-startsWithJoin sg = let
-    joinOps   = filter ((==Join).operator) . vertexList $ sg
-    hasInputs = map snd . edgeList $ sg
-    in length joinOps > 0 && (not . or . map (`elem` hasInputs) $ joinOps)
+startsWithJoin = (Join==) . startsWith
+
+startsWith :: StreamGraph -> StreamOperator
+startsWith sg = let
+    inEdges = map snd (edgeList sg)
+    in (operator . head . filter (not . (flip elem) inEdges) . vertexList) sg
 
 test_startsWithJoin_1 = assertBool . startsWithJoin . path $
     [StreamVertex 1 Join [] "" "" 1, StreamVertex 0 Merge [] "" "" 2]
 
 test_startsWithJoin_2 = assertBool . not . startsWithJoin . path $
     [StreamVertex 0 Merge [] "" "" 3, StreamVertex 1 Join [] "" "" 4]
-
-test_startsWithJoin_3 = assertBool . not . startsWithJoin $ empty
 
 generateNodeSink :: StreamGraph -> String
 generateNodeSink sg = "main = " ++ (showParam $
@@ -339,22 +306,24 @@ generateNodeSink sg = "main = " ++ (showParam $
 -- to others, and is used to calculate the names of the input stream
 -- argument(s).
 -- As the StreamVertex parameters may need to reference the input streams,
--- the generated expression is wrapped in a lambda expression that names
--- them 's' for unary input streams and 's1, s2' for binary input streams
--- (Join and, for the time being, Merge)
--- XXX: streamMerge is broken. We have no way of knowing how many input
--- streams there are supposed to be, so we guess at 2.
+-- the generated expression is wrapped in a lambda expression with a
+-- constant stream name 's'.
 generateCodeFromVertex :: (Int, StreamVertex) -> String
-generateCodeFromVertex (opid, v)  = let
-    op      = operator v
-    lparams = if op `elem` [Join,Merge] then "s1 s2" else "s"
-    params  = intercalate " " (map (paren.showParam) $ parameters v)
-    args    = concat $ if op `elem` [Join,Merge]
-        then ["n", show (opid-2), " n", show (opid-1)]
-        else ["n", show (opid-1)]
-    in
-        --"n" ++ show opid ++ " = (\\" ++ lparams ++ " -> " ++ printOp op ++ " " ++ params ++ " "++lparams++") " ++ args
-        concat ["n", show opid, " = (\\", lparams, " -> ", printOp op, " ", params, " ", lparams, ") ", args]
+generateCodeFromVertex (opid, v) = let
+    op  = operator v
+    n   = 'n' : show opid
+    n_1 = 'n' : show (opid - 1)
+    in case op of
+        -- merges are handled by the runtime via TCP/IP. Replace with a no-op
+        Merge -> n++" = "++n_1
+
+        -- Joins have two inputs and no parameters
+        Join  -> let n_2 = 'n' : show (opid - 2)
+                 in  concat [n, " = streamJoin ", n_2, " ", n_1]
+
+        _ -> let params  = intercalate " " $ map (paren.showParam) (parameters v)
+             in  concat [n, " = (\\s -> ", printOp op, " ", params, " s) ", n_1]
+
 
 paren :: String -> String
 paren s = "("++s++")"
@@ -363,16 +332,6 @@ printOp :: StreamOperator -> String
 printOp (Filter _) = "streamFilter"
 printOp (FilterAcc _) = "streamFilterAcc"
 printOp op = "stream" ++ (show op)
-
--- how many incoming edges to this partition?
--- + how many source nodes
-partValence :: StreamGraph -> StreamGraph -> Int
-partValence g cuts = let
-    verts = vertexList g
-    inEdges = filter (\e -> (snd e) `elem` verts) (edgeList cuts)
-    sourceNodes = filter (isSource . operator) (vertexList g)
-    in
-        (length sourceNodes) + (length inEdges)
 
 ------------------------------------------------------------------------------
 -- tests / test data
@@ -404,6 +363,15 @@ genDockerfile listen opts =
     , if listen then "EXPOSE 9001\n" else ""
     , "CMD /opt/node/node\n"
     ]
+
+mergeEx = path
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
+    , StreamVertex 1 Merge [] "[Int]" "Int" 2
+    , StreamVertex 2 Map [[| show |]] "Int" "String" 3
+    , StreamVertex 3 Sink [[| mapM_ print |]] "String" "String" 4
+    ]
+
+------------------------------------------------------------------------------
 
 -- XXX rename
 writePart :: GenerateOpts -> (Int, String) -> IO ()
