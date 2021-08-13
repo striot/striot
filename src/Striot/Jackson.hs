@@ -103,7 +103,6 @@ arrivalRate:: Array (Int, Int) Double -> Array Int Double -> Double -> Array Int
 -- p - selectivities of filters
 -- p0i - distribution of input events into the system (i.e. to which nodes, which are the source nodes)
 -- alpha- arrival rate into the system
--- XXX throwing a run-time exception when called via calcAllSg, for zeroth element
 arrivalRate p p0i alpha = arrivalRate' p aa
                               where aa = va_mult p0i alpha
 
