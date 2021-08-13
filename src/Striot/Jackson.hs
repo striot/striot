@@ -6,6 +6,7 @@ module Striot.Jackson ( OperatorInfo(..)
 
                       , arrivalRate
                       , arrivalRate'
+                      , outputRate
 
                       , derivePropagationArray
                       , deriveServiceTimes
@@ -345,6 +346,48 @@ graph = path
     ]
 
 test_isOverUtilised = assertBool $ isOverUtilised (calcAllSg graph)
+
+------------------------------------------------------------------------------
+-- what is the output rate of an Operator?
+outputRate :: StreamGraph -> Int {- operator id -} -> Double
+outputRate sg i = let
+    ois = map (\oi -> (opId oi, oi)) $ calcAllSg sg
+    v   = (head . filter ((==i) . vertexId) . vertexList) sg
+    arr = (arrRate . fromJust . lookup i) ois
+
+    in case operator v of
+        (Filter sel)    -> arr * sel
+        (FilterAcc sel) -> arr * sel
+
+        -- the output rate of Join is the slowest input rate
+        Join            -> ( minimum
+                           . map (outputRate sg . vertexId . fst)
+                           . filter ((==i) . vertexId . snd)
+                           . edgeList
+                           ) sg
+    {-
+        Window          -> 0
+    -}
+        _               -> arr
+
+test_outputRate_src    = assertEqual 1.0 $ outputRate g 1
+test_outputRate_merge  = assertEqual 2.0 $ outputRate g 3
+test_outputRate_join   = assertEqual 2.0 $ outputRate g 3
+test_outputRate_filter = assertEqual 1.0 $ outputRate g 6
+
+v1 = Vertex $ StreamVertex 1 (Source 1)   [] "Int" "Int" 0
+v2 = Vertex $ StreamVertex 2 (Source 1)   [] "Int" "Int" 0
+v3 = Vertex $ StreamVertex 3 Merge        [] "Int" "Int" 0
+v4 = Vertex $ StreamVertex 4 (Source 3)   [] "Int" "Int" 0
+v5 = Vertex $ StreamVertex 5 Join         [] "Int" "(Int,Int)" 0
+v6 = Vertex $ StreamVertex 6 (Filter 0.5) [] "(Int,Int)" "(Int,Int)" 0
+v7 = Vertex $ StreamVertex 7 Sink         [] "(Int,Int)" "IO ()" 0
+
+m  = (v1 `connect` v3) `overlay` (v2 `connect` v3)
+g  = m `overlay`
+     (v3 `connect` v5) `overlay` (v4 `connect` v5)
+     `overlay` (v5 `connect` v6)
+     `overlay` (v6 `connect` v7)
 
 ------------------------------------------------------------------------------
 -- Matrix.LU.inverse fails with 0-indexed arrays. bumpIndex and bumpIndex2 are
