@@ -107,15 +107,17 @@ defaultOpts = GenerateOpts
 -- |Partitions the supplied `StreamGraph` according to the supplied `PartitionMap`
 -- and options specified within the supplied `GenerateOpts` and returns a list of
 -- the sub-graphs converted into source code and encoded as `String`s.
---
--- TODO: the sorting of the `PartitionMap` is a work-around for
--- <https://github.com/striot/striot/issues/124>
-generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
-generateCode sg pm opts = let
+generateCode :: GenerateOpts -> StreamGraph -> PartitionMap -> [String]
+generateCode opts sg pm = let
     (sgs,cuts)      = createPartitions sg (sort (map sort pm))
     sgs'            = if rewrite opts then map optimise sgs else sgs
     enumeratedParts = zip [1..] sgs'
     in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
+
+-- TODO: the sorting of the `PartitionMap` is a work-around for
+-- <https://github.com/striot/striot/issues/124>
+--
+-- TODO: there is no test coverage for generateCode
 
 data NodeType = NodeSource | NodeSink | NodeLink deriving (Show)
 
@@ -390,7 +392,7 @@ writePart opts (x,y) = let
 -- source code to individual source code files, one per node.
 partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
 partitionGraph graph partitions opts = do
-    mapM_ (writePart opts) $ zip [1..] $ generateCode graph partitions opts
+    mapM_ (writePart opts) $ zip [1..] $ generateCode opts graph partitions
 
 ------------------------------------------------------------------------------
 
