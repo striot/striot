@@ -313,14 +313,16 @@ deriveServiceTimes sg = let
 
     in bumpIndex (1 - m) $ listArray (m,n) $ map prop [m..n]
 
+totalArrivalRate = sum . map (\(Source x) -> x) . filter isSource . map operator . vertexList
+
 calcAllSg :: StreamGraph -> [OperatorInfo]
 calcAllSg sg = deBump $ calcAll propagation arrivals services
     where
         propagation      = derivePropagationArray sg
-        totalArrivalRate = sum $ map (\(Source x) -> x) $ filter isSource $ map operator $ vertexList sg
-        inputs           = deriveInputsArray sg totalArrivalRate
+        totalArrivals    = totalArrivalRate sg
+        inputs           = deriveInputsArray sg totalArrivals
         services         = deriveServiceTimes sg
-        arrivals         = arrivalRate propagation inputs totalArrivalRate
+        arrivals         = arrivalRate propagation inputs totalArrivals
 
         -- re-adjust vertexIds down to the original range if it began <1
         -- and filter out any dummy vertices that were added to fill the range
