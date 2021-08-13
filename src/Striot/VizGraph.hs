@@ -4,9 +4,11 @@
 
 module Striot.VizGraph ( streamGraphToDot
                        , displayGraph
+                       , displayGraph'
                        , displayGraphKitty
                        , displayGraphDebug
                        , displayPartitionedGraph
+                       , jacksonGraphToDot
                        , partitionedGraphToDot
                        , subGraphToPartition
 
@@ -16,6 +18,7 @@ module Striot.VizGraph ( streamGraphToDot
 
 import Striot.StreamGraph
 import Striot.CompileIoT
+import Striot.Jackson
 import Algebra.Graph
 import Algebra.Graph.Export.Dot
 import Data.String
@@ -49,6 +52,7 @@ myStyle = Style
     , vertexName              = show . vertexId
     , vertexAttributes        = (\v -> ["label":=(escape . show') v])
     , edgeAttributes          = (\_ o -> ["label":=intype o])
+    , attributeQuoting        = DoubleQuotes
     }
 
 -- escape a string, suitable for inclusion in a .dot file
@@ -159,6 +163,50 @@ writeGraph toDot g path = do
       { std_in = CreatePipe }
     hPutStr hin (toDot g)
     hClose hin
+
+-- | Convert a `StreamGraph` into a GraphViz representation, including
+-- parameters derived from queueing theory/Jackson
+jacksonGraphToDot :: StreamGraph -> String
+jacksonGraphToDot graph = let
+    jackson = map (\oi -> (opId oi, oi)) (calcAllSg graph) -- (Int, [OperatorInfo])
+
+    style = myStyle
+      { edgeAttributes          = (\i _ -> [ "label" := concat [ "<<SUP>"
+                                                               , show (outputRate graph (vertexId i))
+                                                               , "</SUP>/<SUB>s</SUB> <I>:: "
+                                                               , outtype i
+                                                               , "</I>>" ]])
+
+      , vertexAttributes        = (\v -> [ "label"     := (doubleQuotes . escape . show') v
+                                         , "xlabel"    := srvRate v
+                                         , "fillcolor" := if   overUt v
+                                                          then "\"#ffcccc\""
+                                                          else "\"#ffffff\"" ])
+      , attributeQuoting        = NoQuotes
+      , graphAttributes         = quoteValues (graphAttributes myStyle)
+      , defaultVertexAttributes = quoteValues (defaultVertexAttributes myStyle)
+      , defaultEdgeAttributes   = quoteValues (defaultEdgeAttributes myStyle)
+      }
+
+    arr v = case lookup (vertexId v) jackson of
+        Nothing -> "?"
+        Just oi -> show (arrRate oi) -- This is invalid for merge/join where arrrate is combined not from one node
+
+    srvRate v = case Striot.StreamGraph.serviceTime v of
+        0 -> "<>" -- effectively undefined/not useful
+        t -> wrap $ show (1 / t)
+        where wrap s = "<<SUP>"++s++"</SUP>/<SUB>s</SUB>>"
+
+    overUt v = case lookup (vertexId v) jackson of
+        Nothing -> False
+        Just oi -> util oi > 1
+
+    doubleQuotes v = "\"" ++ v ++ "\""
+
+    -- avoiding Export.doubleQuotes to avoid IsString, Doc etc
+    quoteValues = map (\(k := v) -> k := (doubleQuotes v))
+
+    in export style graph
 
 -- test data
 pgs   = createPartitions mergeEx [[1,2],[3,4],[5,6]]
