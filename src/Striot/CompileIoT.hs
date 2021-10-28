@@ -6,6 +6,7 @@ module Striot.CompileIoT ( createPartitions
                          , generateCode
                          , GenerateOpts(..)
                          , defaultOpts
+                         , Partition
                          , PartitionMap
                          , writePart
                          , genDockerfile
