@@ -10,16 +10,17 @@ Maintainer  : StrIoT maintainers
 Stability   : experimental
 
 The highest-level StrIoT interfaces, for transforming and partitioning
-programs described as StreamGraphs.
+programs described as 'StreamGraph's.
 
 -}
-module Striot.Orchestration ( distributeProgram
+module Striot.Orchestration ( Plan
+                            , Cost
+                            , distributeProgram
                             , chopAndChange
                             , viableRewrites
                             , deriveRewritesAndPartitionings
                             , allPartitionsPaired
                             , sumUtility
-                            , Cost
 
                             -- $fromCompileIoT
                             , simpleStream
@@ -42,17 +43,14 @@ import Striot.Partition
 import Striot.StreamGraph
 import Striot.VizGraph
 
-{- $fromCompileIoT
-Functions re-exported from `Striot.CompileIoT`.
- -}
+-- | A Plan is a pairing of a 'StreamGraph' with a 'PartitionMap' that could
+-- be used for its partitioning and deployment.
+type Plan = (StreamGraph, PartitionMap)
 
--- | The Cost of a ('StreamGraph', 'PartitionMap') pairing (lower is better).
+-- | The Cost of a 'Plan' (lower is better).
 -- 'Nothing' represents a non-viable pairing. 'Maybe' n represents the cost
 -- n.
 type Cost = Maybe (Double, Double)
-
--- TODO: a type for ('StreamGraph', 'PartitionMap')?
--- type Plan = (StreamGraph, PartitionMap)
 
 -- | Apply rewrite rules to the supplied 'StreamGraph' to possibly rewrite
 -- it; partition it when a generated 'PartitionMap'; generate and write out
@@ -63,12 +61,12 @@ distributeProgram sg opts = let
     in partitionGraph best partMap opts
 
 -- | apply 'viableRewrites' to the supplied 'StreamGraph'.
--- Return the lowest-cost ('StreamGraph', 'PartitionMap') pairing.
+-- Return the lowest-cost 'Plan'.
 -- If there are no pairings, throw an error.
 -- 
 -- TODO: rename this. It's a bad name!
 -- optimiseChoosePartitionMap?
-chopAndChange :: StreamGraph -> (StreamGraph, PartitionMap)
+chopAndChange :: StreamGraph -> Plan
 chopAndChange sg = case viableRewrites sg of
     [] -> error "distributeProgram: no viable programs"
     rs -> rs & sortOn snd & head & fst
@@ -77,14 +75,13 @@ chopAndChange sg = case viableRewrites sg of
 --
 --   * generate derivative graphs via rewrite rules.
 --   * generate all possible partitionings for each graph
---   * for each pair of graph, partitioning:
+--   * for each pair of graph and partitioning ('Plan'):
 --
 --       * reject any pairings which are not viable
 --       * 'Cost' the pairs with the cost model 'sumUtility'
 --
---   * return the ('StreamGraph', 'PartitionMap') pairings, paired with
---   with the 'Cost' from applying the cost model.
-viableRewrites :: StreamGraph -> [((StreamGraph, PartitionMap), Cost)]
+--   * return the 'Plan' paired with with the 'Cost' from applying the cost model.
+viableRewrites :: StreamGraph -> [(Plan, Cost)]
 viableRewrites = deriveRewritesAndPartitionings
              >>> map (toSnd (uncurry sumUtility))
              >>> filter (isJust . snd)
@@ -100,17 +97,17 @@ toFst f a = (f a, a)
 
 -- | given a 'StreamGraph', derives further graphs by applying rewrite
 -- rules and pairs them with all their potential partitionings
-deriveRewritesAndPartitionings :: StreamGraph -> [(StreamGraph,PartitionMap)]
+deriveRewritesAndPartitionings :: StreamGraph -> [Plan]
 deriveRewritesAndPartitionings = concatMap allPartitionsPaired . nub . applyRules 5
 
 -- | given a 'StreamGraph', generate all partitionings of it and pair
 -- them individually with the 'StreamGraph'.
-allPartitionsPaired :: StreamGraph -> [(StreamGraph,PartitionMap)]
+allPartitionsPaired :: StreamGraph -> [Plan]
 allPartitionsPaired sg = map (\pm -> (sg,pm)) (allPartitions sg)
 
--- | Return a 'Cost' for a ('StreamGraph','PartitionMap') pair. Return
--- 'Nothing' if the pairing is not viable,
--- either due to an over-utilised operator or an over-utilised Partition.
+-- | Return a 'Cost' for a 'Plan'. Return
+-- 'Nothing' if the 'Plan' is not viable,
+-- either due to an over-utilised operator or an over-utilised 'Partition'.
 --
 sumUtility :: StreamGraph -> PartitionMap -> Cost
 sumUtility sg pm = let
@@ -206,3 +203,8 @@ test_overUtilisedPartition_rejected = -- example of an over-utilised partition
 test_overUtilisedPartition_acceptable = assertElem [[1,2,3],[4,5,6],[7,8,9]]
     $ map (sort . (map sort))
     $ (map (snd.fst) . viableRewrites) partUtilGraph -- :: [PartitionMap]
+
+{- $fromCompileIoT
+== CompileIoT functions
+Functions re-exported from `Striot.CompileIoT`.
+ -}
