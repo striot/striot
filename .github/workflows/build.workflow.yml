@@ -1,0 +1,69 @@
+name: Build and Test
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  cabal-build:
+    name: Cabal build
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        ghc: ['8.6', '8.8', '8.10', '9.0']
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: haskell/actions/setup@v1
+        with:
+          ghc-version: ${{ matrix.ghc }}
+
+      - name: Install librdkafka
+        run: |
+          # install librdkafka-dev
+          wget -qO - https://packages.confluent.io/deb/5.3/archive.key | sudo apt-key add -
+          sudo add-apt-repository "deb [arch=amd64] https://packages.confluent.io/deb/5.3 stable main"
+          sudo apt-get update && sudo apt-get install librdkafka-dev
+
+      - name: Install Haskell deps
+        run: |
+          cabal install happy alex HTF
+          cabal install c2hs
+          cabal install --lib --only-dependencies --extra-include-dirs=/usr/local/include --extra-lib-dirs=/usr/local/lib
+
+      - name: Build and test striot
+        run: |
+          cabal configure --enable-tests && cabal build && cabal test
+
+  stack-build:
+    name: Stack build (+ examples)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: haskell/actions/setup@v1
+        with:
+          ghc-version: '8.6'
+          enable-stack: true
+
+      - name: Install librdkafka
+        run: |
+          # install librdkafka-dev
+          wget -qO - https://packages.confluent.io/deb/5.3/archive.key | sudo apt-key add -
+          sudo add-apt-repository "deb [arch=amd64] https://packages.confluent.io/deb/5.3 stable main"
+          sudo apt-get update && sudo apt-get install librdkafka-dev
+
+      - name: Install Haskell deps
+        run: |
+          stack install happy alex HTF
+          stack install c2hs
+          stack install --only-dependencies
+
+      - name: Build and test striot
+        run: |
+          stack build && stack install && stack test
+          
+      - name: Build examples
+        run: |
+          ./gen_test_makefile.sh > Makefile; make

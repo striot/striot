@@ -48,7 +48,7 @@ library
                     , store-streaming   >= 0.1.0
                     , async
                     , prometheus        >= 2.2.2
-                    , net-mqtt          >= 0.6.2.1
+                    , net-mqtt          >= 0.6.2.1 && <= 0.7.1.0
                     , text
                     , process
                     , deepseq
@@ -84,7 +84,7 @@ test-suite test-striot
                     , store-streaming   >= 0.1.0
                     , async
                     , prometheus        >= 2.2.2
-                    , net-mqtt          >= 0.6.2.1
+                    , net-mqtt          >= 0.6.2.1 && <= 0.7.1.0
                     , text
                     , process
                     , deepseq
