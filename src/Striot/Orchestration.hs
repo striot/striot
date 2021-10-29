@@ -25,6 +25,8 @@ module Striot.Orchestration ( Plan
                             -- $fromCompileIoT
                             , simpleStream
                             , partitionGraph
+                            , GenerateOpts(..)
+                            , defaultOpts
 
                             , htf_thisModulesTests
                             ) where
@@ -55,9 +57,9 @@ type Cost = Maybe (Double, Double)
 -- | Apply rewrite rules to the supplied 'StreamGraph' to possibly rewrite
 -- it; partition it when a generated 'PartitionMap'; generate and write out
 -- Haskell source code files for each Partition, ready for deployment.
-distributeProgram :: StreamGraph -> GenerateOpts -> IO ()
-distributeProgram sg opts = let
-    (best,partMap) = chopAndChange sg
+distributeProgram :: GenerateOpts -> StreamGraph -> IO ()
+distributeProgram opts sg = let
+    (best,partMap) = chopAndChange opts sg
     in partitionGraph best partMap opts
 
 -- | apply 'viableRewrites' to the supplied 'StreamGraph'.
@@ -66,8 +68,8 @@ distributeProgram sg opts = let
 -- 
 -- TODO: rename this. It's a bad name!
 -- optimiseChoosePartitionMap?
-chopAndChange :: StreamGraph -> Plan
-chopAndChange sg = case viableRewrites sg of
+chopAndChange :: GenerateOpts -> StreamGraph -> Plan
+chopAndChange opts sg = case viableRewrites opts sg of
     [] -> error "distributeProgram: no viable programs"
     rs -> rs & sortOn snd & head & fst
 
@@ -81,13 +83,13 @@ chopAndChange sg = case viableRewrites sg of
 --       * 'Cost' the pairs with the cost model 'sumUtility'
 --
 --   * return the 'Plan' paired with with the 'Cost' from applying the cost model.
-viableRewrites :: StreamGraph -> [(Plan, Cost)]
-viableRewrites = deriveRewritesAndPartitionings
-             >>> map (toSnd (uncurry sumUtility))
-             >>> filter (isJust . snd)
+viableRewrites :: GenerateOpts -> StreamGraph -> [(Plan, Cost)]
+viableRewrites opts = deriveRewritesAndPartitionings
+                  >>> map (toSnd (uncurry (sumUtility opts)))
+                  >>> filter (isJust . snd)
 
-test_viableRewrites_graph = assertNotEmpty $ viableRewrites graph
-test_viableRewrites_tooMuch = assertEmpty  $ viableRewrites tooMuch
+test_viableRewrites_graph = assertNotEmpty $ viableRewrites defaultOpts graph
+test_viableRewrites_tooMuch = assertEmpty  $ viableRewrites defaultOpts tooMuch
 
 toSnd :: (a -> b) -> a -> (a, b)
 toSnd f a = (a, f a)
@@ -109,19 +111,14 @@ allPartitionsPaired sg = map (\pm -> (sg,pm)) (allPartitions sg)
 -- 'Nothing' if the 'Plan' is not viable,
 -- either due to an over-utilised operator or an over-utilised 'Partition'.
 --
-sumUtility :: StreamGraph -> PartitionMap -> Cost
-sumUtility sg pm = let
+sumUtility :: GenerateOpts -> StreamGraph -> PartitionMap -> Cost
+sumUtility opts sg pm = let
     oi = calcAllSg sg
-    in if isOverUtilised oi
+    in if   isOverUtilised oi || any (> maxNodeUtil opts) (totalNodeUtilisations oi pm)
        then Nothing
-
-       -- filter our Partition over-utilisation
-       else if   any (>partitionUtilThreshold) (sumUtilPartitions oi pm)
-            then Nothing
-
-            else let graphCost = sum . map util $ oi
-                     partCost  = fromIntegral (length pm)
-                 in  Just (graphCost, partCost)
+       else let graphCost = sum . map util $ oi
+                partCost  = fromIntegral (length pm)
+            in  Just (graphCost, partCost)
 
 -- | fitness function for StreamGraphs. Is this a viable program?
 viableStreamGraph :: [OperatorInfo] -> Bool
@@ -162,15 +159,13 @@ main = htfMain htf_thisModulesTests
 ------------------------------------------------------------------------------
 -- Rejecting over-utilised Partitions
 
-partitionUtilThreshold = 3.0 -- finger in the air
-
-sumUtilPartitions :: [OperatorInfo] -> PartitionMap -> [Double]
-sumUtilPartitions oi pm =
+totalNodeUtilisations :: [OperatorInfo] -> PartitionMap -> [Double]
+totalNodeUtilisations oi pm =
     let oi' = map (toFst opId) oi -- :: [(Int, OperatorInfo)]
-    in map (sumUtilPartition oi') pm
+    in map (sumPartitionUtilisation oi') pm
 
-sumUtilPartition :: [(Int, OperatorInfo)] -> [Partition] -> Double
-sumUtilPartition opInfo =
+sumPartitionUtilisation :: [(Int, OperatorInfo)] -> [Partition] -> Double
+sumPartitionUtilisation opInfo =
         sum . map (util . fromJust . (flip lookup) opInfo)
 
 partUtilGraph = simpleStream
@@ -194,15 +189,15 @@ partUtilGraph = simpleStream
 
 -- expensive to evaluate (1911ms)
 test_overUtilisedPartition_minThreePartitions = assertBool $
-    (not . any (<3) . map (length.snd.fst) . viableRewrites) partUtilGraph
+    (not . any (<3) . map (length.snd.fst) . viableRewrites defaultOpts) partUtilGraph
 
 test_overUtilisedPartition_rejected = -- example of an over-utilised partition
-    assertNothing (sumUtility partUtilGraph [[1,2],[3,4,5,6,7,8,9]])
+    assertNothing (sumUtility defaultOpts partUtilGraph [[1,2],[3,4,5,6,7,8,9]])
 
 -- example of an acceptable PartitionMap
 test_overUtilisedPartition_acceptable = assertElem [[1,2,3],[4,5,6],[7,8,9]]
     $ map (sort . (map sort))
-    $ (map (snd.fst) . viableRewrites) partUtilGraph -- :: [PartitionMap]
+    $ (map (snd.fst) . viableRewrites defaultOpts) partUtilGraph -- :: [PartitionMap]
 
 {- $fromCompileIoT
 == CompileIoT functions
