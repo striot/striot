@@ -1,10 +1,12 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
+{-# OPTIONS_HADDOCK prune #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Striot.CompileIoT ( createPartitions
                          , generateCode
                          , GenerateOpts(..)
                          , defaultOpts
+                         , Partition
                          , PartitionMap
                          , writePart
                          , genDockerfile
@@ -52,7 +54,7 @@ type Partition = Int
 -- The inner-lists are the IDs of Operators to include in that partition.
 type PartitionMap = [[Int]]
 
--- `createPartitions` returns ([partitions], [inter-graph links])
+-- |`createPartitions` returns ([partitions], [inter-graph links])
 -- where inter-graph links are the cut edges due to partitioning
 createPartitions :: StreamGraph -> PartitionMap -> PartitionedGraph
 createPartitions _ [] = ([],empty)
@@ -106,15 +108,17 @@ defaultOpts = GenerateOpts
 -- |Partitions the supplied `StreamGraph` according to the supplied `PartitionMap`
 -- and options specified within the supplied `GenerateOpts` and returns a list of
 -- the sub-graphs converted into source code and encoded as `String`s.
---
--- TODO: the sorting of the `PartitionMap` is a work-around for
--- <https://github.com/striot/striot/issues/124>
-generateCode :: StreamGraph -> PartitionMap -> GenerateOpts -> [String]
-generateCode sg pm opts = let
+generateCode :: GenerateOpts -> StreamGraph -> PartitionMap -> [String]
+generateCode opts sg pm = let
     (sgs,cuts)      = createPartitions sg (sort (map sort pm))
     sgs'            = if rewrite opts then map optimise sgs else sgs
     enumeratedParts = zip [1..] sgs'
     in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
+
+-- TODO: the sorting of the `PartitionMap` is a work-around for
+-- <https://github.com/striot/striot/issues/124>
+--
+-- TODO: there is no test coverage for generateCode
 
 data NodeType = NodeSource | NodeSink | NodeLink deriving (Show)
 
@@ -389,7 +393,7 @@ writePart opts (x,y) = let
 -- source code to individual source code files, one per node.
 partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
 partitionGraph graph partitions opts = do
-    mapM_ (writePart opts) $ zip [1..] $ generateCode graph partitions opts
+    mapM_ (writePart opts) $ zip [1..] $ generateCode opts graph partitions
 
 ------------------------------------------------------------------------------
 

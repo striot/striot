@@ -1,7 +1,17 @@
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 module WearableUseCaseCloudCom2 where
 
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
+import Striot.Orchestration
+import Striot.StreamGraph
+import Striot.CompileIoT -- superfluous
+import Striot.VizGraph -- debug
+import Striot.LogicalOptimiser -- debug
+
+import Test.Framework
 import System.Random
 import Data.Time (UTCTime)
 import Data.Time.Calendar
@@ -129,3 +139,24 @@ main6 = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
   print.take 100 $ streamWindow (chopTime 120) $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
+
+
+-- corresponding to "main"
+graph = simpleStream
+    [ (Source 1,        [[| sampleDataGenerator jan_1_1900_time 10 rs|]],  "PebbleMode60", 0)
+
+    -- edEvent
+    , ((Filter 0.5),    [[| (\((x,y,z),vibe)->vibe == 0) |]],              "PebbleMode60", 0)
+    , (Map,             [[| (\((x,y,z),vibe)-> intSqrt (x*x+y*y+z*z)) |]], "Int",          0)
+
+    -- stepEvent
+    , ((FilterAcc 0.5), [ [| (\last new -> new) |]
+                        , [| 0 |]
+                        , [| (\new last ->(last>threshold) && (new<=threshold)) |]
+                        ],                                                 "Int",          0)
+    -- stepCount
+    , (Window,          [[| chopTime 120 |]],                              "[Int]",        0)
+    , (Map,             [[| length |]],                                    "Int",          0)
+
+    , (Sink,            [[| print.take 100 |]],                            "IO ()",        0)
+    ]

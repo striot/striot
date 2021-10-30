@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK prune #-}
 {-|
 Module      : Striot.Simple
 Description : StrIoT Simple end-user interface

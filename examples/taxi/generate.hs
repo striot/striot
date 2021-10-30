@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-
     generate.hs for Taxi Q1
 -}

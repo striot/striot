@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# OPTIONS_HADDOCK prune #-}
 {-|
 Module      : Striot.FunctionalIoTtypes
 Description : StrIoT Functional IoT types

@@ -5,13 +5,10 @@
 
 module Simple where
 
-import Striot.FunctionalIoTtypes
-import Striot.FunctionalProcessing
-import Striot.Nodes
+import Striot.Simple
 
 import Control.Concurrent (threadDelay)
 import System.Random (getStdRandom, randomR)
-import Data.Function ((&))
 
 -- periodically generates a random Int
 streamSrc :: IO Int

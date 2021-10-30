@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
+{-# OPTIONS_HADDOCK prune #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-|
 Module      : Striot.Orchestration
@@ -113,8 +114,7 @@ sumUtility sg pm = let
     in if isOverUtilised oi
        then Nothing
        else let graphScore = sum . map util $ oi
-                numOps     = length oi
-                partScore  = fromIntegral (length pm) / fromIntegral numOps
+                partScore  = fromIntegral (length pm)
                 in Just    $ (graphScore, partScore)
 
 -- | fitness function for StreamGraphs. Is this a viable program?
