@@ -7,6 +7,7 @@ module Striot.Jackson ( OperatorInfo(..)
 
                       , arrivalRate
                       , arrivalRate'
+                      , outputRate
 
                       , derivePropagationArray
                       , deriveServiceTimes
@@ -104,7 +105,6 @@ arrivalRate:: Array (Int, Int) Double -> Array Int Double -> Double -> Array Int
 -- p - selectivities of filters
 -- p0i - distribution of input events into the system (i.e. to which nodes, which are the source nodes)
 -- alpha- arrival rate into the system
--- XXX throwing a run-time exception when called via calcAllSg, for zeroth element
 arrivalRate p p0i alpha = arrivalRate' p aa
                               where aa = va_mult p0i alpha
 
@@ -315,14 +315,16 @@ deriveServiceTimes sg = let
 
     in bumpIndex (1 - m) $ listArray (m,n) $ map prop [m..n]
 
+totalArrivalRate = sum . map (\(Source x) -> x) . filter isSource . map operator . vertexList
+
 calcAllSg :: StreamGraph -> [OperatorInfo]
 calcAllSg sg = deBump $ calcAll propagation arrivals services
     where
         propagation      = derivePropagationArray sg
-        totalArrivalRate = sum $ map (\(Source x) -> x) $ filter isSource $ map operator $ vertexList sg
-        inputs           = deriveInputsArray sg totalArrivalRate
+        totalArrivals    = totalArrivalRate sg
+        inputs           = deriveInputsArray sg totalArrivals
         services         = deriveServiceTimes sg
-        arrivals         = arrivalRate propagation inputs totalArrivalRate
+        arrivals         = arrivalRate propagation inputs totalArrivals
 
         -- re-adjust vertexIds down to the original range if it began <1
         -- and filter out any dummy vertices that were added to fill the range
@@ -345,6 +347,48 @@ graph = path
     ]
 
 test_isOverUtilised = assertBool $ isOverUtilised (calcAllSg graph)
+
+------------------------------------------------------------------------------
+-- what is the output rate of an Operator?
+outputRate :: StreamGraph -> Int {- operator id -} -> Double
+outputRate sg i = let
+    ois = map (\oi -> (opId oi, oi)) $ calcAllSg sg
+    v   = (head . filter ((==i) . vertexId) . vertexList) sg
+    arr = (arrRate . fromJust . lookup i) ois
+
+    in case operator v of
+        (Filter sel)    -> arr * sel
+        (FilterAcc sel) -> arr * sel
+
+        -- the output rate of Join is the slowest input rate
+        Join            -> ( minimum
+                           . map (outputRate sg . vertexId . fst)
+                           . filter ((==i) . vertexId . snd)
+                           . edgeList
+                           ) sg
+    {-
+        Window          -> 0
+    -}
+        _               -> arr
+
+test_outputRate_src    = assertEqual 1.0 $ outputRate g 1
+test_outputRate_merge  = assertEqual 2.0 $ outputRate g 3
+test_outputRate_join   = assertEqual 2.0 $ outputRate g 3
+test_outputRate_filter = assertEqual 1.0 $ outputRate g 6
+
+v1 = Vertex $ StreamVertex 1 (Source 1)   [] "Int" "Int" 0
+v2 = Vertex $ StreamVertex 2 (Source 1)   [] "Int" "Int" 0
+v3 = Vertex $ StreamVertex 3 Merge        [] "Int" "Int" 0
+v4 = Vertex $ StreamVertex 4 (Source 3)   [] "Int" "Int" 0
+v5 = Vertex $ StreamVertex 5 Join         [] "Int" "(Int,Int)" 0
+v6 = Vertex $ StreamVertex 6 (Filter 0.5) [] "(Int,Int)" "(Int,Int)" 0
+v7 = Vertex $ StreamVertex 7 Sink         [] "(Int,Int)" "IO ()" 0
+
+m  = (v1 `connect` v3) `overlay` (v2 `connect` v3)
+g  = m `overlay`
+     (v3 `connect` v5) `overlay` (v4 `connect` v5)
+     `overlay` (v5 `connect` v6)
+     `overlay` (v6 `connect` v7)
 
 ------------------------------------------------------------------------------
 -- Matrix.LU.inverse fails with 0-indexed arrays. bumpIndex and bumpIndex2 are
