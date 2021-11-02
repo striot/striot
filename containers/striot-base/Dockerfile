@@ -9,7 +9,7 @@ ENV LANG="C.UTF-8"
 # Install the librdkafka library for Kafka
 RUN git clone https://github.com/edenhill/librdkafka && \
     cd librdkafka && \
-    git checkout $(git describe --tags `git rev-list --tags --max-count=1`) && \
+    git checkout $( git describe --tags --abbrev=0) && \
     ./configure --install-deps && \
     make && make install
 

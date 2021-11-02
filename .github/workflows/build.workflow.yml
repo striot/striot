@@ -21,9 +21,6 @@ jobs:
 
       - name: Install librdkafka
         run: |
-          # install librdkafka-dev
-          wget -qO - https://packages.confluent.io/deb/5.3/archive.key | sudo apt-key add -
-          sudo add-apt-repository "deb [arch=amd64] https://packages.confluent.io/deb/5.3 stable main"
           sudo apt-get update && sudo apt-get install librdkafka-dev
 
       - name: Install Haskell deps
@@ -49,9 +46,6 @@ jobs:
 
       - name: Install librdkafka
         run: |
-          # install librdkafka-dev
-          wget -qO - https://packages.confluent.io/deb/5.3/archive.key | sudo apt-key add -
-          sudo add-apt-repository "deb [arch=amd64] https://packages.confluent.io/deb/5.3 stable main"
           sudo apt-get update && sudo apt-get install librdkafka-dev
 
       - name: Install Haskell deps
