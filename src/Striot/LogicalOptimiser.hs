@@ -864,3 +864,35 @@ newVertexId :: StreamGraph -> Int
 newVertexId = succ . last . sort . map vertexId . vertexList
 
 main = htfMain htf_thisModulesTests
+
+-- streamFilter p >>> streamWindow w = streamWindow w >>> streamMap (filter p)
+-- this is not a generally-applicable rule:
+--  * if the WindowMaker makes decisions based on the Event values or their
+--    sequencing, then this is altered by removing the pre-filter 
+--  * even if it doesn't, the windows might change
+-- the filter's selectivity is lost
+
+filterWindow :: RewriteRule
+filterWindow (Connect (Vertex f@(StreamVertex i (Filter _) (p:_) _ _ s))
+                      (Vertex w@(StreamVertex j Window     _     _ t _))) =
+    let m = StreamVertex j Map [[| filter $(p) |]] t t s
+        w'= w { vertexId = i }
+    in  Just (replaceVertex f w' . replaceVertex w m)
+
+filterWindow _ = Nothing
+
+filterWindowPre = path
+    [ StreamVertex 0 (Source 1)   []         "Int"   "Int"   1
+    , StreamVertex 1 (Filter 0.5) [[|(>3)|]] "Int"   "Int"   2
+    , StreamVertex 2 Window       []         "Int"   "[Int]" 3
+    , StreamVertex 3 Sink         []         "[Int]" "[Int]" 4
+    ]
+
+filterWindowPost = path
+    [ StreamVertex 0 (Source 1)   []                "Int"   "Int"   1
+    , StreamVertex 1 Window       []                "Int"   "[Int]" 3
+    , StreamVertex 2 Map          [[|filter (>3)|]] "[Int]" "[Int]" 2
+    , StreamVertex 3 Sink         []                "[Int]" "[Int]" 4
+    ]
+
+test_filterWindow = assertEqual (applyRule filterWindow filterWindowPre) filterWindowPost
