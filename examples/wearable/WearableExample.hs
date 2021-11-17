@@ -145,9 +145,10 @@ main6 = do
 graph = simpleStream
     [ (Source 1,        [[| sampleDataGenerator jan_1_1900_time 10 rs|]],  "PebbleMode60", 0)
 
-    -- edEvent
+    -- edEvent (euclidean distance)
     , ((Filter 0.5),    [[| (\((x,y,z),vibe)->vibe == 0) |]],              "PebbleMode60", 0)
-    , (Map,             [[| (\((x,y,z),vibe)-> intSqrt (x*x+y*y+z*z)) |]], "Int",          0)
+    , (Map,             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]],         "(Int,Int,Int)",0)
+    , (Map,             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]],         "Int",          0)
 
     -- stepEvent
     , ((FilterAcc 0.5), [ [| (\last new -> new) |]
