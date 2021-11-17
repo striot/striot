@@ -46,7 +46,7 @@ edEvent :: Stream PebbleMode60 -> Stream Int -- output is ed
 edEvent s = streamMap (\((x,y,z),vibe)-> intSqrt (x*x+y*y+z*z)) $ streamFilter (\((x,y,z),vibe)->vibe == 0) s
 
 intSqrt :: Int -> Int
-intSqrt i = round $ fromIntegral i
+intSqrt = round . sqrt . fromIntegral
 
 {-
 Query 3 detects any spike crossing the specified threshold.
