@@ -34,7 +34,20 @@ streamGraphToDot :: StreamGraph -> String
 streamGraphToDot = export myStyle
 
 show' :: StreamVertex -> String
-show' v = intercalate " " $ ((printOp . operator) v) : ((map (\s->"("++s++")")) . map showParam . parameters) v
+show' v = intercalate " " $ ((printOp . operator) v)
+                          : "<br />"
+                          : (map (paren . cleanParam . showParam) . parameters) v
+
+paren :: String -> String
+paren s = '(' : (s ++ ")")
+
+-- escape HTML brackets
+cleanParam :: String -> String
+cleanParam [] = []
+cleanParam (x:s) | x == '<'  = "&lt;"  ++ cleanParam s
+                 | x == '>'  = "&gt;"  ++ cleanParam s
+                 | x == '&'  = "&amp;" ++ cleanParam s
+                 | otherwise = x : cleanParam s
 
 printOp :: StreamOperator -> String
 printOp (Filter _)        = "streamFilter"
@@ -46,16 +59,19 @@ myStyle :: Style StreamVertex String
 myStyle = Style
     { graphName               = mempty
     , preamble                = mempty
-    , graphAttributes         = ["bgcolor":="white"]
+    , graphAttributes         = ["bgcolor":="white","ratio":="compress"]
     , defaultVertexAttributes = ["shape" := "box","fillcolor":="white","style":="filled"]
-    , defaultEdgeAttributes   = ["weight":="10","color":="black","fontcolor":="black"]
+    , defaultEdgeAttributes   = ["weight":="10","color":="black","fontcolor":="black","fontsize":="18"]
     , vertexName              = show . vertexId
-    , vertexAttributes        = (\v -> ["label":=(escape . show') v])
-    , edgeAttributes          = (\_ o -> ["label":=intype o])
-    , attributeQuoting        = DoubleQuotes
+    , vertexAttributes        = (\v -> [ "label":=(("<"++) . (++">") . show') v
+                                       , "fontsize":="18"
+                                       , "shape":="box"])
+    -- without forcing shape=box, the nodes end up ellipses in PartitionedGraphs
+    , edgeAttributes          = (\_ o -> ["label":=("\"" ++ intype o ++ "\"")])
+    , attributeQuoting        = NoQuotes
     }
 
--- escape a string, suitable for inclusion in a .dot file
+-- escape a string, suitable for inclusion inside a double-quoted string in a .dot file
 escape [] = []
 escape (x:xs) = case x of
     '"'  -> '\\':'"' : escape xs
@@ -120,7 +136,7 @@ displayGraphKitty g = do
 
 -- | display a debug graph using GraphViz and ImageMagick
 displayGraphDebug = displayGraph' (export debugStyle :: StreamGraph -> String)
-debugStyle        = myStyle { vertexAttributes = (\v -> ["label":=(escape . show) v]) }
+debugStyle        = myStyle { vertexAttributes = (\v -> ["label":=(doubleQuotes . escape . show) v]) }
 
 -- | display a `PartitionedGraph` using GraphViz and "display" from ImageMagick
 displayPartitionedGraph :: PartitionedGraph -> IO ()
@@ -134,9 +150,7 @@ partitionedGraphToDot pgs@(ps,cuts) = let
     graph = overlays (cuts:ps)
     pre   = map (uncurry subGraphToPartition) (zip ps [0..])
     style = myStyle
-      { preamble = pre -- without forcing shape=box, the nodes end up ellipses
-      , vertexAttributes = (\v -> [ "label":=(escape . show') v
-                                  , "shape":="box"]) }
+      { preamble = pre }
     in export style graph
 
 -- | generate a GraphViz subgraph definition (encoded into a `String`)c
@@ -177,8 +191,9 @@ jacksonGraphToDot graph = let
                                                                , outtype i
                                                                , "</I>>" ]])
 
-      , vertexAttributes        = (\v -> [ "label"     := (doubleQuotes . escape . show') v
+      , vertexAttributes        = (\v -> [ "label"     :=(("<"++) . (++">") . show') v
                                          , "xlabel"    := srvRate v
+                                         , "fontsize":="18"
                                          , "fillcolor" := if   overUt v
                                                           then "\"#ffcccc\""
                                                           else "\"#ffffff\"" ])
@@ -201,12 +216,12 @@ jacksonGraphToDot graph = let
         Nothing -> False
         Just oi -> util oi > 1
 
-    doubleQuotes v = "\"" ++ v ++ "\""
-
     -- avoiding Export.doubleQuotes to avoid IsString, Doc etc
     quoteValues = map (\(k := v) -> k := (doubleQuotes v))
 
     in export style graph
+
+doubleQuotes v = "\"" ++ v ++ "\""
 
 -- test data
 pgs   = createPartitions mergeEx [[1,2],[3,4],[5,6]]
