@@ -11,7 +11,6 @@ module Striot.VizGraph ( streamGraphToDot
                        , jacksonGraphToDot
                        , partitionedGraphToDot
                        , subGraphToPartition
-
                        , writeGraph
 
                        , htf_thisModulesTests) where
@@ -30,87 +29,18 @@ import Language.Haskell.TH
 import System.Process
 import System.IO (openTempFile, hPutStr, hGetContents, hClose)
 
+------------------------------------------------------------------------------
+-- main functions
+
 streamGraphToDot :: StreamGraph -> String
 streamGraphToDot = export myStyle
-
-show' :: StreamVertex -> String
-show' v = intercalate " " $ ((printOp . operator) v)
-                          : "<br />"
-                          : (map (paren . cleanParam . showParam) . parameters) v
-
-paren :: String -> String
-paren s = '(' : (s ++ ")")
-
--- escape HTML brackets
-cleanParam :: String -> String
-cleanParam [] = []
-cleanParam (x:s) | x == '<'  = "&lt;"  ++ cleanParam s
-                 | x == '>'  = "&gt;"  ++ cleanParam s
-                 | x == '&'  = "&amp;" ++ cleanParam s
-                 | otherwise = x : cleanParam s
-
-printOp :: StreamOperator -> String
-printOp (Filter _)        = "streamFilter"
-printOp (FilterAcc _)     = "streamFilterAcc"
-printOp (Source _)        = "streamSource"
-printOp x                 = "stream" ++ (show x)
-
-myStyle :: Style StreamVertex String
-myStyle = Style
-    { graphName               = mempty
-    , preamble                = mempty
-    , graphAttributes         = ["bgcolor":="white","ratio":="compress"]
-    , defaultVertexAttributes = ["shape" := "box","fillcolor":="white","style":="filled"]
-    , defaultEdgeAttributes   = ["weight":="10","color":="black","fontcolor":="black","fontsize":="18"]
-    , vertexName              = show . vertexId
-    , vertexAttributes        = (\v -> [ "label":=(("<"++) . (++">") . show') v
-                                       , "fontsize":="18"
-                                       , "shape":="box"])
-    -- without forcing shape=box, the nodes end up ellipses in PartitionedGraphs
-    , edgeAttributes          = (\_ o -> ["label":=("\"" ++ intype o ++ "\"")])
-    , attributeQuoting        = NoQuotes
-    }
-
--- escape a string, suitable for inclusion inside a double-quoted string in a .dot file
-escape [] = []
-escape (x:xs) = case x of
-    '"'  -> '\\':'"' : escape xs
-    '\\' -> '\\':'\\': escape xs
-    _    -> x        : escape xs
-
-test_escape_1 = assertEqual "no escaping"        $ escape ("no escaping")
-test_escape_2 = assertEqual "escaped \\\" quote" $ escape ("escaped \" quote")
-test_escape_3 = assertEqual "escaped \\\\ backslash" $ escape ("escaped \\ backslash")
-
--- test data
-
-source x = [| do
-    let x' = $(litE (StringL x))
-    threadDelay (1000*1000)
-    putStrLn "sending '"++x'++"'"
-    return x'
-    |]
-
-v1 = StreamVertex 1 (Source 1) [source "foo"]    "String" "String" 0
-v2 = StreamVertex 2 Map    [[| id |]]        "String" "String" 1
-v3 = StreamVertex 3 (Source 1) [source "bar"]    "String" "String" 2
-v4 = StreamVertex 4 Map    [[| id |]]        "String" "String" 3
-v5 = StreamVertex 5 Merge  []                "[String]" "String" 4
-v6 = StreamVertex 6 Sink   [[| mapM_ print|]] "String" "IO ()" 5
-mergeEx :: StreamGraph
-mergeEx = overlay (path [v3, v4, v5]) (path [v1, v2, v5, v6])
-
-v7 = StreamVertex  1 (Source 1) [[| sourceOfRandomTweets |]] "String" "String" 0
-v8 = StreamVertex  2 Map    [[| filter (('#'==).head) . words |]] "String" "[String]" 1
-v9 = StreamVertex  5 Expand [] "[String]" "String" 2
-v10 = StreamVertex 6 Sink   [[|mapM_ print|]] "String" "IO ()" 3
-expandEx :: StreamGraph
-expandEx = path [v7, v8, v9, v10]
 
 -- | display a graph using GraphViz and "display" from ImageMagick
 displayGraph :: StreamGraph -> IO ()
 displayGraph = displayGraph' streamGraphToDot
 
+-- | display a graph by applying a provided converter to the supplied
+-- StreamGraph
 displayGraph' toDot g = do
     (Just hin,Just hout,_, _) <- createProcess (proc "dot" ["-Tpng"])
       { std_out = CreatePipe, std_in = CreatePipe }
@@ -137,10 +67,47 @@ displayGraphKitty g = do
 -- | display a debug graph using GraphViz and ImageMagick
 displayGraphDebug = displayGraph' (export debugStyle :: StreamGraph -> String)
 debugStyle        = myStyle { vertexAttributes = (\v -> ["label":=(doubleQuotes . escape . show) v]) }
+    where doubleQuotes v = "\"" ++ v ++ "\""
 
 -- | display a `PartitionedGraph` using GraphViz and "display" from ImageMagick
 displayPartitionedGraph :: PartitionedGraph -> IO ()
 displayPartitionedGraph = displayGraph' partitionedGraphToDot
+
+-- | Convert a `StreamGraph` into a GraphViz representation, including
+-- parameters derived from queueing theory/Jackson
+jacksonGraphToDot :: StreamGraph -> String
+jacksonGraphToDot graph = let
+    jackson = map (\oi -> (opId oi, oi)) (calcAllSg graph) -- (Int, [OperatorInfo])
+
+    style = myStyle
+      { edgeAttributes   = (\i _ -> [ "label" := concat [ "<<SUP>"
+                                                        , show (outputRate graph (vertexId i))
+                                                        , "</SUP>/<SUB>s</SUB> <I>:: "
+                                                        , outtype i
+                                                        , "</I>>" ]])
+
+      , vertexAttributes = (\v -> [ "label"     :=(("<"++) . (++">") . show') v
+                                  , "xlabel"    := srvRate v
+                                  , "fontsize":="18"
+                                  , "fillcolor" := if   overUt v
+                                                   then "\"#ffcccc\""
+                                                   else "\"#ffffff\"" ])
+      }
+
+    arr v = case lookup (vertexId v) jackson of
+        Nothing -> "?"
+        Just oi -> show (arrRate oi) -- This is invalid for merge/join where arrrate is combined not from one node
+
+    srvRate v = case Striot.StreamGraph.serviceTime v of
+        0 -> "<>" -- effectively undefined/not useful
+        t -> wrap $ show (1 / t)
+        where wrap s = "<<SUP>"++s++"</SUP>/<SUB>s</SUB>>"
+
+    overUt v = case lookup (vertexId v) jackson of
+        Nothing -> False
+        Just oi -> util oi > 1
+
+    in export style graph
 
 -- | Convert `PartitionedGraph` into a GraphViz representation,
 -- with each sub-graph separately delineated,
@@ -171,58 +138,98 @@ subGraphToPartition sg i = let
     \    "++ids++"\n\
     \  }\n"
 
--- | Render a graph to a PNG and write it out to the supplied path.
+-- | Render a graph to a PNG using GraphViz and write it out to the supplied
+-- path.
 writeGraph toDot g path = do
     (Just hin, _, _, _) <- createProcess (proc "dot" ["-Tpng", "-o", path])
       { std_in = CreatePipe }
     hPutStr hin (toDot g)
     hClose hin
 
--- | Convert a `StreamGraph` into a GraphViz representation, including
--- parameters derived from queueing theory/Jackson
-jacksonGraphToDot :: StreamGraph -> String
-jacksonGraphToDot graph = let
-    jackson = map (\oi -> (opId oi, oi)) (calcAllSg graph) -- (Int, [OperatorInfo])
+------------------------------------------------------------------------------
+-- utility functions
 
-    style = myStyle
-      { edgeAttributes          = (\i _ -> [ "label" := concat [ "<<SUP>"
-                                                               , show (outputRate graph (vertexId i))
-                                                               , "</SUP>/<SUB>s</SUB> <I>:: "
-                                                               , outtype i
-                                                               , "</I>>" ]])
+show' :: StreamVertex -> String
+show' v = intercalate " " $ ((printOp . operator) v)
+                          : "<br />"
+                          : (map (paren . cleanParam . showParam) . parameters) v
 
-      , vertexAttributes        = (\v -> [ "label"     :=(("<"++) . (++">") . show') v
-                                         , "xlabel"    := srvRate v
-                                         , "fontsize":="18"
-                                         , "fillcolor" := if   overUt v
-                                                          then "\"#ffcccc\""
-                                                          else "\"#ffffff\"" ])
-      , attributeQuoting        = NoQuotes
-      , graphAttributes         = quoteValues (graphAttributes myStyle)
-      , defaultVertexAttributes = quoteValues (defaultVertexAttributes myStyle)
-      , defaultEdgeAttributes   = quoteValues (defaultEdgeAttributes myStyle)
-      }
+printOp :: StreamOperator -> String
+printOp (Filter _)        = "streamFilter"
+printOp (FilterAcc _)     = "streamFilterAcc"
+printOp (Source _)        = "streamSource"
+printOp x                 = "stream" ++ (show x)
 
-    arr v = case lookup (vertexId v) jackson of
-        Nothing -> "?"
-        Just oi -> show (arrRate oi) -- This is invalid for merge/join where arrrate is combined not from one node
+paren :: String -> String
+paren s = '(' : (s ++ ")")
 
-    srvRate v = case Striot.StreamGraph.serviceTime v of
-        0 -> "<>" -- effectively undefined/not useful
-        t -> wrap $ show (1 / t)
-        where wrap s = "<<SUP>"++s++"</SUP>/<SUB>s</SUB>>"
+prop_paren_prefix s = head (paren s) == '('
+prop_paren_suffix s = last (paren s) == ')'
 
-    overUt v = case lookup (vertexId v) jackson of
-        Nothing -> False
-        Just oi -> util oi > 1
+-- escape HTML brackets
+cleanParam :: String -> String
+cleanParam [] = []
+cleanParam (x:s) | x == '<'  = "&lt;"  ++ cleanParam s
+                 | x == '>'  = "&gt;"  ++ cleanParam s
+                 | x == '&'  = "&amp;" ++ cleanParam s
+                 | otherwise = x : cleanParam s
 
-    -- avoiding Export.doubleQuotes to avoid IsString, Doc etc
-    quoteValues = map (\(k := v) -> k := (doubleQuotes v))
+test_cleanParam_1 = assertEqual "no escaping"          $ cleanParam "no escaping"
+test_cleanParam_2 = assertEqual "opening &lt; chevron" $ cleanParam "opening < chevron"
+test_cleanParam_3 = assertEqual "closing &gt; chevron" $ cleanParam "closing > chevron"
+test_cleanParam_4 = assertEqual "ampersand &amp; amp"  $ cleanParam "ampersand & amp"
 
-    in export style graph
+myStyle :: Style StreamVertex String
+myStyle = Style
+    { graphName               = mempty
+    , preamble                = mempty
+    , graphAttributes         = ["bgcolor":="white","ratio":="compress"]
+    , defaultVertexAttributes = ["shape" := "box","fillcolor":="white","style":="filled"]
+    , defaultEdgeAttributes   = ["weight":="10","color":="black","fontcolor":="black","fontsize":="18"]
+    , vertexName              = show . vertexId
+    , vertexAttributes        = (\v -> [ "label":=(("<"++) . (++">") . show') v
+                                       , "fontsize":="18"
+                                       , "shape":="box"])
+    -- without forcing shape=box, the nodes end up ellipses in PartitionedGraphs
+    , edgeAttributes          = (\_ o -> ["label":=("\"" ++ intype o ++ "\"")])
+    , attributeQuoting        = NoQuotes
+    }
 
-doubleQuotes v = "\"" ++ v ++ "\""
+-- escape a string, suitable for inclusion inside a double-quoted string in a .dot file
+escape [] = []
+escape (x:xs) = case x of
+    '"'  -> '\\':'"' : escape xs
+    '\\' -> '\\':'\\': escape xs
+    _    -> x        : escape xs
 
+test_escape_1 = assertEqual "no escaping"            $ escape ("no escaping")
+test_escape_2 = assertEqual "escaped \\\" quote"     $ escape ("escaped \" quote")
+test_escape_3 = assertEqual "escaped \\\\ backslash" $ escape ("escaped \\ backslash")
+
+------------------------------------------------------------------------------
 -- test data
 pgs   = createPartitions mergeEx [[1,2],[3,4],[5,6]]
 pgs'  = createPartitions expandEx [[1,2],[5],[6]]
+
+source x = [| do
+    let x' = $(litE (StringL x))
+    threadDelay (1000*1000)
+    putStrLn "sending '"++x'++"'"
+    return x'
+    |]
+
+v1 = StreamVertex 1 (Source 1) [source "foo"]    "String" "String" 0
+v2 = StreamVertex 2 Map    [[| id |]]        "String" "String" 1
+v3 = StreamVertex 3 (Source 1) [source "bar"]    "String" "String" 2
+v4 = StreamVertex 4 Map    [[| id |]]        "String" "String" 3
+v5 = StreamVertex 5 Merge  []                "[String]" "String" 4
+v6 = StreamVertex 6 Sink   [[| mapM_ print|]] "String" "IO ()" 5
+mergeEx :: StreamGraph
+mergeEx = overlay (path [v3, v4, v5]) (path [v1, v2, v5, v6])
+
+v7 = StreamVertex  1 (Source 1) [[| sourceOfRandomTweets |]] "String" "String" 0
+v8 = StreamVertex  2 Map    [[| filter (('#'==).head) . words |]] "String" "[String]" 1
+v9 = StreamVertex  5 Expand [] "[String]" "String" 2
+v10 = StreamVertex 6 Sink   [[|mapM_ print|]] "String" "IO ()" 3
+expandEx :: StreamGraph
+expandEx = path [v7, v8, v9, v10]
