@@ -374,7 +374,6 @@ outputRate sg i = let
 test_outputRate_src    = assertEqual 1.0 $ outputRate g 1
 test_outputRate_merge  = assertEqual 2.0 $ outputRate g 3
 test_outputRate_join   = assertEqual 2.0 $ outputRate g 3
-test_outputRate_filter = assertEqual 1.0 $ outputRate g 6
 
 v1 = Vertex $ StreamVertex 1 (Source 1)   [] "Int" "Int" 0
 v2 = Vertex $ StreamVertex 2 (Source 1)   [] "Int" "Int" 0
