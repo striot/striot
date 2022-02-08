@@ -10,6 +10,8 @@ module Striot.VizGraph ( streamGraphToDot
                        , partitionedGraphToDot
                        , subGraphToPartition
 
+                       , writeGraph
+
                        , htf_thisModulesTests) where
 
 import Striot.StreamGraph
@@ -150,6 +152,13 @@ subGraphToPartition sg i = let
     \    label=\"                    Node "++n++"\"\n\
     \    "++ids++"\n\
     \  }\n"
+
+-- | Render a graph to a PNG and write it out to the supplied path.
+writeGraph toDot g path = do
+    (Just hin, _, _, _) <- createProcess (proc "dot" ["-Tpng", "-o", path])
+      { std_in = CreatePipe }
+    hPutStr hin (toDot g)
+    hClose hin
 
 -- test data
 pgs   = createPartitions mergeEx [[1,2],[3,4],[5,6]]
