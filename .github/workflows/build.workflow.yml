@@ -3,36 +3,6 @@ name: Build and Test
 on: [push, pull_request, workflow_dispatch]
 
 jobs:
-  cabal-build:
-    name: Cabal build
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        ghc: ['8.6', '8.8', '8.10', '9.0']
-      fail-fast: false
-
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: haskell/actions/setup@v1
-        with:
-          ghc-version: ${{ matrix.ghc }}
-
-      - name: Install librdkafka
-        run: |
-          sudo apt-get update && sudo apt-get install librdkafka-dev
-
-      - name: Install Haskell deps
-        run: |
-          cabal install happy alex HTF
-          cabal install c2hs
-          cabal install --lib --only-dependencies --extra-include-dirs=/usr/local/include --extra-lib-dirs=/usr/local/lib
-
-      - name: Build and test striot
-        run: |
-          cabal configure --enable-tests && cabal build && cabal test
-
   stack-build:
     name: Stack build (+ examples)
     runs-on: ubuntu-latest
