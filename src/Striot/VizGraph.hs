@@ -172,6 +172,7 @@ cleanParam [] = []
 cleanParam (x:s) | x == '<'  = "&lt;"  ++ cleanParam s
                  | x == '>'  = "&gt;"  ++ cleanParam s
                  | x == '&'  = "&amp;" ++ cleanParam s
+                 | x == '\n' = "<br />\n" ++ cleanParam s
                  | otherwise = x : cleanParam s
 
 test_cleanParam_1 = assertEqual "no escaping"          $ cleanParam "no escaping"
