@@ -150,8 +150,7 @@ writeGraph toDot g path = do
 -- utility functions
 
 show' :: StreamVertex -> String
-show' v = intercalate " " $ ((printOp . operator) v)
-                          : "<br />"
+show' v = intercalate "<br />\n" $ ((printOp . operator) v)
                           : (map (paren . cleanParam . showParam) . parameters) v
 
 printOp :: StreamOperator -> String
