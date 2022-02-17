@@ -38,6 +38,7 @@ import Striot.StreamGraph
 import Striot.FunctionalProcessing
 import Algebra.Graph
 import Test.Framework hiding ((===))
+import Data.Char (isLower)
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Function ((&))
 import Data.List (nub, sort, intercalate)
@@ -447,19 +448,33 @@ test_mapFilterAcc = assertEqual (applyRule mapFilterAcc mapFilterAccPre) mapFilt
 -- TODO: assuming serviceTime for map is the same
 -- This is only applicable when the map parameter has type (a -> a)
 
-mapWindow :: RewriteRule
-mapWindow (Connect (Vertex m@(StreamVertex i Map (f:_) mapInT mapOutT sm))
-                   (Vertex w@(StreamVertex j Window (wm:_) _ windowOutT sw))) =
+isTypeVariable :: String -> Bool
+isTypeVariable = isLower . head
 
-    if   mapInT /= mapOutT
+-- could two types be plugged together?
+-- we do not handle any typeclass constraints
+compatibleTypes :: String -> String -> Bool
+compatibleTypes outT inT | outT == inT        = True -- matching concrete types
+                         | isTypeVariable inT = True
+                         | isTypeVariable outT= True
+                         | otherwise          = False
+
+test_compatibleTypes = assertBool $ compatibleTypes "Int" "a"
+
+mapWindow :: RewriteRule
+mapWindow (Connect (Vertex m@(StreamVertex i Map    (f:_) mapInT mapOutT sm))
+                   (Vertex w@(StreamVertex j Window (wm:_) windowInT windowOutT sw))) =
+
+    if   not (compatibleTypes mapInT windowInT)
     then Nothing
     else let
-        w2 = StreamVertex i Window [wm] mapInT windowOutT sw
-        m2 = StreamVertex j Map [[| map $(f) |]] windowOutT windowOutT sm
+        w2 = StreamVertex i Window [wm] windowInT windowOutT sw
+        m2 = StreamVertex j Map [[| map $(f) |]] ("["++mapInT++"]") ("["++mapOutT++"]") sm
     in  Just (replaceVertex m w2 . replaceVertex w m2)
 
 mapWindow _ = Nothing
 
+-- concrete map, concrete window, map types match
 mapWindowPre = path
     [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
     , StreamVertex 1 Map    [[| (+1) |]] "Int" "Int" 2
@@ -476,12 +491,67 @@ mapWindowPost = path
 
 test_mapWindow = assertEqual (applyRule mapWindow mapWindowPre) mapWindowPost
 
+-- concrete map, concrete window, map types don't match
 mapWindowPre2 = path
     [ StreamVertex 0 Map    [[| read   :: String -> Int  |]] "String" "Int"   1
     , StreamVertex 1 Window [[| chop 2 :: WindowMaker Int|]] "Int"    "[Int]" 1
     ]
 
 test_mapWindow2 = assertNothingNoShow (mapWindow mapWindowPre2)
+
+-- concrete map, polymorphic window
+mapWindowPre3 = path
+    [ StreamVertex 0 (Source 1) [] "(Int,Int)" "(Int,Int)" 1
+    , StreamVertex 1 Map [[|fst|]] "(Int,Int)" "Int" 0.0
+    , StreamVertex 2 Window [[|chop 2|]] "a" "[a]" 0.0
+    , StreamVertex 3 Sink   [] "[Int]" "[Int]" 4
+    ]
+mapWindowPost3 = path
+    [ StreamVertex 0 (Source 1) [] "(Int,Int)" "(Int,Int)" 1
+    , StreamVertex 1 Window [[|chop 2|]] "a" "[a]" 0.0
+    , StreamVertex 2 Map [[|map fst|]] "[(Int,Int)]" "[Int]" 0.0
+    , StreamVertex 3 Sink   [] "[Int]" "[Int]" 4
+    ]
+test_mapWindow3 = assertEqual mapWindowPost3 (applyRule mapWindow mapWindowPre3)
+
+-- polymorphic map, concrete window, map types match
+mapWindowPre4 = path
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
+    , StreamVertex 1 Map [[|(+1)|]] "a" "a" 0.0
+    , StreamVertex 2 Window [[|chop 2|]] "Int" "[Int]" 0.0
+    , StreamVertex 3 Sink   [] "[Int]" "[Int]" 4
+    ]
+mapWindowPost4 = path
+    [ StreamVertex 0 (Source 1) [] "Int" "Int" 1
+    , StreamVertex 1 Window [[|chop 2|]] "Int" "[Int]" 0.0
+    , StreamVertex 2 Map [[|map (+1)|]] "[a]" "[a]" 0.0
+    , StreamVertex 3 Sink   [] "[Int]" "[Int]" 4
+    ]
+test_mapWindow4 = assertEqual mapWindowPost4 (applyRule mapWindow mapWindowPre4)
+
+-- polymorphic map, concrete window, map types don't match
+mapWindowPre5 = path
+    [ StreamVertex 0 (Source 1) [] "String" "String" 1
+    , StreamVertex 1 Map [[|show|]] "a" "b" 0.0
+    , StreamVertex 2 Window [[|chop 2|]] "String" "[String]" 0.0
+    , StreamVertex 3 Sink   [] "[String]" "[String]" 4
+    ]
+test_mapWindow5 = assertNothingNoShow (mapWindow mapWindowPre5)
+
+-- polymorphic map, polymorphic window
+mapWindowPre6 = path
+    [ StreamVertex 0 (Source 1) []       "String"   "String" 1
+    , StreamVertex 1 Map [[|show|]]      "a"        "b" 0.0
+    , StreamVertex 2 Window [[|chop 2|]] "c"        "[c]" 0.0
+    , StreamVertex 3 Sink   []           "[String]" "[String]" 4
+    ]
+mapWindowPost6 = path
+    [ StreamVertex 0 (Source 1) []       "String"   "String" 1
+    , StreamVertex 1 Window [[|chop 2|]] "c"        "[c]" 0.0
+    , StreamVertex 2 Map [[|map show|]]  "[a]"      "[b]" 0.0
+    , StreamVertex 3 Sink   []           "[String]" "[String]" 4
+    ]
+test_mapWindow6 = assertEqual mapWindowPost6 (applyRule mapWindow mapWindowPre6)
 
 -- streamExpand >>> streamMap f == streamMap (map f) >>> streamExpand --------
 -- [a]           a            b   [a]               [b]               b
