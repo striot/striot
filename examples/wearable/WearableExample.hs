@@ -11,6 +11,7 @@ import Striot.CompileIoT -- superfluous
 import Striot.VizGraph -- debug
 import Striot.LogicalOptimiser -- debug
 
+import Algebra.Graph
 import Test.Framework
 import System.Random
 import Data.Time (UTCTime)
@@ -142,22 +143,26 @@ main6 = do
 
 
 -- corresponding to "main"
-graph = simpleStream
-    [ (Source 1,        [[| sampleDataGenerator jan_1_1900_time 10 rs|]],  "PebbleMode60", 0)
-
+graph = path
+  [ StreamVertex 1 (Source 1)      [[|sampleDataGenerator jan_1_1900_time 10 rs|]]
+                                                                             "IO ()"        "PebbleMode60"   0
     -- edEvent (euclidean distance)
-    , ((Filter 0.5),    [[| (\((x,y,z),vibe)->vibe == 0) |]],              "PebbleMode60", 0)
-    , (Map,             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]],         "(Int,Int,Int)",0)
-    , (Map,             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]],         "Int",          0)
+  , StreamVertex 2 (Filter 0.5)    [[| (\((x,y,z),vibe)->vibe == 0) |]]      "PebbleMode60"  "PebbleMode60"  0
+  , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode60"  "(Int,Int,Int)" 0
+  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           0
 
     -- stepEvent
-    , ((FilterAcc 0.5), [ [| (\last new -> new) |]
-                        , [| 0 |]
-                        , [| (\new last ->(last>threshold) && (new<=threshold)) |]
-                        ],                                                 "Int",          0)
+  , StreamVertex 5 (FilterAcc 0.5) [[| (\last new -> new) |]
+                                   ,[| 0 |]
+                                   ,[| (\new last ->(last>threshold) && (new<=threshold)) |]
+                                   ]                                         "Int"           "Int"           0
     -- stepCount
-    , (Window,          [[| chopTime 120 |]],                              "[Int]",        0)
-    , (Map,             [[| length |]],                                    "Int",          0)
+  , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           0
+  , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           0
 
-    , (Sink,            [[| print.take 100 |]],                            "IO ()",        0)
-    ]
+  , StreamVertex 8 Sink            [[| print.take 100 |]]                    "Int"           "IO ()"         0
+  ]
+
+plan9 = applyRule mapWindow
+      . applyRule filterAccWindow
+      $ graph
