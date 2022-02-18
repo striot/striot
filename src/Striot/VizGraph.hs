@@ -150,8 +150,7 @@ writeGraph toDot g path = do
 -- utility functions
 
 show' :: StreamVertex -> String
-show' v = intercalate " " $ ((printOp . operator) v)
-                          : "<br />"
+show' v = intercalate "<br />\n" $ ((printOp . operator) v)
                           : (map (paren . cleanParam . showParam) . parameters) v
 
 printOp :: StreamOperator -> String
@@ -172,6 +171,7 @@ cleanParam [] = []
 cleanParam (x:s) | x == '<'  = "&lt;"  ++ cleanParam s
                  | x == '>'  = "&gt;"  ++ cleanParam s
                  | x == '&'  = "&amp;" ++ cleanParam s
+                 | x == '\n' = "<br />\n" ++ cleanParam s
                  | otherwise = x : cleanParam s
 
 test_cleanParam_1 = assertEqual "no escaping"          $ cleanParam "no escaping"

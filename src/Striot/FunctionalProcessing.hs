@@ -43,6 +43,8 @@ module Striot.FunctionalProcessing (
    , JoinFilter
    , JoinMap
 
+   , filterAcc
+
    , htf_thisModulesTests) where
 
 import Striot.FunctionalIoTtypes
@@ -214,6 +216,12 @@ streamExpand s = concatMap eventExpand s
 
 -- streamSink:: (Stream alpha -> beta) -> Stream alpha -> beta
 -- streamSink ssink s = ssink s
+
+-- | filterAcc, for plain lists
+filterAcc :: (b -> a -> b) -> (a -> b -> Bool) -> b -> [a] -> ([a],b)
+filterAcc accfn pred acc = let
+    foldfn (list,acc) v = (if pred v acc then v:list else list, accfn acc v)
+    in foldl foldfn ([],acc)
 
 --- Tests ------
 --t1 :: Int -> Int -> Stream alpha -> (Bool,Stream alpha,Stream alpha)
