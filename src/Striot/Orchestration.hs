@@ -40,7 +40,7 @@ import Control.Arrow ((>>>))
 
 import Striot.CompileIoT
 import Striot.Jackson
-import Striot.LogicalOptimiser
+import Striot.LogicalOptimiser (applyRules)
 import Striot.Partition
 import Striot.StreamGraph
 import Striot.VizGraph
@@ -120,10 +120,6 @@ sumUtility opts sg pm = let
                 partCost  = fromIntegral (length pm)
             in  Just (graphCost, partCost)
 
--- | fitness function for StreamGraphs. Is this a viable program?
-viableStreamGraph :: [OperatorInfo] -> Bool
-viableStreamGraph = not . isOverUtilised
-
 ------------------------------------------------------------------------------
 -- test program taken from examples/filter/generate.hs
 
@@ -152,7 +148,7 @@ tooMuch = simpleStream
     , (Sink,     [[| mapM_ print |]], "Int", 0)
     ]
 
-test_tooMuch_notviable = assertBool (not . viableStreamGraph . calcAllSg $ tooMuch)
+test_tooMuch_notviable = assertBool (isOverUtilised . calcAllSg $ tooMuch)
 
 main = htfMain htf_thisModulesTests
 

@@ -3,8 +3,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Striot.LogicalOptimiser ( applyRules
-                               , costModel
-                               , optimise
 
                                , applyRule
                                , firstMatch
@@ -66,11 +64,6 @@ firstMatch g f = case f g of
                                 Just f  -> Just f
                                 Nothing -> firstMatch b f
 
--- thoughts about cost model
--- higher is better
-costModel :: StreamGraph -> Int
-costModel = negate . length . vertexList
-
 -- N-bounded recursive rule traversal
 -- (caller may wish to apply 'nub')
 applyRules :: Int -> StreamGraph -> [StreamGraph]
@@ -79,17 +72,6 @@ applyRules n sg =
         else let
              sgs = map ((&) sg) $ mapMaybe (firstMatch sg) rules
              in    sg : sgs ++ (concatMap (applyRules (n-1)) sgs)
-
--- | Return an optimised version of the supplied StreamGraph, or the
--- graph itself if no better alternative is found.
-optimise :: StreamGraph -> StreamGraph
-optimise sg = let
-    base              = costModel sg
-    sgs               = nub $ applyRules 5 sg
-    (score,candidate) = maximum $ map (\g -> (costModel g, g) ) sgs
-    in if score > base
-       then candidate
-       else sg
 
 ------------------------------------------------------------------------------
 
