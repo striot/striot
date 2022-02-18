@@ -7,8 +7,6 @@ import Striot.CompileIoT
 import Striot.StreamGraph
 import Algebra.Graph
 
-opts = defaultOpts { rewrite = False }
-
 graph = path
     [ StreamVertex 1 (Source 1) [[| do
             threadDelay (1000*1000)
@@ -21,4 +19,4 @@ graph = path
     , StreamVertex 6 Sink   [[| mapM_ print |]] "[String]" "IO ()" 0
     ]
 
-main = partitionGraph graph [[1,2],[3],[4,5,6]] opts
+main = partitionGraph graph [[1,2],[3],[4,5,6]] defaultOpts

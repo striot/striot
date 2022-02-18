@@ -89,7 +89,6 @@ data GenerateOpts = GenerateOpts
   { imports     :: [String]     -- ^ list of import statements to add to generated files
   , packages    :: [String]     -- ^ list of Cabal packages to install within containers
   , preSource   :: Maybe String -- ^ code to run prior to starting 'nodeSource'
-  , rewrite     :: Bool         -- ^ Whether to apply the logical optimiser
   , maxNodeUtil :: Double       -- ^ The per-Partition utilisation limit
   }
 
@@ -104,7 +103,6 @@ defaultOpts = GenerateOpts
                   ]
   , packages    = []
   , preSource   = Nothing
-  , rewrite     = True
   , maxNodeUtil = 3.0 -- finger in the air
   }
 
@@ -114,8 +112,7 @@ defaultOpts = GenerateOpts
 generateCode :: GenerateOpts -> StreamGraph -> PartitionMap -> [String]
 generateCode opts sg pm = let
     (sgs,cuts)      = createPartitions sg (sort (map sort pm))
-    sgs'            = if rewrite opts then map optimise sgs else sgs
-    enumeratedParts = zip [1..] sgs'
+    enumeratedParts = zip [1..] sgs
     in map (generateCodeFromStreamGraph opts enumeratedParts cuts) enumeratedParts
 
 -- TODO: the sorting of the `PartitionMap` is a work-around for

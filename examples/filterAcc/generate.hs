@@ -7,9 +7,7 @@ import Striot.CompileIoT
 import Striot.StreamGraph
 import Algebra.Graph
 
-opts = defaultOpts { imports  = imports defaultOpts ++ ["System.Random"]
-                   , rewrite = False
-                   }
+opts = defaultOpts { imports  = imports defaultOpts ++ ["System.Random"] }
 
 source = [| do
     i <- getStdRandom (randomR (1,10)) :: IO Int

@@ -18,7 +18,6 @@ opts = GenerateOpts { imports = imports defaultOpts ++
                         ]
                     , packages = []
                     , preSource = Just "preSource"
-                    , rewrite = True
                     }
 source = [| getLine >>= return . stringsToTrip . splitOn "," |]
 
