@@ -3,7 +3,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Striot.LogicalOptimiser ( applyRules
-                               , costModel
                                , optimise
 
                                , applyRule

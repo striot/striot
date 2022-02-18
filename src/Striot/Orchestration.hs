@@ -40,7 +40,7 @@ import Control.Arrow ((>>>))
 
 import Striot.CompileIoT
 import Striot.Jackson
-import Striot.LogicalOptimiser
+import Striot.LogicalOptimiser (applyRules)
 import Striot.Partition
 import Striot.StreamGraph
 import Striot.VizGraph

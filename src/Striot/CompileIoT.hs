@@ -11,16 +11,12 @@ module Striot.CompileIoT ( createPartitions
                          , writePart
                          , genDockerfile
                          , partitionGraph
-                         , optimiseWriteOutAll
 
-                         , optimise -- XXX we are re-exporting this from LogicalOptimiser
                          , generateCodeFromStreamGraph
                          , nodeFn
                          , nodeType
                          , generateNodeSrc
                          , connectNodeId
-
-                         , allOptimisations
 
                          , htf_thisModulesTests
                          ) where
@@ -39,7 +35,6 @@ import Language.Haskell.TH
 
 import Striot.StreamGraph
 import Striot.LogicalOptimiser
-import Striot.Jackson
 import Striot.Partition
 
 ------------------------------------------------------------------------------
@@ -438,63 +433,3 @@ test_partitionings_2 = assertEqual 3 $ length $
 
 test_partitionings_3 = assertEqual 3 $ length $ head $
     partitionings partTestGraph [0..2]
-
--- | placeholder
-allPartitionings :: StreamGraph -> [Partition] -> [PartitionMap]
-allPartitionings sg pt = let
-    count = length pt
-    in filter ((==count) . length) (allPartitions sg)
-
-------------------------------------------------------------------------------
-
--- | write out all rewritten versions of the input StreamGraph, along with some
--- of the necessary supporting code.
--- TODO: rename this to something more intuitive
-optimiseWriteOutAll :: FilePath -> [Partition] -> StreamGraph -> IO ()
-optimiseWriteOutAll fn parts =
-    writeFile fn
-        . template
-        . intercalate "\n    , "
-        . map show
-        . deriveStreamGraphOptions parts
-
--- | Apply the Logical Optimiser to the supplied StreamGraph and then return a
--- list of all possible pairings of StreamGraphs and Partition Maps
--- TODO tests for this pure bit
-deriveStreamGraphOptions :: [Partition] -> StreamGraph -> [(StreamGraph, PartitionMap)]
-deriveStreamGraphOptions parts sg =
-    [ (x,y) | x <- optimise' sg, y <- allPartitionings x parts ]
-
-optimise' :: StreamGraph -> [StreamGraph]
-optimise' = nub . map simplify . applyRules 5
-
--- first ensure that the Logical Optimiser produces at least one rewritten graph
--- for this test input
-test_ensureOptimised' = assertBool $ length (optimise' partTestGraph) > 1
-
--- we must have at least as many options after considering partition mapping as
--- we have StreamGraphs
-test_deriveStreamGraphOptions = assertBool $
-    length (optimise' partTestGraph) <= length (deriveStreamGraphOptions [0..4] partTestGraph)
-
-template g = intercalate "\n"
-    [ "import Striot.StreamGraph"
-    , "import Algebra.Graph"
-    , "\n"
-    , "graphs = "
-    , "    [ "++g
-    , "    ]\n"
-    ]
-
-------------------------------------------------------------------------------
--- Jackson/cost model entry point functions
--- No partitioning
-
--- | derive all optimisations of the supplied StreamGraph, calculate all
--- Jackson stuff from that
-
-allOptimisations :: StreamGraph -> [(StreamGraph, [OperatorInfo])]
-allOptimisations sg = let
-    sgs = nub $ applyRules 5 sg
-    out = map (\sg -> (sg, calcAllSg sg)) sgs
-    in out
