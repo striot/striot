@@ -7,6 +7,9 @@ module Striot.LogicalOptimiser ( applyRules
                                , applyRule
                                , firstMatch
 
+                               , RewriteRule(..)
+                               , defaultRewriteRules
+
                                , mapFilter
                                , filterFilterAcc
                                , filterAccFilter
@@ -98,6 +101,7 @@ rules = [ filterFuse
         , mergeFuse
         , expandFilterAcc
         ]
+defaultRewriteRules = rules
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
 
