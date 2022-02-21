@@ -32,6 +32,9 @@ module Striot.LogicalOptimiser ( applyRules
                                , mergeFuse
                                , expandFilterAcc
 
+                               , filterWindow
+                               , filterAccWindow
+
                                , htf_thisModulesTests
                                ) where
 
