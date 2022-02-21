@@ -72,12 +72,12 @@ firstMatch g f = case f g of
 
 -- N-bounded recursive rule traversal
 -- (caller may wish to apply 'nub')
-applyRules :: Int -> StreamGraph -> [StreamGraph]
-applyRules n sg =
+applyRules :: [RewriteRule] -> Int -> StreamGraph -> [StreamGraph]
+applyRules rs n sg =
         if   n < 1 then [sg]
         else let
-             sgs = map ((&) sg) $ mapMaybe (firstMatch sg) rules
-             in    sg : sgs ++ (concatMap (applyRules (n-1)) sgs)
+             sgs = map ((&) sg) $ mapMaybe (firstMatch sg) rs
+             in    sg : sgs ++ (concatMap (applyRules rs (n-1)) sgs)
 
 ------------------------------------------------------------------------------
 
