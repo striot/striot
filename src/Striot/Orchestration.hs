@@ -52,7 +52,7 @@ type Plan = (StreamGraph, PartitionMap)
 -- | The Cost of a 'Plan' (lower is better).
 -- 'Nothing' represents a non-viable pairing. 'Maybe' n represents the cost
 -- n.
-type Cost = Maybe (Double, Double)
+type Cost = Maybe Int
 
 -- | Apply rewrite rules to the supplied 'StreamGraph' to possibly rewrite
 -- it; partition it when a generated 'PartitionMap'; generate and write out
@@ -116,9 +116,7 @@ sumUtility opts sg pm = let
     oi = calcAllSg sg
     in if   isOverUtilised oi || any (> maxNodeUtil opts) (totalNodeUtilisations oi pm)
        then Nothing
-       else let graphCost = sum . map util $ oi
-                partCost  = fromIntegral (length pm)
-            in  Just (graphCost, partCost)
+       else Just (length pm)
 
 ------------------------------------------------------------------------------
 -- test program taken from examples/filter/generate.hs
