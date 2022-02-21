@@ -12,9 +12,11 @@ Stability   : experimental
 Experimental routines for reasoning about bandwidth.
 
 -}
-module Striot.Bandwidth (
-
-    ) where
+module Striot.Bandwidth ( howBig
+                        , knownEventSizes
+                        , departTime
+                        , whatBandwidth
+                        ) where
 
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
