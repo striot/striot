@@ -7,7 +7,7 @@ import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
 import Striot.Orchestration
 import Striot.StreamGraph
-import Striot.CompileIoT -- superfluous
+import Striot.CompileIoT (createPartitions)
 import Striot.VizGraph -- debug
 import Striot.LogicalOptimiser -- debug
 
@@ -145,17 +145,17 @@ main6 = do
 -- corresponding to "main"
 graph = path
   [ StreamVertex 1 (Source 1)      [[|sampleDataGenerator jan_1_1900_time 10 rs|]]
-                                                                             "IO ()"        "PebbleMode60"   0
+                                                                             "IO ()"        "PebbleMode60"   1
     -- edEvent (euclidean distance)
-  , StreamVertex 2 (Filter 0.5)    [[| (\((x,y,z),vibe)->vibe == 0) |]]      "PebbleMode60"  "PebbleMode60"  0
-  , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode60"  "(Int,Int,Int)" 0
-  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           0
+  , StreamVertex 2 (Filter 0.5)    [[| (\((x,y,z),vibe)->vibe == 0) |]]      "PebbleMode60"  "PebbleMode60"  1
+  , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode60"  "(Int,Int,Int)" 1
+  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           2
 
     -- stepEvent
   , StreamVertex 5 (FilterAcc 0.5) [[| (\last new -> new) |]
                                    ,[| 0 |]
                                    ,[| (\new last ->(last>threshold) && (new<=threshold)) |]
-                                   ]                                         "Int"           "Int"           0
+                                   ]                                         "Int"           "Int"           0.1
     -- stepCount
   , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           0
   , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           0
@@ -166,3 +166,12 @@ graph = path
 plan9 = applyRule mapWindow
       . applyRule filterAccWindow
       $ graph
+
+-- what the current optimiser chooses
+opt    = fst $ chopAndChange defaultOpts graph
+--XXX draw partitioned graph
+
+-- hand-coded version of what we want
+plan9part = [[1,2,3,4],[5,6,7,8,9]]
+plan9p =createPartitions plan9 plan9part
+plan9cost = sumUtility defaultOpts plan9 plan9part
