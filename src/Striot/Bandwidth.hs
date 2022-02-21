@@ -49,12 +49,13 @@ e = howBig . Event (Just (addUTCTime 0 (read "2013-01-01 00:00:00"))) . Just
 
 -- limited to boxed types, and non-list types. Very limited!
 knownEventSizes =
-  [ ("Int",     e (2 :: Int))
-  , ("Double",  e (2 :: Double))
-  , ("Char",    e 'c')
-  , ("String1", e "c")
-  , ("String2", e "cc")
-  , ("String3", e "ccc")
+  [ ("Int",           e (2 :: Int))
+  , ("Double",        e (2 :: Double))
+  , ("Char",          e 'c')
+  , ("String1",       e "c")
+  , ("String2",       e "cc")
+  , ("String3",       e "ccc")
+  , ("(Int,Int,Int)", e ((1,2,3)::(Int,Int,Int)))
   ]
 
 -- XXX copy in Orchestration too. put in Util
