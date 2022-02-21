@@ -24,6 +24,7 @@ library
                       Striot.Nodes.TCP
                       Striot.Nodes.Kafka
                       Striot.Nodes.MQTT
+                      Striot.Bandwidth
                       Striot.CompileIoT
                       Striot.StreamGraph
                       Striot.VizGraph
@@ -109,6 +110,7 @@ test-suite test-striot
                       Striot.Nodes.MQTT
                       Striot.StreamGraph
                       Striot.VizGraph
+                      Striot.Bandwidth
                       Striot.Jackson
                       Striot.Simple
                       Striot.Partition

@@ -44,6 +44,7 @@ import Striot.LogicalOptimiser (applyRules)
 import Striot.Partition
 import Striot.StreamGraph
 import Striot.VizGraph
+import Striot.Bandwidth
 
 -- | A Plan is a pairing of a 'StreamGraph' with a 'PartitionMap' that could
 -- be used for its partitioning and deployment.
