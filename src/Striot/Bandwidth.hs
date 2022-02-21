@@ -14,11 +14,12 @@ Experimental routines for reasoning about bandwidth.
 -}
 module Striot.Bandwidth ( howBig
                         , knownEventSizes
-                        , departTime
+                        , departRate
                         , whatBandwidth
                         ) where
 
 import Striot.FunctionalIoTtypes
+import Striot.FunctionalProcessing
 import Striot.StreamGraph
 import Striot.Jackson
 
@@ -61,25 +62,70 @@ knownEventSizes =
 toFst :: (a -> b) -> a -> (b, a)
 toFst f a = (f a, a)
 
--- what is the bandwidth out of a StreamGraph source
-
---whatBandwidth :: StreamGraph -> Int -> ?
-whatBandwidth g sId = let
-  vs = map (toFst vertexId) (vertexList g)
-  mm = fromJust $ lookup sId vs  -- :: StreamVertex
-  in mm
--- we need to do the matrix from Jackson since we might be looking for
--- rates downstream of a filter
-
-
 ------------------------------------------------------------------------------
 -- test data
 
-v1 = StreamVertex 1 (Source 1) []    "String" "String" 0
-v2 = StreamVertex 2 Map    [[| id |]]        "String" "String" 1
-v3 = StreamVertex 3 (Source 1) []    "String" "String" 2
-v4 = StreamVertex 4 Map    [[| id |]]        "String" "String" 3
-v5 = StreamVertex 5 Merge  []                "[String]" "String" 4
-v6 = StreamVertex 6 Sink   [[| mapM_ print|]] "String" "IO ()" 5
+v1 = StreamVertex 1 (Source 2) []    "Int" "Int" 0
+v2 = StreamVertex 2 Map    [[| id |]]        "Int" "Int" 1
+v3 = StreamVertex 3 (Source 1) []    "Int" "Int" 2
+v4 = StreamVertex 4 Map    [[| id |]]        "Int" "Int" 3
+v5 = StreamVertex 5 Merge  []                "[Int]" "Int" 4
+v6 = StreamVertex 6 Sink   [[| mapM_ print|]] "Int" "IO ()" 5
 graph :: StreamGraph
 graph = overlay (path [v3, v4, v5]) (path [v1, v2, v5, v6])
+
+------------------------------------------------------------------------------
+-- arrival/departure time
+
+parentsOf :: StreamGraph -> Int -> [Int]
+parentsOf = flip f where
+  f i = map (vertexId . fst) . filter ((==i) . vertexId . snd) . edgeList
+
+departRate :: StreamGraph -> Int -> Double
+departRate g i = let
+  vs = map (toFst vertexId) (vertexList g)
+  v  = (fromJust . lookup i) vs
+
+  ps = parentsOf g i
+  p  = head ps
+  p2 = last ps
+
+  in case operator v of
+    Source d    -> d
+    Merge       -> sum (map (departRate g) ps)
+    Join        -> min (departRate g p) (departRate g p2)
+    Filter r    -> r * (departRate g p)
+    FilterAcc r -> r * (departRate g p)
+
+    Window      -> let params = (words . showParam . head . parameters) v in
+                   if   "chopTime" == head params
+                   then 1 / read (params !! 1)
+                   else departRate g p
+
+    _           -> departRate g p
+
+v7 = StreamVertex 7 (Filter 0.5) [] "Int" "Int" 7
+v8 = StreamVertex 8 Join [] "Int" "(Int, Int)" 8
+graph2 = overlay (path [v3, v4, v8]) (path [v1, v2, v8, v7, v6])
+
+test_departRate_merge = assertEqual 3.0 $ departRate graph 6
+test_departRate_join  = assertEqual 1.0 $ departRate graph2 8
+test_departRate_filter= assertEqual 0.5 $ departRate graph2 7
+
+v9 = StreamVertex 9 Window [[| chopTime 120 |]] "a" "[a]" 9
+
+graph3 = path [v1, v2, v9, v7, v6]
+
+test_departRate_window = assertEqual (1/120) $ departRate graph3 9
+
+------------------------------------------------------------------------------
+
+-- what is the bandwidth out of a StreamVertex
+whatBandwidth :: StreamGraph -> Int -> Maybe Double
+whatBandwidth g i = let
+  outrate = departRate g i
+  outType = (outtype . fromJust . lookup i . map (toFst vertexId) . vertexList) g
+  in fmap ((*outrate) . fromIntegral) (lookup outType knownEventSizes)
+
+-- XXX: write an "departSize"? we could estimate window sizes for fixed-length
+-- or time-bound windows for example. Joins approx double, etc
