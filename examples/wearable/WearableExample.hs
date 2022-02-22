@@ -17,6 +17,11 @@ import System.Random
 import Data.Time (UTCTime)
 import Data.Time.Calendar
 import Data.Time.Clock
+import Data.Char (isLower)
+
+import Data.Function ((&))
+import Data.List (sort, nub)
+import Data.Maybe (fromJust)
 
 type AccelVal = Int
 
@@ -175,3 +180,29 @@ opt    = fst $ chopAndChange defaultOpts graph
 plan9part = [[1,2,3,4],[5,6,7,8,9]]
 plan9p =createPartitions plan9 plan9part
 plan9cost = sumUtility defaultOpts plan9 plan9part
+
+------------------------------------------------------------------------------
+-- here temporarily
+
+-- adapted from a version in LogicalOptimiser
+isTypeVariable :: String -> Bool
+isTypeVariable [] = False
+isTypeVariable (c:cs) | c `elem` "([" = isTypeVariable cs
+                      | otherwise     = isLower c
+
+hasTypeVars :: StreamGraph -> Bool
+hasTypeVars g = vertexList g
+              & map (\v -> (intype v, outtype v))
+              & map (\(a,b) -> isTypeVariable a || isTypeVariable b)
+              & or
+
+-- rewrite rule approach
+removeTypeVariables :: RewriteRule
+removeTypeVariables (Connect (Vertex a) (Vertex b)) =
+    if   isTypeVariable (intype b) && (not . isTypeVariable . outtype) a
+    then Just (replaceVertex b b { intype = outtype a })
+    -- we might be copying a type var from outtype a here. Whether this works
+    -- is going to depend on what order the edges are traversed
+    else Nothing
+
+removeTypeVariables _ = Nothing
