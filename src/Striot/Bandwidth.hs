@@ -16,18 +16,23 @@ module Striot.Bandwidth ( howBig
                         , knownEventSizes
                         , departRate
                         , whatBandwidth
+                        , connectedToSources
+                        , overBandwidthLimit
                         ) where
 
+import Striot.CompileIoT
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
 import Striot.StreamGraph
 import Striot.Jackson
 
 import Algebra.Graph
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe, catMaybes)
 import Data.Time (addUTCTime) -- UTCTime (..),addUTCTime,diffUTCTime,NominalDiffTime,picosecondsToDiffTime, Day (..))
 import Data.Store (Store)
 import Test.Framework
+import Data.Function ((&))
+import Data.List.Unicode
 
 import qualified Data.Store.Streaming as SS
 import qualified Data.ByteString as B
@@ -129,3 +134,34 @@ whatBandwidth g i = let
 
 -- XXX: write an "departSize"? we could estimate window sizes for fixed-length
 -- or time-bound windows for example. Joins approx double, etc
+
+-- TEMP. This will be a streamSource property. Or part of a Catalog.
+bandwidthLimit = 29 :: Double
+
+-- | Does this StreamGraph breach a bandwidth limit?
+overBandwidthLimit :: StreamGraph -> PartitionMap -> Bool
+overBandwidthLimit sg pm = let
+  sourceIds = (map vertexId . filter (isSource . operator) . vertexList) sg
+  connected = connectedToSources sourceIds pm
+
+  in edgeList sg
+    & filter ((connected ∋) . vertexId . fst) -- edges from source Partition
+    & filter ((connected ∌) . vertexId . snd) -- not terminating there
+    & map fst -- source vertex
+    & mapMaybe (fmap (>bandwidthLimit) . whatBandwidth sg . vertexId)
+    & or
+
+-- XXX: tests or overBandwidthLimit
+
+test_overBandwidthLimit = assertBool $ overBandwidthLimit graph [[1,2],[3,4],[5,6]]
+
+-- | Provide a flattened list of node IDs from a PartitionMap which are
+-- connected to a source node within a partition.
+connectedToSources :: [Partition] -> PartitionMap -> [Partition]
+connectedToSources sources =
+  concat . filter (not . null . filter (sources ∋))
+
+test_connectedToSources = assertEqual [1,2,3,4] $ connectedToSources [1,3] [[1,2],[3,4],[5,6,7]]
+test_connectedToSources2= assertEqual [1,2]     $ connectedToSources   [1] [[1,2],[3,4],[5,6,7]]
+test_connectedToSources3= assertEqual [5,6,7]   $ connectedToSources   [7] [[1,2],[3,4],[5,6,7]]
+test_connectedToSources4= assertEqual []        $ connectedToSources   [0] [[1,2],[3,4],[5,6,7]]
