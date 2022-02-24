@@ -86,7 +86,7 @@ chopAndChange opts sg = case viableRewrites opts sg of
 --   * return the 'Plan' paired with with the 'Cost' from applying the cost model.
 viableRewrites :: GenerateOpts -> StreamGraph -> [(Plan, Cost)]
 viableRewrites opts = deriveRewritesAndPartitionings (rules opts)
-                  >>> map (toSnd (uncurry (planCost opts)))
+                  >>> map (toSnd (planCost opts))
                   >>> filter (isJust . snd)
 
 test_viableRewrites_graph = assertNotEmpty $ viableRewrites defaultOpts graph
@@ -112,8 +112,8 @@ allPartitionsPaired sg = map (\pm -> (sg,pm)) (allPartitions sg)
 -- 'Nothing' if the 'Plan' is not viable,
 -- either due to an over-utilised operator or an over-utilised 'Partition'.
 --
-planCost :: GenerateOpts -> StreamGraph -> PartitionMap -> Cost
-planCost opts sg pm = let
+planCost :: GenerateOpts -> Plan -> Cost
+planCost opts (sg,pm) = let
     oi = calcAllSg sg
     in if   isOverUtilised oi
          || any (> maxNodeUtil opts) (totalNodeUtilisations oi pm)
@@ -189,7 +189,7 @@ test_overUtilisedPartition_minThreePartitions = assertBool $
     (not . any (<3) . map (length.snd.fst) . viableRewrites defaultOpts) partUtilGraph
 
 test_overUtilisedPartition_rejected = -- example of an over-utilised partition
-    assertNothing (planCost defaultOpts partUtilGraph [[1,2],[3,4,5,6,7,8,9]])
+    assertNothing (planCost defaultOpts (partUtilGraph, [[1,2],[3,4,5,6,7,8,9]]))
 
 -- example of an acceptable PartitionMap
 test_overUtilisedPartition_acceptable = assertElem [[1,2,3],[4,5,6],[7,8,9]]
