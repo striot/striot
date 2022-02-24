@@ -14,7 +14,7 @@ Experimental routines for reasoning about bandwidth.
 -}
 module Striot.Bandwidth ( howBig
                         , knownEventSizes
-                        , departTime
+                        , departRate
                         , whatBandwidth
                         , connectedToSources
                         , overBandwidthLimit
@@ -94,8 +94,8 @@ parentsOf = flip f where
   f i = map (vertexId . fst) . filter ((==i) . vertexId . snd) . edgeList
 
 -- XXX is this departure RATE?
-departTime :: StreamGraph -> Int -> Double
-departTime g i = let
+departRate :: StreamGraph -> Int -> Double
+departRate g i = let
   vs = map (toFst vertexId) (vertexList g)
   v  = (fromJust . lookup i) vs
 
@@ -105,38 +105,38 @@ departTime g i = let
 
   in case operator v of
     Source d    -> d
-    Merge       -> sum (map (departTime g) ps)
-    Join        -> min (departTime g p) (departTime g p2)
-    Filter r    -> r * (departTime g p)
-    FilterAcc r -> r * (departTime g p)
+    Merge       -> sum (map (departRate g) ps)
+    Join        -> min (departRate g p) (departRate g p2)
+    Filter r    -> r * (departRate g p)
+    FilterAcc r -> r * (departRate g p)
 
     Window      -> let params = (words . showParam . head . parameters) v in
                    if   "chopTime" == head params
-                   then read (params !! 1)
-                   else departTime g p
+                   then 1 / read (params !! 1)
+                   else departRate g p
 
-    _           -> departTime g p
+    _           -> departRate g p
 
 v7 = StreamVertex 7 (Filter 0.5) [] "Int" "Int" 7
 v8 = StreamVertex 8 Join [] "Int" "(Int, Int)" 8
 graph2 = overlay (path [v3, v4, v8]) (path [v1, v2, v8, v7, v6])
 
-test_departTime_merge = assertEqual 3.0 $ departTime graph 6
-test_departTime_join  = assertEqual 1.0 $ departTime graph2 8
-test_departTime_filter= assertEqual 0.5 $ departTime graph2 7
+test_departRate_merge = assertEqual 3.0 $ departRate graph 6
+test_departRate_join  = assertEqual 1.0 $ departRate graph2 8
+test_departRate_filter= assertEqual 0.5 $ departRate graph2 7
 
 v9 = StreamVertex 9 Window [[| chopTime 120 |]] "a" "[a]" 9
 
 graph3 = path [v1, v2, v9, v7, v6]
 
-test_departTime_window = assertEqual 120.0 $ departTime graph3 9
+test_departRate_window = assertEqual (1/120) $ departRate graph3 9
 
 ------------------------------------------------------------------------------
 
 -- what is the bandwidth out of a StreamVertex
 whatBandwidth :: StreamGraph -> Int -> Maybe Double
 whatBandwidth g i = let
-  outrate = departTime g i
+  outrate = departRate g i
   outType = (outtype . fromJust . lookup i . map (toFst vertexId) . vertexList) g
   in fmap ((*outrate) . fromIntegral) (lookup outType knownEventSizes)
 
