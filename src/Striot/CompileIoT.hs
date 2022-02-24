@@ -86,11 +86,12 @@ unPartition (a,b) = overlay b $ foldl overlay Empty a
 -- | Options for source code generation are captured in instances of the
 -- 'GenerateOpts' data-type.
 data GenerateOpts = GenerateOpts
-  { imports     :: [String]     -- ^ list of import statements to add to generated files
-  , packages    :: [String]     -- ^ list of Cabal packages to install within containers
-  , preSource   :: Maybe String -- ^ code to run prior to starting 'nodeSource'
-  , rules       :: [RewriteRule]-- ^ A list of rewrite rules for the logical optimiser
-  , maxNodeUtil :: Double       -- ^ The per-Partition utilisation limit
+  { imports           :: [String]      -- ^ list of import statements to add to generated files
+  , packages          :: [String]      -- ^ list of Cabal packages to install within containers
+  , preSource         :: Maybe String  -- ^ code to run prior to starting 'nodeSource'
+  , rules             :: [RewriteRule] -- ^ A list of rewrite rules for the logical optimiser
+  , maxNodeUtil       :: Double        -- ^ The per-Partition utilisation limit
+  , bandwidthLimit    :: Double        -- ^ A program-global maximum bandwidth limit
   }
 
 -- | Sensible default values for 'GenerateOpts'. Users who wish to customise
@@ -106,6 +107,7 @@ defaultOpts = GenerateOpts
   , preSource   = Nothing
   , rules       = defaultRewriteRules
   , maxNodeUtil = 3.0 -- finger in the air
+  , bandwidthLimit = 29 -- same
   }
 
 -- |Partitions the supplied `StreamGraph` according to the supplied `PartitionMap`
