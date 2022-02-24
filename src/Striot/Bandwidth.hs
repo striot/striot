@@ -32,6 +32,7 @@ import Data.Time (addUTCTime) -- UTCTime (..),addUTCTime,diffUTCTime,NominalDiff
 import Data.Store (Store)
 import Test.Framework
 import Data.Function ((&))
+import Data.List.Unicode
 
 import qualified Data.Store.Streaming as SS
 import qualified Data.ByteString as B
@@ -162,11 +163,6 @@ overBandwidthLimit sg pm = let
 -- XXX: tests or overBandwidthLimit
 
 test_overBandwidthLimit = assertBool $ overBandwidthLimit graph [[1,2],[3,4],[5,6]]
-
--- also defined in base-unicode-symbols/Prelude.Unicode
-(∋) = flip elem
-(∌) = flip (∉)
-(∉) = notElem
 
 -- | Provide a flattened list of node IDs from a PartitionMap which are
 -- connected to a source node within a partition.
