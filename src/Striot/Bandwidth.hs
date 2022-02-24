@@ -51,6 +51,13 @@ howBig = B.length . SS.encodeMessage . SS.Message
 e :: Store a => a -> Int
 e = howBig . Event (Just (addUTCTime 0 (read "2013-01-01 00:00:00"))) . Just
 
+-- these are types copied from examples/wearable. Longer term we should
+-- accept user-provided event sizes
+type AccelVal = Int
+type Accelerometer = (AccelVal,AccelVal,AccelVal) -- X,Y,Z accelerometer values
+type Vibe = Int
+type PebbleMode60 = (Accelerometer,Vibe)
+
 -- limited to boxed types, and non-list types. Very limited!
 knownEventSizes =
   [ ("Int",           e (2 :: Int))
@@ -60,6 +67,7 @@ knownEventSizes =
   , ("String2",       e "cc")
   , ("String3",       e "ccc")
   , ("(Int,Int,Int)", e ((1,2,3)::(Int,Int,Int)))
+  , ("PebbleMode60",  e (((0,0,0),0) :: PebbleMode60))
   ]
 
 -- XXX copy in Orchestration too. put in Util
