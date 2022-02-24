@@ -5,6 +5,7 @@ module WearableUseCaseCloudCom2 where
 
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
+import Striot.Bandwidth
 import Striot.Orchestration
 import Striot.StreamGraph
 import Striot.CompileIoT (createPartitions)
@@ -181,6 +182,8 @@ plan9part = [[1,2,3,4],[5,6,7,8,9]]
 plan9p =createPartitions plan9 plan9part
 plan9cost = sumUtility defaultOpts plan9 plan9part
 
+opts = defaultOpts { rules = filterAccWindow : rules defaultOpts }
+
 ------------------------------------------------------------------------------
 -- here temporarily
 
@@ -206,3 +209,8 @@ removeTypeVariables (Connect (Vertex a) (Vertex b)) =
     else Nothing
 
 removeTypeVariables _ = Nothing
+
+------------------------------------------------------------------------------
+-- confirm that plan9 is a winning rewrite
+
+test_plan9_winner = assertElem plan9 $ (map (fst.fst) . filter ((<= plan9cost) . snd) . viableRewrites opts) graph
