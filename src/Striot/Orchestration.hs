@@ -115,7 +115,9 @@ allPartitionsPaired sg = map (\pm -> (sg,pm)) (allPartitions sg)
 sumUtility :: GenerateOpts -> StreamGraph -> PartitionMap -> Cost
 sumUtility opts sg pm = let
     oi = calcAllSg sg
-    in if   isOverUtilised oi || any (> maxNodeUtil opts) (totalNodeUtilisations oi pm)
+    in if   isOverUtilised oi
+         || any (> maxNodeUtil opts) (totalNodeUtilisations oi pm)
+         || overBandwidthLimit sg pm
        then Nothing
        else Just (length pm)
 
