@@ -191,7 +191,7 @@ myStyle = Style
                                        , "fontsize":="18"
                                        , "shape":="box"])
     -- without forcing shape=box, the nodes end up ellipses in PartitionedGraphs
-    , edgeAttributes          = (\_ o -> ["label":=("\"" ++ intype o ++ "\"")])
+    , edgeAttributes          = (\_ o -> ["label":=("\" " ++ intype o ++ "\"")])
     , attributeQuoting        = NoQuotes
     }
 
