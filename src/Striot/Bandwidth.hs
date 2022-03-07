@@ -16,6 +16,7 @@ module Striot.Bandwidth ( howBig
                         , knownEventSizes
                         , departRate
                         , whatBandwidth
+                        , whatBandwidth'
                         , connectedToSources
                         , overBandwidthLimit
                         ) where
@@ -136,10 +137,18 @@ test_departRate_window = assertEqual (1/120) $ departRate graph3 9
 
 -- what is the bandwidth out of a StreamVertex
 whatBandwidth :: StreamGraph -> Int -> Maybe Double
-whatBandwidth g i = let
-  outrate = departRate g i
-  outType = (outtype . fromJust . lookup i . map (toFst vertexId) . vertexList) g
-  in fmap ((*outrate) . fromIntegral) (lookup outType knownEventSizes)
+whatBandwidth g i =
+  let v = (head . filter ((==i) . vertexId) . vertexList) g
+  in if Window == operator v
+     then whatBandwidth g $ head $ parentsOf g i
+     else
+       let outrate = departRate g i
+       in fmap ((*outrate) . fromIntegral) (lookup (outtype v) knownEventSizes)
+
+
+-- applies a rate-based overhead weighting
+weighting = 2.0
+whatBandwidth' g i = fmap (+ (departRate g i * weighting)) (whatBandwidth g i)
 
 -- XXX: write an "departSize"? we could estimate window sizes for fixed-length
 -- or time-bound windows for example. Joins approx double, etc
@@ -154,7 +163,7 @@ overBandwidthLimit sg pm bandwidthLimit = let
     & filter ((connected ∋) . vertexId . fst) -- edges from source Partition
     & filter ((connected ∌) . vertexId . snd) -- not terminating there
     & map fst -- source vertex
-    & mapMaybe (fmap (>bandwidthLimit) . whatBandwidth sg . vertexId)
+    & mapMaybe (fmap (>bandwidthLimit) . whatBandwidth' sg . vertexId)
     & or
 
 -- XXX: tests or overBandwidthLimit

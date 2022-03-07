@@ -184,6 +184,12 @@ plan9cost = planCost defaultOpts (plan9, plan9part)
 
 opts = defaultOpts { rules = filterAccWindow : rules defaultOpts }
 
+-- probably belongs in Bandwidth
+test_whatBandwidth1 = assertEqual (Just 68.0) $ whatBandwidth plan9 1
+test_whatBandwidth2 = assertEqual (Just 34.0) $ whatBandwidth plan9 2
+test_whatBandwidth3 = assertEqual (Just 30.0) $ whatBandwidth plan9 3
+test_whatBandwidth4 = assertEqual (Just 30.0) $ whatBandwidth plan9 4 -- the Window
+
 ------------------------------------------------------------------------------
 -- here temporarily
 
