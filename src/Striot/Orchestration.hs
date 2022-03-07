@@ -196,7 +196,7 @@ test_overUtilisedPartition_acceptable = assertElem [[1,2,3],[4,5,6],[7,8,9]]
     $ map (sort . (map sort))
     $ (map (snd.fst) . viableRewrites opts) partUtilGraph -- :: [PartitionMap]
     where
-        opts = defaultOpts { bandwidthLimit = 44 }
+        opts = defaultOpts { bandwidthLimit = 46 }
 
 {- $fromCompileIoT
 == CompileIoT functions
