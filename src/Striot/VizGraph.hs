@@ -115,7 +115,7 @@ jacksonGraphToDot graph = let
 partitionedGraphToDot :: PartitionedGraph -> String
 partitionedGraphToDot pgs@(ps,cuts) = let
     graph = overlays (cuts:ps)
-    pre   = map (uncurry subGraphToPartition) (zip ps [0..])
+    pre   = map (uncurry subGraphToPartition) (zip ps [1..])
     style = myStyle
       { preamble = pre }
     in export style graph
@@ -134,7 +134,8 @@ subGraphToPartition sg i = let
     \    color=\"#888888\"\n\
     \    style=\"rounded,dashed\"\n\
     \    labelloc=b\n\
-    \    label=\"                    Node "++n++"\"\n\
+    \    labeljust=r\n\
+    \    label=\"Node "++n++"\"\n\
     \    "++ids++"\n\
     \  }\n"
 
