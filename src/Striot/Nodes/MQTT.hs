@@ -11,9 +11,11 @@ import qualified Data.ByteString                          as B (length)
 import qualified Data.ByteString.Lazy.Char8               as BLC
 import           Data.Store                               (Store, decode,
                                                            encode)
+import           Data.Maybe                               (fromJust)
 import           Data.Text                                as T (pack)
 import           Network.MQTT.Client                      as MQTT hiding
                                                                    (Timeout)
+import           Network.MQTT.Topic                       (mkTopic, mkFilter)
 import           Network.MQTT.Types                       (RetainHandling (..))
 import           Network.Socket                           (HostName,
                                                            ServiceName)
@@ -31,8 +33,9 @@ sendStreamMQTT name conf met stream = do
                     val <- E.evaluate . force . encode $ x
                     PC.inc (_egressEvents met)
                         >> PC.add (B.length val) (_egressBytes met)
-                        >> publishq mc (T.pack $ conf ^. mqttTopic) (BLC.fromStrict val) False QoS0 []) stream
-
+                        >> publishq mc topic (BLC.fromStrict val) False QoS0 []) stream
+                        where
+                            topic = (fromJust . mkTopic . T.pack) $ conf ^. mqttTopic
 
 runMQTTPub :: String -> HostName -> ServiceName -> IO MQTTClient
 runMQTTPub name host port =
@@ -46,8 +49,10 @@ runMQTTSub name conf met chan = do
         p = conf ^. mqttConn . port
         (Just uri) = parseURI $ "mqtt://" ++ h ++ ":" ++ p
     mc <- connectURI (netmqttConf name h p (SimpleCallback $ mqttMessageCallback met chan)) uri
-    print =<< subscribe mc (map (\x -> (x, subOptions)) [T.pack (conf ^. mqttTopic)]) []
+    print =<< subscribe mc (map (\x -> (x, subOptions)) [filtr]) []
     waitForClient mc
+    where
+        filtr = (fromJust . mkFilter . T.pack) (conf ^. mqttTopic)
 
 
 mqttMessageCallback :: Store alpha => Metrics -> U.InChan (Event alpha) -> MQTTClient -> Topic -> BLC.ByteString -> [Property] -> IO ()
