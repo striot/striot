@@ -1,16 +1,9 @@
-resolver: lts-13.25
+resolver: lts-19.0 # ghc-9.0.2
 packages:
 - .
 extra-deps:
-- network-3.1.0.0
-- prometheus-2.2.2
-- store-streaming-0.1.0.0
-- unagi-chan-0.4.1.0
-- net-mqtt-0.6.2.1
-- websockets-0.12.6.1
-- connection-0.3.1
-- socks-0.6.1
-- hw-kafka-client-3.0.0
-- envy-2.0.0.0
+- net-mqtt-0.8.2.0
+- aeson-2.0.2.0
+- attoparsec-0.13.2.5@sha256:1b64fc08464d9dc73d80e13aea362410f3c8bca5abfa6831df8821281c3cdfeb,6199
 - git: https://github.com/snowleopard/alga.git
   commit: 1623fae605503595ee331929157c61b5e5e0c1c7
