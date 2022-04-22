@@ -40,7 +40,7 @@ import Control.Arrow ((>>>))
 
 import Striot.CompileIoT
 import Striot.Jackson
-import Striot.LogicalOptimiser (applyRules)
+import Striot.LogicalOptimiser (applyRules, RewriteRule)
 import Striot.Partition
 import Striot.StreamGraph
 import Striot.VizGraph
@@ -84,7 +84,7 @@ chopAndChange opts sg = case viableRewrites opts sg of
 --
 --   * return the 'Plan' paired with with the 'Cost' from applying the cost model.
 viableRewrites :: GenerateOpts -> StreamGraph -> [(Plan, Cost)]
-viableRewrites opts = deriveRewritesAndPartitionings
+viableRewrites opts = deriveRewritesAndPartitionings (rules opts)
                   >>> map (toSnd (uncurry (sumUtility opts)))
                   >>> filter (isJust . snd)
 
@@ -99,8 +99,8 @@ toFst f a = (f a, a)
 
 -- | given a 'StreamGraph', derives further graphs by applying rewrite
 -- rules and pairs them with all their potential partitionings
-deriveRewritesAndPartitionings :: StreamGraph -> [Plan]
-deriveRewritesAndPartitionings = concatMap allPartitionsPaired . nub . applyRules 5
+deriveRewritesAndPartitionings :: [RewriteRule] -> StreamGraph -> [Plan]
+deriveRewritesAndPartitionings rs = concatMap allPartitionsPaired . nub . applyRules rs 5
 
 -- | given a 'StreamGraph', generate all partitionings of it and pair
 -- them individually with the 'StreamGraph'.

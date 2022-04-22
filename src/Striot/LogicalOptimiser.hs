@@ -7,6 +7,9 @@ module Striot.LogicalOptimiser ( applyRules
                                , applyRule
                                , firstMatch
 
+                               , RewriteRule(..)
+                               , defaultRewriteRules
+
                                , mapFilter
                                , filterFilterAcc
                                , filterAccFilter
@@ -28,6 +31,9 @@ module Striot.LogicalOptimiser ( applyRules
                                , expandMerge
                                , mergeFuse
                                , expandFilterAcc
+
+                               , filterWindow
+                               , filterAccWindow
 
                                , htf_thisModulesTests
                                ) where
@@ -66,12 +72,12 @@ firstMatch g f = case f g of
 
 -- N-bounded recursive rule traversal
 -- (caller may wish to apply 'nub')
-applyRules :: Int -> StreamGraph -> [StreamGraph]
-applyRules n sg =
+applyRules :: [RewriteRule] -> Int -> StreamGraph -> [StreamGraph]
+applyRules rs n sg =
         if   n < 1 then [sg]
         else let
-             sgs = map ((&) sg) $ mapMaybe (firstMatch sg) rules
-             in    sg : sgs ++ (concatMap (applyRules (n-1)) sgs)
+             sgs = map ((&) sg) $ mapMaybe (firstMatch sg) rs
+             in    sg : sgs ++ (concatMap (applyRules rs (n-1)) sgs)
 
 ------------------------------------------------------------------------------
 
@@ -98,6 +104,7 @@ rules = [ filterFuse
         , mergeFuse
         , expandFilterAcc
         ]
+defaultRewriteRules = rules
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
 
