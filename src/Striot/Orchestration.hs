@@ -115,7 +115,9 @@ allPartitionsPaired sg = map (\pm -> (sg,pm)) (allPartitions sg)
 planCost :: GenerateOpts -> Plan -> Cost
 planCost opts (sg,pm) = let
     oi = calcAllSg sg
-    in if   isOverUtilised oi || any (> maxNodeUtil opts) (totalNodeUtilisations oi pm)
+    in if   isOverUtilised oi
+         || any (> maxNodeUtil opts) (totalNodeUtilisations oi pm)
+         || overBandwidthLimit sg pm (bandwidthLimit opts)
        then Nothing
        else Just (length pm)
 
@@ -192,7 +194,9 @@ test_overUtilisedPartition_rejected = -- example of an over-utilised partition
 -- example of an acceptable PartitionMap
 test_overUtilisedPartition_acceptable = assertElem [[1,2,3],[4,5,6],[7,8,9]]
     $ map (sort . (map sort))
-    $ (map (snd.fst) . viableRewrites defaultOpts) partUtilGraph -- :: [PartitionMap]
+    $ (map (snd.fst) . viableRewrites opts) partUtilGraph -- :: [PartitionMap]
+    where
+        opts = defaultOpts { bandwidthLimit = 44 }
 
 {- $fromCompileIoT
 == CompileIoT functions

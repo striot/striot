@@ -143,12 +143,9 @@ whatBandwidth g i = let
 -- XXX: write an "departSize"? we could estimate window sizes for fixed-length
 -- or time-bound windows for example. Joins approx double, etc
 
--- TEMP. This will be a streamSource property. Or part of a Catalog.
-bandwidthLimit = 29 :: Double
-
 -- | Does this StreamGraph breach a bandwidth limit?
-overBandwidthLimit :: StreamGraph -> PartitionMap -> Bool
-overBandwidthLimit sg pm = let
+overBandwidthLimit :: StreamGraph -> PartitionMap -> Double -> Bool
+overBandwidthLimit sg pm bandwidthLimit = let
   sourceIds = (map vertexId . filter (isSource . operator) . vertexList) sg
   connected = connectedToSources sourceIds pm
 
@@ -161,7 +158,7 @@ overBandwidthLimit sg pm = let
 
 -- XXX: tests or overBandwidthLimit
 
-test_overBandwidthLimit = assertBool $ overBandwidthLimit graph [[1,2],[3,4],[5,6]]
+test_overBandwidthLimit = assertBool $ overBandwidthLimit graph [[1,2],[3,4],[5,6]] 29
 
 -- | Provide a flattened list of node IDs from a PartitionMap which are
 -- connected to a source node within a partition.
