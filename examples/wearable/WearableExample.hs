@@ -173,7 +173,7 @@ opt    = fst $ chopAndChange defaultOpts graph
 -- hand-coded version of what we want
 plan9part = [[1,2,3,4],[5,6,7,8,9]]
 plan9p =createPartitions plan9 plan9part
-plan9cost = sumUtility defaultOpts plan9 plan9part
+plan9cost = planCost defaultOpts (plan9, plan9part)
 
 test_plan9_winner = assertElem plan9 $ (map (fst.fst) . filter ((<= plan9cost) . snd) . viableRewrites opts) graph
   where  opts = defaultOpts { rules = filterAccWindow : rules defaultOpts }
