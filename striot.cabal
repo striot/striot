@@ -24,6 +24,7 @@ library
                       Striot.Nodes.TCP
                       Striot.Nodes.Kafka
                       Striot.Nodes.MQTT
+                      Striot.Bandwidth
                       Striot.CompileIoT
                       Striot.StreamGraph
                       Striot.VizGraph
@@ -62,6 +63,7 @@ library
                     , syb
                     , dsp               >= 0.2
                     , array             >= 0.5
+                    , base-unicode-symbols >= 0.2
   hs-source-dirs:     src
   default-language:   Haskell2010
 
@@ -98,6 +100,7 @@ test-suite test-striot
                     , syb
                     , dsp               >= 0.2
                     , array             >= 0.5
+                    , base-unicode-symbols >= 0.2
   other-modules:      Striot.CompileIoT
                       Striot.FunctionalIoTtypes
                       Striot.FunctionalProcessing
@@ -109,6 +112,7 @@ test-suite test-striot
                       Striot.Nodes.MQTT
                       Striot.StreamGraph
                       Striot.VizGraph
+                      Striot.Bandwidth
                       Striot.Jackson
                       Striot.Simple
                       Striot.Partition
