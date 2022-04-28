@@ -228,10 +228,10 @@ filterAcc accfn pred acc = let
 --t1 tLen sLen s = splitAtValuedEvents tLen (take sLen s)
 
 s1 :: Stream Int
-s1 = [(Event (Just (addUTCTime i (read "2013-01-01 00:00:00"))) (Just 999))|i<-[0..]]
+s1 = [(Event (Just (addUTCTime i (read "2013-01-01 00:00:00 +0000"))) (Just 999))|i<-[0..]]
 
 s2 :: Stream Int
-s2 = [Event (Just (addUTCTime i (read "2013-01-01 00:00:00"))) Nothing |i<-[0..]]
+s2 = [Event (Just (addUTCTime i (read "2013-01-01 00:00:00 +0000"))) Nothing |i<-[0..]]
 
 s3 :: Stream Int
 s3 = streamMerge [s1,s2]
