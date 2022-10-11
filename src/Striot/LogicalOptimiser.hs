@@ -850,7 +850,7 @@ expandFilterAcc (Connect (Vertex e@(StreamVertex i Expand _ t1 t2 _))
                          (Vertex fa@(StreamVertex j (FilterAcc _) (f:a:p:_) _ _ s))) =
     Just $ \g -> let
         scan = StreamVertex i Scan
-            [ [| \(_,acc) a -> filterAcc $(f) $(p) acc a |]
+            [ [| \(_,acc) a -> filterAcc $(f) acc $(p) a |]
             , [| ([],$(a)) |]
             ] t1 t1 s
         mapr = StreamVertex j Map [[| reverse.fst |]] t1 t1 0
@@ -881,7 +881,7 @@ expandFilterAccPost = path
             a  = [| (True, undefined) |]
             p  = [| \new (b,old) -> b || old /= new |]
             f' = [| reverse.fst |]
-            sa = [| \(_,acc) a -> filterAcc $(f) $(p) acc a |]
+            sa = [| \(_,acc) a -> filterAcc $(f) acc $(p) a |]
             si = [| ([],$(a)) |]
 
 test_expandFilterAcc = assertEqual expandFilterAccPost
@@ -951,7 +951,7 @@ filterWindowPost = path
 test_filterWindow = assertEqual (applyRule filterWindow filterWindowPre) filterWindowPost
 
 -- streamFilterAcc f a p >>> streamWindow w =
--- streamWindow w >>> streamScan (\ (_,acc) a -> filterAcc f p acc a) ([],a)
+-- streamWindow w >>> streamScan (\ (_,acc) a -> filterAcc f acc p a) ([],a)
 --                >>> streamMap (reverse.fst) 
 
 -- Same caveats as filterWindow
@@ -962,7 +962,7 @@ filterAccWindow (Connect (Vertex fa@(StreamVertex i (FilterAcc _) (f:a:p:_) _ _ 
     Just $ \g -> let
       w' = w { vertexId = i }
       sc = StreamVertex j Scan
-         [ [| \ (_, acc) a -> filterAcc $(f) $(p) acc a |]
+         [ [| \ (_, acc) a -> filterAcc $(f) acc $(p) a |]
          , [| ([], $(a)) |]
          ] t t s
       m  = StreamVertex (newVertexId g) Map [[| reverse.fst |]] t t 0
@@ -990,7 +990,7 @@ filterAccWindowPost = path
             a = [| (True, undefined) |]
             p = [| \new (b,old) -> b || old /= new |]
             f' = [| reverse.fst |]
-            sa = [| \(_,acc) a -> filterAcc $(f) $(p) acc a |]
+            sa = [| \(_,acc) a -> filterAcc $(f) acc $(p) a |]
             si = [| ([],$(a)) |]
 
 test_filterAccWindow = assertEqual filterAccWindowPost
