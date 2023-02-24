@@ -51,7 +51,7 @@ howBig = B.length . SS.encodeMessage . SS.Message
 -- so assume they do. The following figures calculated using the above
 
 e :: Store a => a -> Int
-e = howBig . Event (Just (addUTCTime 0 (read "2013-01-01 00:00:00"))) . Just
+e = howBig . Event (Just (addUTCTime 0 (read "2013-01-01 00:00:00 +0000"))) . Just
 
 -- these are types copied from examples/wearable. Longer term we should
 -- accept user-provided event sizes
