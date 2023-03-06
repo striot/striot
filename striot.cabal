@@ -36,7 +36,7 @@ library
   -- other-extensions:
   build-tool-depends: HTF:htfpp >= 0.15
   build-depends:
-      algebraic-graphs     >= 0.6
+      algebraic-graphs     >= 0.6 && < 0.7
     , array                >= 0.5.4.0
     , async                >= 2.2.4
     , base                 >= 4.15.1
@@ -75,7 +75,7 @@ test-suite test-striot
   main-is:            TestMain.hs
   build-tool-depends: HTF:htfpp >= 0.15
   build-depends:
-      algebraic-graphs     >= 0.6
+      algebraic-graphs     >= 0.6 && < 0.7
     , array                >= 0.5.4.0
     , async                >= 2.2.4
     , base                 >= 4.15.1
