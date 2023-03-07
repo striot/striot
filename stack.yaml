@@ -5,5 +5,4 @@ extra-deps:
 - net-mqtt-0.8.2.0
 - aeson-2.0.2.0
 - attoparsec-0.13.2.5@sha256:1b64fc08464d9dc73d80e13aea362410f3c8bca5abfa6831df8821281c3cdfeb,6199
-- git: https://github.com/snowleopard/alga.git
-  commit: 1623fae605503595ee331929157c61b5e5e0c1c7
+- algebraic-graphs-0.6.1
