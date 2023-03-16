@@ -362,7 +362,7 @@ test_reform_s1_2 = assertEqual s1 (unPartition $ createPartitions s1 [[0],[1,2]]
 
 genDockerfile listen opts = 
     let pkgs = packages opts in concat
-    [ "FROM striot/striot-base:latest\n"
+    [ "FROM ghcr.io/striot/striot:latest\n"
     , "WORKDIR /opt/node\n"
     , "COPY . /opt/node\n"
     , if pkgs /= [] then "RUN cabal install " ++ (intercalate " " pkgs) else ""
