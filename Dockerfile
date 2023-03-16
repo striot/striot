@@ -10,7 +10,7 @@ ENV LANG="C.UTF-8"
 RUN apt-get install -y librdkafka-dev
 
 # Copy cabal file and license
-COPY striot/striot.cabal striot/LICENSE /opt/striot/
+COPY striot.cabal LICENSE README.md /opt/striot/
 
 WORKDIR /opt/striot
 
@@ -27,7 +27,7 @@ RUN cabal v1-install --only-dependencies --extra-include-dirs=/usr/local/include
 
 # Copy over source code in a separate layer, ensuring above is cached if
 # cabal file does not change
-COPY striot/src /opt/striot/src
+COPY src /opt/striot/src
 
 RUN cabal v1-build && \
     cabal v1-install
