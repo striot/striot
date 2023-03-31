@@ -1,4 +1,4 @@
-FROM striot/striot-base:latest
+FROM ghcr.io/striot/striot:latest
 WORKDIR /opt/node
 COPY . /opt/node
 
