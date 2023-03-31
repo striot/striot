@@ -69,4 +69,4 @@ docs-upload: docs
 	rsync -va --delete .stack-work/dist/*/*/doc/html/striot/ redmars.org:www/redmars/striot/
 
 default2: examples/expand examples/filterAcc examples/filter examples/join examples/merge examples/pipeline examples/scan examples/taxi
-.PHONY: default default2 clean docs docs-upload examples/expand examples/filterAcc examples/filter examples/join examples/merge examples/pipeline examples/scan examples/taxi
+.PHONY: default default2 clean docs docs-upload image/build examples/expand examples/filterAcc examples/filter examples/join examples/merge examples/pipeline examples/scan examples/taxi

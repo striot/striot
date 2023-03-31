@@ -64,7 +64,7 @@ gen()
     echo
 
     echo default2: "${a[@]}"
-    echo .PHONY: default default2 clean docs docs-upload "${a[@]}"
+    echo .PHONY: default default2 clean docs docs-upload image/build "${a[@]}"
 }
 
 gen
