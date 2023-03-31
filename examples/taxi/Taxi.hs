@@ -9,6 +9,7 @@ import           Data.Maybe                  (fromJust)
 import           Data.Store
 import           Data.Time                   (NominalDiffTime, UTCTime (..),
                                               addUTCTime, fromGregorianValid)
+import           Data.Time.Format            (parseTimeOrError, defaultTimeLocale)
 import           GHC.Generics                (Generic)
 import           Striot.FunctionalIoTtypes
 import           Striot.FunctionalProcessing
@@ -127,12 +128,16 @@ tripSource s = map ((\t -> Event (Just (dropoffDatetime t)) (Just t))
 stringsToTrip :: [String] -> Trip
 stringsToTrip [med, hack, pickupDateTime, dropoffDateTime, trip_time, trip_dist, pickup_long, pickup_lat,
                dropoff_long, dropoff_lat, pay_type, fare, sur, mta, tip, tolls, total] =
-   Trip med hack (read pickupDateTime) (read dropoffDateTime) (read trip_time) (read trip_dist)
+   Trip med hack (parseTimeField pickupDateTime) (parseTimeField dropoffDateTime) (read trip_time) (read trip_dist)
                  (Location (read pickup_lat)  (read pickup_long))
                  (Location (read dropoff_lat) (read dropoff_long))
                  (if pay_type == "CRD" then Card else Cash)
                  (read fare) (read sur) (read mta) (read tip) (read tolls) (read total)
 stringsToTrip s = error ("error in input: " ++ intercalate "," s)
+
+-- time field parser
+parseTimeField :: String -> UTCTime
+parseTimeField = parseTimeOrError True defaultTimeLocale "%Y-%-m-%-d %H:%M:%S"
 
 ----------------------------------------------------------------------------------------------------------------
 
