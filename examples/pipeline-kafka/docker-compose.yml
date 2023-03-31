@@ -1,15 +1,14 @@
 version: "3"
 services:
   kafka:
-    image: wurstmeister/kafka:latest
+    image: ubuntu/kafka:latest
     ports:
       - "9092"
     environment:
-      KAFKA_ADVERTISED_HOST_NAME: kafka
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_CREATE_TOPICS: "striot-queue:1:1"
+      ZOOKEEPER_HOST: zookeeper
+      ZOOKEEPER_PORT: 2181
   zookeeper:
-      image: wurstmeister/zookeeper:latest
+      image: zookeeper:latest
       ports:
         - "2181"
   node3:
