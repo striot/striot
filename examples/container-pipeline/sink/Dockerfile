@@ -1,5 +1,5 @@
 # Run from a pre-built Haskell container
-FROM ghcr.io/striot/striot:latest
+FROM ghcr.io/striot/striot:main
 
 # Add and Install Application Code
 COPY . /opt/haskell

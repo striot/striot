@@ -4,7 +4,7 @@ BUILD_TOOL ?= docker
 REGISTRY ?= ghcr.io
 ORG ?= striot
 IMAGE ?= striot
-VERSION ?= latest
+VERSION ?= main
 
 GHC := stack ghc -- -XTemplateHaskell
 default: default2

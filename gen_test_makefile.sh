@@ -26,7 +26,7 @@ gen()
     echo REGISTRY \?= ghcr.io
     echo ORG \?= striot
     echo IMAGE \?= striot
-    echo VERSION \?= latest
+    echo VERSION \?= main
     echo
     echo GHC := stack ghc -- -XTemplateHaskell
     echo default: default2
