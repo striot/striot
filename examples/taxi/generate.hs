@@ -10,7 +10,7 @@ import Data.Time -- UTCTime(..)
 import Data.Maybe (fromJust)
 import Data.List.Split (splitOn)
 
-opts = GenerateOpts { imports = imports defaultOpts ++
+opts = defaultOpts { imports = imports defaultOpts ++
                         [ "Taxi"
                         , "Data.Maybe"
                         , "Data.List.Split"
