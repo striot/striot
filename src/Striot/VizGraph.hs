@@ -87,7 +87,9 @@ jacksonGraphToDot graph = let
                                                         , "</I>>" ]])
 
       , vertexAttributes = (\v -> [ "label"     :=(("<"++) . (++">") . show') v
-                                  , "xlabel"    := srvRate v
+                                  , "xlabel"    := ("<" ++ srvRate v
+                                                ++  "<br />"
+                                                ++  utilS v ++">")
                                   , "fontsize":="18"
                                   , "fillcolor" := if   overUt v
                                                    then "\"#ffcccc\""
@@ -99,9 +101,16 @@ jacksonGraphToDot graph = let
         Just oi -> show (arrRate oi) -- This is invalid for merge/join where arrrate is combined not from one node
 
     srvRate v = case Striot.StreamGraph.serviceTime v of
-        0 -> "<>" -- effectively undefined/not useful
-        t -> wrap $ show (1 / t)
-        where wrap s = "<<SUP>"++s++"</SUP>/<SUB>s</SUB>>"
+        0 -> "" -- effectively undefined/not useful
+        t -> "μ = " ++ wrap (show (1 / t))
+        where wrap s = "<SUP>"++s++"</SUP>/<SUB>s</SUB>"
+
+    utilS  v = case lookup (vertexId v) jackson of
+        Nothing -> ""
+        Just oi -> case u of
+            0.0 -> "" -- hide utilisation=0
+            n   -> "ρ = " ++ show n
+            where u = util oi
 
     overUt v = case lookup (vertexId v) jackson of
         Nothing -> False
