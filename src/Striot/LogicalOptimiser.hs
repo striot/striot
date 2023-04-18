@@ -8,6 +8,10 @@ module Striot.LogicalOptimiser ( applyRules
                                , firstMatch
 
                                , RewriteRule(..)
+
+                               , pureRules
+                               , reorderingRules
+                               , reshapingRules
                                , defaultRewriteRules
 
                                , mapFilter
@@ -81,8 +85,10 @@ applyRules rs n sg =
 
 ------------------------------------------------------------------------------
 
-rules :: [RewriteRule]
-rules = [ filterFuse
+-- | Semantically-preserving rules. XXX pureRules is not a good name
+pureRules :: [RewriteRule]
+pureRules =
+        [ filterFuse
         , mapFilter
         , filterFilterAcc
         , filterAccFilter
@@ -95,16 +101,30 @@ rules = [ filterFuse
         , expandMap
         , expandScan
         , expandExpand
-        , mergeFilter
-        , mergeExpand
         , mergeMap
         , mapMerge
-        , filterMerge
-        , expandMerge
-        , mergeFuse
         , expandFilterAcc
         ]
-defaultRewriteRules = rules
+
+-- | A list of rules which cause Stream re-ordering.
+-- These are included in 'defaultRewriteRules'.
+reorderingRules =
+    [ filterMerge
+    , expandMerge
+    , mergeFilter
+    , mergeExpand
+    , mergeFuse
+    ]
+
+-- | A list of rules which cause re-shaping of Windows.
+-- These are not included in 'defaultRewriteRules'.
+reshapingRules =
+    [ filterWindow
+    , filterAccWindow
+    ]
+
+defaultRewriteRules =
+    pureRules ++ reorderingRules
 
 -- streamFilter f >>> streamFilter g = streamFilter (\x -> f x && g x) -------
 
