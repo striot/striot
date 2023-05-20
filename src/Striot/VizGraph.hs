@@ -80,11 +80,10 @@ jacksonGraphToDot graph = let
     jackson = map (\oi -> (opId oi, oi)) (calcAllSg graph) -- (Int, [OperatorInfo])
 
     style = myStyle
-      { edgeAttributes   = (\i _ -> [ "label" := concat [ "<<SUP>"
+      { edgeAttributes   = (\i _ -> [ "label" := concat [ "<λ = <SUP>"
                                                         , show (outputRate graph (vertexId i))
-                                                        , "</SUP>/<SUB>s</SUB> <I>:: "
-                                                        , outtype i
-                                                        , "</I>>" ]])
+                                                        , "</SUP>/<SUB>s</SUB>>"
+                                                        ]])
 
       , vertexAttributes = (\v -> [ "label"     :=(("<"++) . (++">") . show') v
                                   , "xlabel"    := ("<" ++ srvRate v
