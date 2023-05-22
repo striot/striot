@@ -4,6 +4,7 @@
  -}
 
 import Striot.CompileIoT
+import Striot.CompileIoT.Compose
 import Striot.StreamGraph
 import Algebra.Graph
 import Language.Haskell.TH
@@ -27,4 +28,6 @@ graph = (overlays (map vertex [v1,v2,v3]) `connect` (vertex v4)) `overlay` path 
 
 parts = [[1],[2],[3],[4,5]]
 
-main = partitionGraph graph parts defaultOpts
+main = do
+    partitionGraph graph parts defaultOpts
+    writeFile "compose.yml" (generateDockerCompose (createPartitions graph parts))

@@ -4,6 +4,7 @@
 -}
 
 import Striot.CompileIoT
+import Striot.CompileIoT.Compose
 import Striot.StreamGraph
 import Algebra.Graph
 import Data.Time -- UTCTime(..)
@@ -46,4 +47,6 @@ taxiQ1 = simpleStream
 
 parts = [[1..7],[8],[9..10]]
 
-main = partitionGraph taxiQ1 parts opts
+main = do
+    partitionGraph taxiQ1 parts opts
+    writeFile "compose.yml" (generateDockerCompose (createPartitions taxiQ1 parts))

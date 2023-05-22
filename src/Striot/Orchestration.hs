@@ -39,6 +39,7 @@ import Data.Function ((&))
 import Control.Arrow ((>>>))
 
 import Striot.CompileIoT
+import Striot.CompileIoT.Compose (generateDockerCompose)
 import Striot.Jackson
 import Striot.LogicalOptimiser (applyRules, RewriteRule)
 import Striot.Partition
@@ -57,11 +58,16 @@ type Cost = Maybe Int
 
 -- | Apply rewrite rules to the supplied 'StreamGraph' to possibly rewrite
 -- it; partition it when a generated 'PartitionMap'; generate and write out
--- Haskell source code files for each Partition, ready for deployment.
+-- Haskell source code files for each Partition, ready for deployment, along
+-- with a Docker Compose-format "compose.yml" file.
 distributeProgram :: GenerateOpts -> StreamGraph -> IO ()
 distributeProgram opts sg = let
     (best,partMap) = chopAndChange opts sg
-    in partitionGraph best partMap opts
+    in do
+        partitionGraph best partMap opts
+        writeFile "compose.yml"
+            $ generateDockerCompose
+            $ createPartitions best partMap
 
 -- | apply 'viableRewrites' to the supplied 'StreamGraph'.
 -- Return the lowest-cost 'Plan'.
