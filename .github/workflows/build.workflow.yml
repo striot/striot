@@ -44,9 +44,9 @@ jobs:
           ghc-version: '8.6'
           enable-stack: true
 
-      - name: Install librdkafka
+      - name: Install librdkafka and graphviz (for dot)
         run: |
-          sudo apt-get update && sudo apt-get install librdkafka-dev
+          sudo apt-get update && sudo apt-get install librdkafka-dev graphviz
 
       - name: Install Haskell deps
         run: |
@@ -57,7 +57,6 @@ jobs:
       - name: Build and test striot
         run: |
           stack build && stack install && stack test
-          
       - name: Build examples
         run: |
           ./gen_test_makefile.sh > Makefile; make
