@@ -6,6 +6,8 @@
 import Striot.CompileIoT
 import Striot.CompileIoT.Compose
 import Striot.StreamGraph
+import Striot.VizGraph
+
 import Algebra.Graph
 import Data.Time -- UTCTime(..)
 import Data.Maybe (fromJust)
@@ -50,3 +52,6 @@ parts = [[1..7],[8],[9..10]]
 main = do
     partitionGraph taxiQ1 parts opts
     writeFile "compose.yml" (generateDockerCompose (createPartitions taxiQ1 parts))
+    let pg = createPartitions taxiQ1 parts
+    writeGraph streamGraphToDot taxiQ1 "taxiQ1.png"
+    writeGraph partitionedGraphToDot pg "partitionedTaxiQ1.png"

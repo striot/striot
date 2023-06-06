@@ -42,6 +42,7 @@ clean:
 	    node1/node.o node2/node.o node3/node.o \
 	    node1/Taxi.hs node2/Taxi.hs node3/Taxi.hs \
 	    node1/Dockerfile node2/Dockerfile node3/Dockerfile \
+	    partitionedTaxiQ1.png taxiQ1.png \
 	    compose.yml
 	-rmdir node1 node2 node3
 
