@@ -26,6 +26,7 @@ library
                       Striot.Nodes.MQTT
                       Striot.Bandwidth
                       Striot.CompileIoT
+                      Striot.CompileIoT.Compose
                       Striot.StreamGraph
                       Striot.VizGraph
                       Striot.Jackson
@@ -106,6 +107,7 @@ test-suite test-striot
     , unagi-chan           >= 0.4.1.4
     , utility-ht           >= 0.0.16
   other-modules:      Striot.CompileIoT
+                      Striot.CompileIoT.Compose
                       Striot.FunctionalIoTtypes
                       Striot.FunctionalProcessing
                       Striot.LogicalOptimiser

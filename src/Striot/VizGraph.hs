@@ -13,6 +13,10 @@ module Striot.VizGraph ( streamGraphToDot
                        , subGraphToPartition
                        , writeGraph
 
+                       , baseGraphStyle
+                       , jacksonStyle
+                       , enumGraphStyle
+
                        , htf_thisModulesTests) where
 
 import Striot.StreamGraph
@@ -33,7 +37,7 @@ import System.IO (openTempFile, hPutStr, hGetContents, hClose)
 -- main functions
 
 streamGraphToDot :: StreamGraph -> String
-streamGraphToDot = export myStyle
+streamGraphToDot = export baseGraphStyle
 
 -- | display a graph using GraphViz and "display" from ImageMagick
 displayGraph :: StreamGraph -> IO ()
@@ -66,7 +70,7 @@ displayGraphKitty g = do
 
 -- | display a debug graph using GraphViz and ImageMagick
 displayGraphDebug = displayGraph' (export debugStyle :: StreamGraph -> String)
-debugStyle        = myStyle { vertexAttributes = (\v -> ["label":=(doubleQuotes . escape . show) v]) }
+debugStyle        = baseGraphStyle { vertexAttributes = (\v -> ["label":=(doubleQuotes . escape . show) v]) }
     where doubleQuotes v = "\"" ++ v ++ "\""
 
 -- | display a `PartitionedGraph` using GraphViz and "display" from ImageMagick
@@ -76,46 +80,7 @@ displayPartitionedGraph = displayGraph' partitionedGraphToDot
 -- | Convert a `StreamGraph` into a GraphViz representation, including
 -- parameters derived from queueing theory/Jackson
 jacksonGraphToDot :: StreamGraph -> String
-jacksonGraphToDot graph = let
-    jackson = map (\oi -> (opId oi, oi)) (calcAllSg graph) -- (Int, [OperatorInfo])
-
-    style = myStyle
-      { edgeAttributes   = (\i _ -> [ "label" := concat [ "<λ = <SUP>"
-                                                        , show (outputRate graph (vertexId i))
-                                                        , "</SUP>/<SUB>s</SUB>>"
-                                                        ]])
-
-      , vertexAttributes = (\v -> [ "label"     :=(("<"++) . (++">") . show') v
-                                  , "xlabel"    := ("<" ++ srvRate v
-                                                ++  "<br />"
-                                                ++  utilS v ++">")
-                                  , "fontsize":="18"
-                                  , "fillcolor" := if   overUt v
-                                                   then "\"#ffcccc\""
-                                                   else "\"#ffffff\"" ])
-      }
-
-    arr v = case lookup (vertexId v) jackson of
-        Nothing -> "?"
-        Just oi -> show (arrRate oi) -- This is invalid for merge/join where arrrate is combined not from one node
-
-    srvRate v = case Striot.StreamGraph.serviceTime v of
-        0 -> "" -- effectively undefined/not useful
-        t -> "μ = " ++ wrap (show (1 / t))
-        where wrap s = "<SUP>"++s++"</SUP>/<SUB>s</SUB>"
-
-    utilS  v = case lookup (vertexId v) jackson of
-        Nothing -> ""
-        Just oi -> case u of
-            0.0 -> "" -- hide utilisation=0
-            n   -> "ρ = " ++ show n
-            where u = util oi
-
-    overUt v = case lookup (vertexId v) jackson of
-        Nothing -> False
-        Just oi -> util oi > 1
-
-    in export style graph
+jacksonGraphToDot graph = export (jacksonStyle graph) graph
 
 -- | Convert `PartitionedGraph` into a GraphViz representation,
 -- with each sub-graph separately delineated,
@@ -124,8 +89,7 @@ partitionedGraphToDot :: PartitionedGraph -> String
 partitionedGraphToDot pgs@(ps,cuts) = let
     graph = overlays (cuts:ps)
     pre   = map (uncurry subGraphToPartition) (zip ps [1..])
-    style = myStyle
-      { preamble = pre }
+    style = baseGraphStyle { preamble = pre }
     in export style graph
 
 -- | generate a GraphViz subgraph definition (encoded into a `String`)c
@@ -155,6 +119,68 @@ writeGraph toDot g path = do
     hPutStr hin (toDot g)
     hClose hin
 
+------------------------------------------------------------------------------
+-- graph display styles
+
+-- | the base Style information for StreamGraphs of all types.
+baseGraphStyle :: Style StreamVertex String
+baseGraphStyle = Style
+    { graphName               = mempty
+    , preamble                = mempty
+    , graphAttributes         = ["bgcolor":="white","ratio":="compress"]
+    , defaultVertexAttributes = ["shape" := "box","fillcolor":="white","style":="filled"]
+    , defaultEdgeAttributes   = ["weight":="10","color":="black","fontcolor":="black","fontsize":="18"]
+    , vertexName              = show . vertexId
+    , vertexAttributes        = (\v -> [ "label":=(("<"++) . (++">") . show') v
+                                       , "fontsize":="18"
+                                       , "shape":="box"])
+    -- without forcing shape=box, the nodes end up ellipses in PartitionedGraphs
+    , edgeAttributes          = (\_ o -> ["label":=("\" " ++ intype o ++ "\"")])
+    , attributeQuoting        = NoQuotes
+    }
+
+-- | A specialised Style for StreamGraphs annotated with Jackson parameters.
+-- Presently requires a StreamGraph argument.
+jacksonStyle graph = baseGraphStyle
+    { edgeAttributes   = (\i _ -> [ "label" := concat [ "<λ = <SUP>"
+                                                      , show (outputRate graph (vertexId i))
+                                                      , "</SUP>/<SUB>s</SUB>>"
+                                                      ]])
+
+    , vertexAttributes = (\v -> [ "label"     :=(("<"++) . (++">") . show') v
+                                , "xlabel"    := ("<" ++ srvRate v
+                                              ++  "<br />"
+                                              ++  utilS v ++">")
+                                , "fontsize":="18"
+                                , "fillcolor" := if   overUt v
+                                                 then "\"#ffcccc\""
+                                                 else "\"#ffffff\"" ])
+    } where
+    jackson = map (\oi -> (opId oi, oi)) (calcAllSg graph) -- (Int, [OperatorInfo])
+
+    srvRate v = case Striot.StreamGraph.serviceTime v of
+        0 -> "" -- effectively undefined/not useful
+        t -> "μ = " ++ wrap (show (1 / t))
+
+    wrap s = "<SUP>"++s++"</SUP>/<SUB>s</SUB>"
+
+    utilS  v = case lookup (vertexId v) jackson of
+        Nothing -> ""
+        Just oi -> case util oi of
+            0.0 -> "" -- hide utilisation=0
+            n   -> "ρ = " ++ show n
+
+    overUt v = case lookup (vertexId v) jackson of
+        Nothing -> False
+        Just oi -> util oi > 1
+
+-- | A StreamGraph Style where each Operator is annotated with its vertexId.
+enumGraphStyle = baseGraphStyle
+ {
+    vertexAttributes = \v ->
+        (vertexAttributes baseGraphStyle) v
+        ++ ["xlabel" := show (vertexId v)]
+ }
 ------------------------------------------------------------------------------
 -- utility functions
 
@@ -187,22 +213,6 @@ test_cleanParam_1 = assertEqual "no escaping"          $ cleanParam "no escaping
 test_cleanParam_2 = assertEqual "opening &lt; chevron" $ cleanParam "opening < chevron"
 test_cleanParam_3 = assertEqual "closing &gt; chevron" $ cleanParam "closing > chevron"
 test_cleanParam_4 = assertEqual "ampersand &amp; amp"  $ cleanParam "ampersand & amp"
-
-myStyle :: Style StreamVertex String
-myStyle = Style
-    { graphName               = mempty
-    , preamble                = mempty
-    , graphAttributes         = ["bgcolor":="white","ratio":="compress"]
-    , defaultVertexAttributes = ["shape" := "box","fillcolor":="white","style":="filled"]
-    , defaultEdgeAttributes   = ["weight":="10","color":="black","fontcolor":="black","fontsize":="18"]
-    , vertexName              = show . vertexId
-    , vertexAttributes        = (\v -> [ "label":=(("<"++) . (++">") . show') v
-                                       , "fontsize":="18"
-                                       , "shape":="box"])
-    -- without forcing shape=box, the nodes end up ellipses in PartitionedGraphs
-    , edgeAttributes          = (\_ o -> ["label":=("\" " ++ intype o ++ "\"")])
-    , attributeQuoting        = NoQuotes
-    }
 
 -- escape a string, suitable for inclusion inside a double-quoted string in a .dot file
 escape [] = []
