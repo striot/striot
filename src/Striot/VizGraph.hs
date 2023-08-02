@@ -20,6 +20,7 @@ module Striot.VizGraph ( streamGraphToDot
                        , htf_thisModulesTests) where
 
 import Striot.StreamGraph
+import Striot.Bandwidth
 import Striot.CompileIoT
 import Striot.Jackson
 import Algebra.Graph
@@ -89,7 +90,7 @@ partitionedGraphToDot :: PartitionedGraph -> String
 partitionedGraphToDot pgs@(ps,cuts) = let
     graph = overlays (cuts:ps)
     pre   = map (uncurry subGraphToPartition) (zip ps [1..])
-    style = baseGraphStyle { preamble = pre }
+    style = (bandwidthStyle graph) { preamble = pre }
     in export style graph
 
 -- | generate a GraphViz subgraph definition (encoded into a `String`)c
@@ -137,6 +138,21 @@ baseGraphStyle = Style
     -- without forcing shape=box, the nodes end up ellipses in PartitionedGraphs
     , edgeAttributes          = (\_ o -> ["label":=("\" " ++ intype o ++ "\"")])
     , attributeQuoting        = NoQuotes
+    }
+
+-- | A specialised Style to annotate edges with calculated bandwidth
+-- XXX merge with jacksonStyle?
+bandwidthStyle :: StreamGraph -> Style StreamVertex String
+bandwidthStyle sg = baseGraphStyle
+    {
+        -- XXX: bandwidth units?
+        edgeAttributes = \v o -> "xlabel" := concat
+            [ "<",
+              case whatBandwidthWeighted sg (vertexId v) of
+                  Nothing -> "??"
+                  Just b  -> show b,
+              " <sup>bytes</sup>/<sub>sec</sub>>"
+            ] : (edgeAttributes baseGraphStyle) v o
     }
 
 -- | A specialised Style for StreamGraphs annotated with Jackson parameters.
