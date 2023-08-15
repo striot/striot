@@ -2,10 +2,23 @@ name: Stack Build and Test
 
 on: [push, pull_request, workflow_dispatch]
 
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   stack-build:
     name: Stack build (+ examples)
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v3
       - name: Install librdkafka and graphviz (for dot)
@@ -14,7 +27,23 @@ jobs:
       - uses: freckle/stack-action@v4
         with:
           pedantic: false
+          stack-arguments: --no-haddock-deps --haddock --haddock-arguments "-o haddock"
       - name: Build examples
         run: |
           ./gen_test_makefile.sh > Makefile
           make
+
+      - if: github.event_name != 'pull_request'
+        name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      - if: github.event_name != 'pull_request'
+        name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: haddock/
+
+      - if: github.event_name != 'pull_request'
+        name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
