@@ -1,4 +1,4 @@
-name: Build and Test
+name: Cabal Build and Test
 
 on: [push, pull_request, workflow_dispatch]
 
@@ -32,31 +32,3 @@ jobs:
       - name: Build and test striot
         run: |
           cabal configure --enable-tests && cabal build && cabal test
-
-  stack-build:
-    name: Stack build (+ examples)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - uses: haskell/actions/setup@v1
-        with:
-          ghc-version: '8.6'
-          enable-stack: true
-
-      - name: Install librdkafka and graphviz (for dot)
-        run: |
-          sudo apt-get update && sudo apt-get install librdkafka-dev graphviz
-
-      - name: Install Haskell deps
-        run: |
-          stack install happy alex HTF
-          stack install c2hs
-          stack install --only-dependencies
-
-      - name: Build and test striot
-        run: |
-          stack build && stack install && stack test
-      - name: Build examples
-        run: |
-          ./gen_test_makefile.sh > Makefile; make
