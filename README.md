@@ -1,6 +1,8 @@
 # StrIoT — functional stream processing for IoT
 
-![GitHub Actions Workflow](https://github.com/striot/striot/actions/workflows/build.workflow.yml/badge.svg)
+[![Cabal Build and Test](https://github.com/striot/striot/actions/workflows/cabal.build.workflow.yml/badge.svg)](https://github.com/striot/striot/actions/workflows/cabal.build.workflow.yml)
+[![Stack Build and Test](https://github.com/striot/striot/actions/workflows/stack.build.workflow.yml/badge.svg)](https://github.com/striot/striot/actions/workflows/stack.build.workflow.yml)
+[![Build and push Docker image](https://github.com/striot/striot/actions/workflows/deploy.workflow.yml/badge.svg)](https://github.com/striot/striot/actions/workflows/deploy.workflow.yml)
 
 **StrIoT** is a stream-processing engine for IoT workloads, implemented as a
 [Haskell](https://www.haskell.org) library. A user defines a stream-processing
@@ -30,7 +32,7 @@ operators. See [docs/Operators.md](docs/Operators.md) for a detailed
 description of the operators and several example programs. 
 
 [Haddock](https://www.haskell.org/haddock/)-generated API documentation is
-[published here](https://redmars.org/striot/).  This is very rudimentary,
+[published here](https://striot.github.io/striot/).  This is very rudimentary,
 patches to improve it are welcome!
 
 ### For use with the Optimiser
