@@ -13,7 +13,9 @@ jobs:
       - uses: freckle/stack-action@v4
         with:
           pedantic: false
-          stack-arguments: --no-haddock-deps --haddock --haddock-arguments "-o haddock"
+          stack-arguments: --no-haddock-deps --haddock
+          cache-prefix: v2
+
       - name: Build examples
         run: |
           ./gen_test_makefile.sh > Makefile
@@ -27,7 +29,7 @@ jobs:
         name: Upload artifact
         uses: actions/upload-pages-artifact@v2
         with:
-          path: haddock/
+          path: .stack-work/dist/*/*/doc/html/striot/
 
   deploy-pages:
     name: Deploy Haddock docs to GitHub Pages
