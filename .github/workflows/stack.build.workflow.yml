@@ -11,6 +11,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install librdkafka-dev graphviz
       - uses: freckle/stack-action@v4
+        id: stack
         with:
           pedantic: false
           stack-arguments: --no-haddock-deps --haddock
@@ -29,7 +30,7 @@ jobs:
         name: Upload artifact
         uses: actions/upload-pages-artifact@v2
         with:
-          path: .stack-work/dist/*/*/doc/html/striot/
+          path: ${{ steps.stack.outputs.dist-dir }}/doc/html/striot/
 
   deploy-pages:
     name: Deploy Haddock docs to GitHub Pages
