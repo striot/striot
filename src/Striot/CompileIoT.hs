@@ -8,6 +8,7 @@ module Striot.CompileIoT ( createPartitions
                          , defaultOpts
                          , Partition
                          , PartitionMap
+                         , Plan(..)
                          , writePart
                          , genDockerfile
                          , partitionGraph
@@ -50,6 +51,11 @@ type Partition = Int
 -- Each element in the outer-most list corresponds to a distinct partition.
 -- The inner-lists are the IDs of Operators to include in that partition.
 type PartitionMap = [[Int]]
+
+-- | A Plan is a pairing of a 'StreamGraph' with a 'PartitionMap' that could
+-- be used for its partitioning and deployment.
+data Plan = Plan { planStreamGraph  :: StreamGraph
+                 , planPartitionMap :: PartitionMap }
 
 -- |`createPartitions` returns ([partitions], [inter-graph links])
 -- where inter-graph links are the cut edges due to partitioning

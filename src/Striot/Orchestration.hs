@@ -13,13 +13,12 @@ The highest-level StrIoT interfaces, for transforming and partitioning
 programs described as 'StreamGraph's.
 
 -}
-module Striot.Orchestration ( Plan
-                            , Cost
+module Striot.Orchestration ( Cost
                             , distributeProgram
                             , chopAndChange
                             , viableRewrites
                             , deriveRewritesAndPartitionings
-                            , allPartitionsPaired
+                            , makePlans
                             , planCost
 
                             -- $fromCompileIoT
@@ -47,10 +46,6 @@ import Striot.StreamGraph
 import Striot.VizGraph
 import Striot.Bandwidth
 
--- | A Plan is a pairing of a 'StreamGraph' with a 'PartitionMap' that could
--- be used for its partitioning and deployment.
-type Plan = (StreamGraph, PartitionMap)
-
 -- | The Cost of a 'Plan' (lower is better).
 -- 'Nothing' represents a non-viable pairing. 'Maybe' n represents the cost
 -- n.
@@ -62,7 +57,7 @@ type Cost = Maybe Int
 -- with a Docker Compose-format "compose.yml" file.
 distributeProgram :: GenerateOpts -> StreamGraph -> IO ()
 distributeProgram opts sg = let
-    (best,partMap) = chopAndChange opts sg
+    Plan best partMap = chopAndChange opts sg
     in do
         partitionGraph best partMap opts
         writeFile "compose.yml"
@@ -78,7 +73,12 @@ distributeProgram opts sg = let
 chopAndChange :: GenerateOpts -> StreamGraph -> Plan
 chopAndChange opts sg = case viableRewrites opts sg of
     [] -> error "distributeProgram: no viable programs"
-    rs -> rs & sortOn snd & head & fst
+    rs -> rs & sortOn costedPlanCost & head & costedPlanPlan
+
+data CostedPlan = CostedPlan
+    { costedPlanPlan :: Plan
+    , costedPlanCost :: Cost
+    }
 
 -- | Given a stream processing program encoded in a 'StreamGraph':
 --
@@ -90,40 +90,35 @@ chopAndChange opts sg = case viableRewrites opts sg of
 --       * 'Cost' the pairs with the cost model 'planCost'
 --
 --   * return the 'Plan' paired with with the 'Cost' from applying the cost model.
-viableRewrites :: GenerateOpts -> StreamGraph -> [(Plan, Cost)]
+viableRewrites :: GenerateOpts -> StreamGraph -> [CostedPlan]
 viableRewrites opts = deriveRewritesAndPartitionings (rules opts)
-                  >>> map (toSnd (planCost opts))
-                  >>> filter (isJust . snd)
+                  >>> map (\a -> CostedPlan a (planCost opts a))
+                  >>> filter (isJust . costedPlanCost)
 
 test_viableRewrites_graph = assertNotEmpty $ viableRewrites defaultOpts graph
 test_viableRewrites_tooMuch = assertEmpty  $ viableRewrites defaultOpts tooMuch
 
-toSnd :: (a -> b) -> a -> (a, b)
-toSnd f a = (a, f a)
-
-toFst :: (a -> b) -> a -> (b, a)
-toFst f a = (f a, a)
-
 -- | given a 'StreamGraph', derives further graphs by applying rewrite
 -- rules and pairs them with all their potential partitionings
 deriveRewritesAndPartitionings :: [RewriteRule] -> StreamGraph -> [Plan]
-deriveRewritesAndPartitionings rs = concatMap allPartitionsPaired . nub . applyRules rs 5
+deriveRewritesAndPartitionings rs = concatMap makePlans . nub . applyRules rs 5
 
 -- | given a 'StreamGraph', generate all partitionings of it and pair
--- them individually with the 'StreamGraph'.
-allPartitionsPaired :: StreamGraph -> [Plan]
-allPartitionsPaired sg = map (\pm -> (sg,pm)) (allPartitions sg)
+-- | Generate all partitionings for the supplied 'StreamGraph' and pair
+-- them to produce a list of deployment 'Plan's.
+makePlans :: StreamGraph -> [Plan]
+makePlans sg = map (Plan sg) (allPartitions sg)
 
 -- | Return a 'Cost' for a 'Plan'. Return
 -- 'Nothing' if the 'Plan' is not viable,
 -- either due to an over-utilised operator or an over-utilised 'Partition'.
 --
 planCost :: GenerateOpts -> Plan -> Cost
-planCost opts (sg,pm) = let
+planCost opts plan@(Plan sg pm) = let
     oi = calcAllSg sg
     in if   isOverUtilised oi
          || any (> maxNodeUtil opts) (totalNodeUtilisations oi pm)
-         || overBandwidthLimit sg pm (bandwidthLimit opts)
+         || overBandwidthLimit plan (bandwidthLimit opts)
        then Nothing
        else Just (length pm)
 
@@ -167,6 +162,9 @@ totalNodeUtilisations oi pm =
     let oi' = map (toFst opId) oi -- :: [(Int, OperatorInfo)]
     in map (sumPartitionUtilisation oi') pm
 
+toFst :: (a -> b) -> a -> (b, a)
+toFst f a = (f a, a)
+
 sumPartitionUtilisation :: [(Int, OperatorInfo)] -> [Partition] -> Double
 sumPartitionUtilisation opInfo =
         sum . map (util . fromJust . (flip lookup) opInfo)
@@ -192,15 +190,15 @@ partUtilGraph = simpleStream
 
 -- expensive to evaluate (1911ms)
 test_overUtilisedPartition_minThreePartitions = assertBool $
-    (not . any (<3) . map (length.snd.fst) . viableRewrites defaultOpts) partUtilGraph
+    (not . any (<3) . map (length.planPartitionMap.costedPlanPlan) . viableRewrites defaultOpts) partUtilGraph
 
 test_overUtilisedPartition_rejected = -- example of an over-utilised partition
-    assertNothing (planCost defaultOpts (partUtilGraph, [[1,2],[3,4,5,6,7,8,9]]))
+    assertNothing (planCost defaultOpts (Plan partUtilGraph [[1,2],[3,4,5,6,7,8,9]]))
 
 -- example of an acceptable PartitionMap
 test_overUtilisedPartition_acceptable = assertElem [[1,2,3],[4,5,6],[7,8,9]]
     $ map (sort . (map sort))
-    $ (map (snd.fst) . viableRewrites opts) partUtilGraph -- :: [PartitionMap]
+    $ (map (planPartitionMap.costedPlanPlan) . viableRewrites opts) partUtilGraph -- :: [PartitionMap]
     where
         opts = defaultOpts { bandwidthLimit = 46 }
 
