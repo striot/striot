@@ -152,9 +152,9 @@ whatBandwidthWeighted g i = fmap (+ (departRate g i * weighting)) (whatBandwidth
 -- XXX: write an "departSize"? we could estimate window sizes for fixed-length
 -- or time-bound windows for example. Joins approx double, etc
 
--- | Does this StreamGraph breach a bandwidth limit?
-overBandwidthLimit :: StreamGraph -> PartitionMap -> Double -> Bool
-overBandwidthLimit sg pm bandwidthLimit = let
+-- | Does this 'Plan' breach a bandwidth limit?
+overBandwidthLimit :: Plan -> Double -> Bool
+overBandwidthLimit (Plan sg pm) bandwidthLimit = let
   sourceIds = (map vertexId . filter (isSource . operator) . vertexList) sg
   connected = connectedToSources sourceIds pm
 
@@ -167,7 +167,7 @@ overBandwidthLimit sg pm bandwidthLimit = let
 
 -- XXX: tests or overBandwidthLimit
 
-test_overBandwidthLimit = assertBool $ overBandwidthLimit graph [[1,2],[3,4],[5,6]] 29
+test_overBandwidthLimit = assertBool $ overBandwidthLimit (Plan graph [[1,2],[3,4],[5,6]]) 29
 
 -- | Provide a flattened list of node IDs from a PartitionMap which are
 -- connected to a source node within a partition.
