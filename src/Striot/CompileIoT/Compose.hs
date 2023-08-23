@@ -8,7 +8,6 @@
 
 module Striot.CompileIoT.Compose
   ( generateDockerCompose
-  , getConsumers
   ) where
 
 import Striot.StreamGraph
@@ -16,7 +15,7 @@ import Striot.CompileIoT
 import Algebra.Graph
 import Data.List (intersect, null)
 import Test.Framework
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, listToMaybe)
 
 -- | Generate a docker-compose-format compose.yml in a String, encoding the
 -- Node inter-connections from the supplied PartitionedGraph as dependencies,
@@ -36,21 +35,22 @@ nodeToCompose pg i = concat
     deps
   ] where
     n = "node" ++ (show i)
-    deps = concatMap (\d -> "        depends_on:\n"
-                         ++ "        - node" ++ (show d) ++ "\n")
-                     (map fst (getConsumers pg i))
-                     -- this relies on length getConsumers ∈ [0,1]
+    deps = case getConsumer pg i of
+      Nothing -> ""
+      Just d  -> "        depends_on:\n"
+              ++ "        - node" ++ (show d) ++ "\n"
 
--- | Return a list of numbered StreamGraphs which are downstream from the
--- StreamGraph at the given index. This list can only be 0 or 1 element long.
-getConsumers :: PartitionedGraph -> Int -> [(Int, StreamGraph)]
-getConsumers (sgs,cuts) i = let
+-- | Return the index of the 'StreamGraph' downstream from that
+-- at the given index, or 'Nothing' if there isn't one.
+getConsumer :: PartitionedGraph -> Int -> Maybe Int
+getConsumer (sgs,cuts) i = let
   i' = i - 1 -- i is 1-indexed; we need 0-indexed
   vs = vertexList (sgs !! i')
   receivingVertices =
     (map snd . filter (\(a,b) -> a `elem` vs) . edgeList) cuts
   nsgs = zip [1..] sgs
-  in filter (not . null . intersect receivingVertices . vertexList . snd) nsgs
+  res = filter (not . null . intersect receivingVertices . vertexList . snd) nsgs
+  in listToMaybe (map fst res)
 
 -- test data, derived from examples/merge
 v1 = StreamVertex 1 (Source 1) [] "String" "String" 0
@@ -64,9 +64,9 @@ graph = (overlays (map vertex [v1,v2,v3]) `connect` (vertex v4)) `overlay` path 
 parts = [[1],[2],[3],[4,5]]
 pg    = createPartitions graph parts
 
-test_getConsumers_1 = assertNotEmpty $ getConsumers pg 1
-test_getConsumers_2 = assertNotEmpty $ getConsumers pg 2
-test_getConsumers_3 = assertNotEmpty $ getConsumers pg 3
-test_getConsumers_4 = assertEmpty    $ getConsumers pg 4
+test_getConsumer_1 = assertJust $ getConsumer pg 1
+test_getConsumer_2 = assertJust $ getConsumer pg 2
+test_getConsumer_3 = assertJust $ getConsumer pg 3
+test_getConsumer_4 = assertNothing $ getConsumer pg 4
 
-test_getConsumers_2a = assertEqual [4] $ map fst (getConsumers pg 2)
+test_getConsumer_2a = assertEqual (Just 4) $ getConsumer pg 2
