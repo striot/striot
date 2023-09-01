@@ -40,7 +40,7 @@ import Control.Arrow ((>>>))
 import Striot.CompileIoT
 import Striot.CompileIoT.Compose (generateDockerCompose)
 import Striot.Jackson
-import Striot.LogicalOptimiser (applyRules, RewriteRule)
+import Striot.LogicalOptimiser
 import Striot.Partition
 import Striot.StreamGraph
 import Striot.VizGraph
@@ -100,8 +100,11 @@ test_viableRewrites_tooMuch = assertEmpty  $ viableRewrites defaultOpts tooMuch
 
 -- | given a 'StreamGraph', derives further graphs by applying rewrite
 -- rules and pairs them with all their potential partitionings
-deriveRewritesAndPartitionings :: [RewriteRule] -> StreamGraph -> [Plan]
-deriveRewritesAndPartitionings rs = concatMap makePlans . nub . applyRules rs 5
+deriveRewritesAndPartitionings :: [LabelledRewriteRule] -> StreamGraph -> [Plan]
+deriveRewritesAndPartitionings rs = concatMap makePlans
+                                  . nub
+                                  . map variantGraph
+                                  . rewriteGraph rs
 
 -- | given a 'StreamGraph', generate all partitionings of it and pair
 -- | Generate all partitionings for the supplied 'StreamGraph' and pair

@@ -6,6 +6,11 @@ module Striot.LogicalOptimiser ( applyRules
 
                                , applyRule
                                , firstMatch
+                               , rewriteGraph
+
+                               , Variant(..)
+                               , LabelledRewriteRule(..)
+                               , variantSequence
 
                                , RewriteRule(..)
 
@@ -52,7 +57,25 @@ import Data.Function ((&))
 import Data.List (nub, sort, intercalate)
 import Control.Arrow ((>>>))
 
--- applying encoded rules and their resulting ReWriteOps ----------------------
+------------------------------------------------------------------------------
+
+-- | A variant (`variantGraph`) of a stream-processing program (`variantParent`),
+-- produced by applying a rewrite rule (`variantRule`). The `Original` constructor
+-- is to represent the original, unmodified, input stream-processing program.
+data Variant = Variant
+    { variantGraph :: StreamGraph
+    , variantRule  :: String
+    , variantParent:: Variant
+    } | Original
+    { variantGraph :: StreamGraph
+    } deriving (Show, Eq)
+
+-- | Extract a list of `RewriteRule` labels from a `Variant`, to see the sequence
+-- of rules that produced it.
+variantSequence :: Variant -> [String]
+variantSequence = reverse . variantSequence'
+variantSequence' (Original _) = []
+variantSequence' (Variant _ r p) = r:(variantSequence' p)
 
 type RewriteRule = StreamGraph -> Maybe (StreamGraph -> StreamGraph)
 
@@ -74,53 +97,70 @@ firstMatch g r = case r g of
                                 Just f  -> Just f
                                 Nothing -> firstMatch b r
 
--- N-bounded recursive rule traversal
--- (caller may wish to apply 'nub')
-applyRules :: [RewriteRule] -> Int -> StreamGraph -> [StreamGraph]
-applyRules rs n sg =
-        if   n < 1 then [sg]
-        else let
-             sgs = map ((&) sg) $ mapMaybe (firstMatch sg) rs
-             in    sg : sgs ++ (concatMap (applyRules rs (n-1)) sgs)
+-- | Apply a list of `LabelledRewriteRule`s to a `Variant` stream program
+-- to derive rewritten programs. Bound the depth of rule application by
+-- the supplied parameter.
+-- The resulting list may include many equivalent `StreamGraph`s: the caller
+-- may wish to use `nub . variantGraph` or `nubBy (on (==) variantGraph)` to
+-- de-duplicate.
+applyRules :: [LabelledRewriteRule] -> Int -> Variant -> [Variant]
+applyRules lrules n v =
+    if n < 1 then [v]
+    else let
+        sg = variantGraph v
+        vs = map (\(l,f) -> Variant (f sg) l v)
+           $ mapMaybe (\(LabelledRewriteRule l r) -> fmap ((,) l) (firstMatch sg r))
+             lrules
+        in v : vs ++ (concatMap (applyRules lrules (n-1)) vs)
+
+-- | Convenience function to call `applyRules` with an initial `StreamGraph`,
+-- encoding a sensible depth limit of 5.
+rewriteGraph :: [LabelledRewriteRule] -> StreamGraph -> [Variant]
+rewriteGraph rs = applyRules rs 5 . Original
 
 ------------------------------------------------------------------------------
 
+-- | A pairing of a `RewriteRule` with its name, encoded in a `String`.
+data LabelledRewriteRule = LabelledRewriteRule
+    { ruleLabel :: String
+    , rule :: RewriteRule }
+
 -- | Semantically-preserving rules. XXX pureRules is not a good name
-pureRules :: [RewriteRule]
+pureRules :: [LabelledRewriteRule]
 pureRules =
-        [ filterFuse
-        , mapFilter
-        , filterFilterAcc
-        , filterAccFilter
-        , filterAccFilterAcc
-        , mapFuse
-        , mapScan
-        , expandFilter
-        , mapFilterAcc
-        , mapWindow
-        , expandMap
-        , expandScan
-        , expandExpand
-        , mergeMap
-        , mapMerge
-        , expandFilterAcc
+        [ LabelledRewriteRule "filterFuse"         filterFuse
+        , LabelledRewriteRule "mapFilter"          mapFilter
+        , LabelledRewriteRule "filterFilterAcc"    filterFilterAcc
+        , LabelledRewriteRule "filterAccFilter"    filterAccFilter
+        , LabelledRewriteRule "filterAccFilterAcc" filterAccFilterAcc
+        , LabelledRewriteRule "mapFuse"            mapFuse
+        , LabelledRewriteRule "mapScan"            mapScan
+        , LabelledRewriteRule "expandFilter"       expandFilter
+        , LabelledRewriteRule "mapFilterAcc"       mapFilterAcc
+        , LabelledRewriteRule "mapWindow"          mapWindow
+        , LabelledRewriteRule "expandMap"          expandMap
+        , LabelledRewriteRule "expandScan"         expandScan
+        , LabelledRewriteRule "expandExpand"       expandExpand
+        , LabelledRewriteRule "mergeMap"           mergeMap
+        , LabelledRewriteRule "mapMerge"           mapMerge
+        , LabelledRewriteRule "expandFilterAcc"    expandFilterAcc
         ]
 
 -- | A list of rules which cause Stream re-ordering.
 -- These are included in 'defaultRewriteRules'.
 reorderingRules =
-    [ filterMerge
-    , expandMerge
-    , mergeFilter
-    , mergeExpand
-    , mergeFuse
+    [ LabelledRewriteRule "filterMerge" filterMerge
+    , LabelledRewriteRule "expandMerge" expandMerge
+    , LabelledRewriteRule "mergeFilter" mergeFilter
+    , LabelledRewriteRule "mergeExpand" mergeExpand
+    , LabelledRewriteRule "mergeFuse"   mergeFuse
     ]
 
 -- | A list of rules which cause re-shaping of Windows.
 -- These are not included in 'defaultRewriteRules'.
 reshapingRules =
-    [ filterWindow
-    , filterAccWindow
+    [ LabelledRewriteRule "filterWindow"    filterWindow
+    , LabelledRewriteRule "filterAccWindow" filterAccWindow
     ]
 
 defaultRewriteRules =

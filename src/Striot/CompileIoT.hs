@@ -95,7 +95,7 @@ data GenerateOpts = GenerateOpts
   { imports           :: [String]      -- ^ list of import statements to add to generated files
   , packages          :: [String]      -- ^ list of Cabal packages to install within containers
   , preSource         :: Maybe String  -- ^ code to run prior to starting 'nodeSource'
-  , rules             :: [RewriteRule] -- ^ A list of rewrite rules for the logical optimiser
+  , rules             :: [LabelledRewriteRule] -- ^ A list of rewrite rules for the logical optimiser
   , maxNodeUtil       :: Double        -- ^ The per-Partition utilisation limit
   , bandwidthLimit    :: Double        -- ^ A program-global maximum bandwidth limit
   }

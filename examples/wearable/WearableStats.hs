@@ -51,7 +51,7 @@ test_defaultgraph_bwlimit = assertEmpty $ norewritePlans
 ---- Evaluation Stage 2: logical optimiser/rewrites
 
 -- how many program variants are derived?
-rewrites            = (nub . applyRules (rules opts) 5) graph
+rewrites            = (nub . map variantGraph . rewriteGraph (rules opts)) graph
 rewriteVariantCount = length rewrites - 1 -- 57
 plans               = concatMap makePlans rewrites
 rewritePlanCount    = length plans -- 5718
