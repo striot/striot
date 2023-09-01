@@ -1,19 +1,15 @@
-{-# OPTIONS_GHC -F -pgmF htfpp #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module WearableUseCaseCloudCom2 where
+module WearableExample where
 
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
-import Striot.Orchestration
 import Striot.StreamGraph
-import Striot.CompileIoT (createPartitions)
-import Striot.VizGraph -- debug
-import Striot.LogicalOptimiser -- debug
+import Striot.Partition
 
 import Algebra.Graph
-import Test.Framework
 import System.Random
+import System.IO
 import Data.Time (UTCTime)
 import Data.Time.Calendar
 import Data.Time.Clock
@@ -162,18 +158,3 @@ graph = path
 
   , StreamVertex 8 Sink            [[| print.take 100 |]]                    "Int"           "IO ()"         0
   ]
-
-plan9 = applyRule mapWindow
-      . applyRule filterAccWindow
-      $ graph
-
--- what the current optimiser chooses
-opt    = fst $ chopAndChange defaultOpts graph
-
--- hand-coded version of what we want
-plan9part = [[1,2,3,4],[5,6,7,8,9]]
-plan9p =createPartitions plan9 plan9part
-plan9cost = planCost defaultOpts (plan9, plan9part)
-
-test_plan9_winner = assertElem plan9 $ (map (fst.fst) . filter ((<= plan9cost) . snd) . viableRewrites opts) graph
-  where  opts = defaultOpts { rules = filterAccWindow : rules defaultOpts }
