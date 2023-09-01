@@ -62,17 +62,17 @@ applyRule f g = g & fromMaybe id (firstMatch g f)
 -- recursively attempt to apply the rule to the graph, but stop
 -- as soon as we get a match
 firstMatch :: StreamGraph -> RewriteRule -> Maybe (StreamGraph -> StreamGraph)
-firstMatch g f = case f g of
+firstMatch g r = case r g of
         Just f -> Just f
         _      -> case g of
             Empty       -> Nothing
-            Vertex v    -> Nothing
-            Overlay a b -> case firstMatch a f of
+            Vertex _    -> Nothing
+            Overlay a b -> tryLeftThenRight a b r
+            Connect a b -> tryLeftThenRight a b r
+        where
+            tryLeftThenRight a b r = case firstMatch a r of
                                 Just f  -> Just f
-                                Nothing -> firstMatch b f
-            Connect a b -> case firstMatch a f of
-                                Just f  -> Just f
-                                Nothing -> firstMatch b f
+                                Nothing -> firstMatch b r
 
 -- N-bounded recursive rule traversal
 -- (caller may wish to apply 'nub')
