@@ -9,10 +9,11 @@ module Striot.LogicalOptimiser ( applyRules
                                , rewriteGraph
 
                                , Variant(..)
-                               , LabelledRewriteRule(..)
                                , variantSequence
 
+                               -- $fromRewriteRule
                                , RewriteRule(..)
+                               , LabelledRewriteRule(..)
 
                                , pureRules
                                , reorderingRules
@@ -48,6 +49,7 @@ module Striot.LogicalOptimiser ( applyRules
                                ) where
 
 import Striot.StreamGraph
+import Striot.LogicalOptimiser.RewriteRule
 import Striot.FunctionalProcessing
 import Algebra.Graph
 import Test.Framework hiding ((===))
@@ -76,8 +78,6 @@ variantSequence :: Variant -> [String]
 variantSequence = reverse . variantSequence'
 variantSequence' (Original _) = []
 variantSequence' (Variant _ r p) = r:(variantSequence' p)
-
-type RewriteRule = StreamGraph -> Maybe (StreamGraph -> StreamGraph)
 
 applyRule :: RewriteRule -> StreamGraph -> StreamGraph
 applyRule f g = g & fromMaybe id (firstMatch g f)
@@ -120,47 +120,42 @@ rewriteGraph rs = applyRules rs 5 . Original
 
 ------------------------------------------------------------------------------
 
--- | A pairing of a `RewriteRule` with its name, encoded in a `String`.
-data LabelledRewriteRule = LabelledRewriteRule
-    { ruleLabel :: String
-    , rule :: RewriteRule }
-
 -- | Semantically-preserving rules. XXX pureRules is not a good name
 pureRules :: [LabelledRewriteRule]
 pureRules =
-        [ LabelledRewriteRule "filterFuse"         filterFuse
-        , LabelledRewriteRule "mapFilter"          mapFilter
-        , LabelledRewriteRule "filterFilterAcc"    filterFilterAcc
-        , LabelledRewriteRule "filterAccFilter"    filterAccFilter
-        , LabelledRewriteRule "filterAccFilterAcc" filterAccFilterAcc
-        , LabelledRewriteRule "mapFuse"            mapFuse
-        , LabelledRewriteRule "mapScan"            mapScan
-        , LabelledRewriteRule "expandFilter"       expandFilter
-        , LabelledRewriteRule "mapFilterAcc"       mapFilterAcc
-        , LabelledRewriteRule "mapWindow"          mapWindow
-        , LabelledRewriteRule "expandMap"          expandMap
-        , LabelledRewriteRule "expandScan"         expandScan
-        , LabelledRewriteRule "expandExpand"       expandExpand
-        , LabelledRewriteRule "mergeMap"           mergeMap
-        , LabelledRewriteRule "mapMerge"           mapMerge
-        , LabelledRewriteRule "expandFilterAcc"    expandFilterAcc
+        [ $(lrule 'filterFuse)
+        , $(lrule 'mapFilter)
+        , $(lrule 'filterFilterAcc)
+        , $(lrule 'filterAccFilter)
+        , $(lrule 'filterAccFilterAcc)
+        , $(lrule 'mapFuse)
+        , $(lrule 'mapScan)
+        , $(lrule 'expandFilter)
+        , $(lrule 'mapFilterAcc)
+        , $(lrule 'mapWindow)
+        , $(lrule 'expandMap)
+        , $(lrule 'expandScan)
+        , $(lrule 'expandExpand)
+        , $(lrule 'mergeMap)
+        , $(lrule 'mapMerge)
+        , $(lrule 'expandFilterAcc)
         ]
 
 -- | A list of rules which cause Stream re-ordering.
 -- These are included in 'defaultRewriteRules'.
 reorderingRules =
-    [ LabelledRewriteRule "filterMerge" filterMerge
-    , LabelledRewriteRule "expandMerge" expandMerge
-    , LabelledRewriteRule "mergeFilter" mergeFilter
-    , LabelledRewriteRule "mergeExpand" mergeExpand
-    , LabelledRewriteRule "mergeFuse"   mergeFuse
+    [ $(lrule 'filterMerge)
+    , $(lrule 'expandMerge)
+    , $(lrule 'mergeFilter)
+    , $(lrule 'mergeExpand)
+    , $(lrule 'mergeFuse)
     ]
 
 -- | A list of rules which cause re-shaping of Windows.
 -- These are not included in 'defaultRewriteRules'.
 reshapingRules =
-    [ LabelledRewriteRule "filterWindow"    filterWindow
-    , LabelledRewriteRule "filterAccWindow" filterAccWindow
+    [ $(lrule 'filterWindow)
+    , $(lrule 'filterAccWindow)
     ]
 
 defaultRewriteRules =
@@ -1055,3 +1050,10 @@ filterAccWindowPost = path
 
 test_filterAccWindow = assertEqual filterAccWindowPost
     $ applyRule filterAccWindow filterAccWindowPre
+
+{- $fromRewriteRule
+== RewriteRule
+`RewriteRule` and `LabelledRewriteRule` are defined in a sub-module
+`Striot.LogicalOptimiser.RewriteRule` and re-exported here, due to
+technical restrictions with Template Haskell.
+ -}
