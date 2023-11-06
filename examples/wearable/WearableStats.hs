@@ -5,8 +5,9 @@
 module WearableStats where
 
 import Algebra.Graph.Export.Dot
-import Data.Function ((&))
-import Data.List (nub,sort)
+import Algebra.Graph
+import Data.Function ((&), on)
+import Data.List (nub,sort,nubBy,intercalate)
 import Data.Maybe (fromJust, isJust)
 import Data.Text.Format.Numbers
 import Data.Text (unpack)
@@ -23,9 +24,11 @@ import WearableExample
 toSnd :: (a -> b) -> a -> (a, b)
 toSnd f a = (a, f a)
 
+lrules = LabelledRewriteRule "filterAccWindow" filterAccWindow : defaultRewriteRules
+
 opts = defaultOpts { maxNodeUtil    = 3.0
                    , bandwidthLimit = 30
-                   , rules          = filterAccWindow : defaultRewriteRules
+                   , rules          = lrules
                    }
 
 ---- Evaluation Stage 1: no program rewrites
@@ -51,9 +54,10 @@ test_defaultgraph_bwlimit = assertEmpty $ norewritePlans
 ---- Evaluation Stage 2: logical optimiser/rewrites
 
 -- how many program variants are derived?
-rewrites            = (nub . map variantGraph . rewriteGraph (rules opts)) graph
+rewrites            = nubBy (on (==) variantGraph) (rewriteGraph lrules graph)
+
 rewriteVariantCount = length rewrites - 1 -- 57
-plans               = concatMap makePlans rewrites
+plans               = concatMap makePlans (map variantGraph rewrites)
 rewritePlanCount    = length plans -- 5718
 
 -- This time, the \textit{maximum node utilisation} filter removes 4662 options,
@@ -122,5 +126,24 @@ generateThesisArtefacts = do
   writeFile "scoreBarChart.tex" chart
   mapM_ (\(i,v) -> 
      writeGraph streamGraphToDot v ("rewritten/"++(show i)++".png")
-     ) (zip [1..] rewrites)
+     ) (zip [1..] (map variantGraph rewrites))
+
+  writeFile "wearableAppendix.tex" $ concat $ appendixHead : map (\(n,v) ->
+    let s = intercalate ", " (variantSequence v)
+        c = (length . vertexList . variantGraph) v
+    in appendixFig n s c
+    ) (zip [1..] rewrites)
+
   htfMain htf_thisModulesTests
+
+appendixHead = "\\chapter{Wearable Example rewritten programs}\n\
+\\\label{Appendix:WearableExample}\n"
+
+appendixFig n s c = "\\newpage\n\\begin{figure}[H]\n\
+\    \\centering\n\
+\    "++(show c)++" nodes\\\\\n\
+\    \\includegraphics[width=1.0\\linewidth]{wearableVariants/"++(show n)++"}\n\
+\      \\caption{wearableVariants/"++(show n)++"\n"
+     ++ s ++ "}\n\
+\       \\label{fig:wearableVariants"++(show n)++"}\n\
+\  \\end{figure}\n"
