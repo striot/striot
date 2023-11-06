@@ -6,8 +6,14 @@ module Striot.LogicalOptimiser ( applyRules
 
                                , applyRule
                                , firstMatch
+                               , rewriteGraph
 
+                               , Variant(..)
+                               , variantSequence
+
+                               -- $fromRewriteRule
                                , RewriteRule(..)
+                               , LabelledRewriteRule(..)
 
                                , pureRules
                                , reorderingRules
@@ -43,6 +49,7 @@ module Striot.LogicalOptimiser ( applyRules
                                ) where
 
 import Striot.StreamGraph
+import Striot.LogicalOptimiser.RewriteRule
 import Striot.FunctionalProcessing
 import Algebra.Graph
 import Test.Framework hiding ((===))
@@ -52,9 +59,25 @@ import Data.Function ((&))
 import Data.List (nub, sort, intercalate)
 import Control.Arrow ((>>>))
 
--- applying encoded rules and their resulting ReWriteOps ----------------------
+------------------------------------------------------------------------------
 
-type RewriteRule = StreamGraph -> Maybe (StreamGraph -> StreamGraph)
+-- | A variant (`variantGraph`) of a stream-processing program (`variantParent`),
+-- produced by applying a rewrite rule (`variantRule`). The `Original` constructor
+-- is to represent the original, unmodified, input stream-processing program.
+data Variant = Variant
+    { variantGraph :: StreamGraph
+    , variantRule  :: String
+    , variantParent:: Variant
+    } | Original
+    { variantGraph :: StreamGraph
+    } deriving (Show, Eq)
+
+-- | Extract a list of `RewriteRule` labels from a `Variant`, to see the sequence
+-- of rules that produced it.
+variantSequence :: Variant -> [String]
+variantSequence = reverse . variantSequence'
+variantSequence' (Original _) = []
+variantSequence' (Variant _ r p) = r:(variantSequence' p)
 
 applyRule :: RewriteRule -> StreamGraph -> StreamGraph
 applyRule f g = g & fromMaybe id (firstMatch g f)
@@ -62,65 +85,77 @@ applyRule f g = g & fromMaybe id (firstMatch g f)
 -- recursively attempt to apply the rule to the graph, but stop
 -- as soon as we get a match
 firstMatch :: StreamGraph -> RewriteRule -> Maybe (StreamGraph -> StreamGraph)
-firstMatch g f = case f g of
+firstMatch g r = case r g of
         Just f -> Just f
         _      -> case g of
             Empty       -> Nothing
-            Vertex v    -> Nothing
-            Overlay a b -> case firstMatch a f of
+            Vertex _    -> Nothing
+            Overlay a b -> tryLeftThenRight a b r
+            Connect a b -> tryLeftThenRight a b r
+        where
+            tryLeftThenRight a b r = case firstMatch a r of
                                 Just f  -> Just f
-                                Nothing -> firstMatch b f
-            Connect a b -> case firstMatch a f of
-                                Just f  -> Just f
-                                Nothing -> firstMatch b f
+                                Nothing -> firstMatch b r
 
--- N-bounded recursive rule traversal
--- (caller may wish to apply 'nub')
-applyRules :: [RewriteRule] -> Int -> StreamGraph -> [StreamGraph]
-applyRules rs n sg =
-        if   n < 1 then [sg]
-        else let
-             sgs = map ((&) sg) $ mapMaybe (firstMatch sg) rs
-             in    sg : sgs ++ (concatMap (applyRules rs (n-1)) sgs)
+-- | Apply a list of `LabelledRewriteRule`s to a `Variant` stream program
+-- to derive rewritten programs. Bound the depth of rule application by
+-- the supplied parameter.
+-- The resulting list may include many equivalent `StreamGraph`s: the caller
+-- may wish to use `nub . variantGraph` or `nubBy (on (==) variantGraph)` to
+-- de-duplicate.
+applyRules :: [LabelledRewriteRule] -> Int -> Variant -> [Variant]
+applyRules lrules n v =
+    if n < 1 then [v]
+    else let
+        sg = variantGraph v
+        vs = map (\(l,f) -> Variant (f sg) l v)
+           $ mapMaybe (\(LabelledRewriteRule l r) -> fmap ((,) l) (firstMatch sg r))
+             lrules
+        in v : vs ++ (concatMap (applyRules lrules (n-1)) vs)
+
+-- | Convenience function to call `applyRules` with an initial `StreamGraph`,
+-- encoding a sensible depth limit of 5.
+rewriteGraph :: [LabelledRewriteRule] -> StreamGraph -> [Variant]
+rewriteGraph rs = applyRules rs 5 . Original
 
 ------------------------------------------------------------------------------
 
 -- | Semantically-preserving rules. XXX pureRules is not a good name
-pureRules :: [RewriteRule]
+pureRules :: [LabelledRewriteRule]
 pureRules =
-        [ filterFuse
-        , mapFilter
-        , filterFilterAcc
-        , filterAccFilter
-        , filterAccFilterAcc
-        , mapFuse
-        , mapScan
-        , expandFilter
-        , mapFilterAcc
-        , mapWindow
-        , expandMap
-        , expandScan
-        , expandExpand
-        , mergeMap
-        , mapMerge
-        , expandFilterAcc
+        [ $(lrule 'filterFuse)
+        , $(lrule 'mapFilter)
+        , $(lrule 'filterFilterAcc)
+        , $(lrule 'filterAccFilter)
+        , $(lrule 'filterAccFilterAcc)
+        , $(lrule 'mapFuse)
+        , $(lrule 'mapScan)
+        , $(lrule 'expandFilter)
+        , $(lrule 'mapFilterAcc)
+        , $(lrule 'mapWindow)
+        , $(lrule 'expandMap)
+        , $(lrule 'expandScan)
+        , $(lrule 'expandExpand)
+        , $(lrule 'mergeMap)
+        , $(lrule 'mapMerge)
+        , $(lrule 'expandFilterAcc)
         ]
 
 -- | A list of rules which cause Stream re-ordering.
 -- These are included in 'defaultRewriteRules'.
 reorderingRules =
-    [ filterMerge
-    , expandMerge
-    , mergeFilter
-    , mergeExpand
-    , mergeFuse
+    [ $(lrule 'filterMerge)
+    , $(lrule 'expandMerge)
+    , $(lrule 'mergeFilter)
+    , $(lrule 'mergeExpand)
+    , $(lrule 'mergeFuse)
     ]
 
 -- | A list of rules which cause re-shaping of Windows.
 -- These are not included in 'defaultRewriteRules'.
 reshapingRules =
-    [ filterWindow
-    , filterAccWindow
+    [ $(lrule 'filterWindow)
+    , $(lrule 'filterAccWindow)
     ]
 
 defaultRewriteRules =
@@ -1015,3 +1050,10 @@ filterAccWindowPost = path
 
 test_filterAccWindow = assertEqual filterAccWindowPost
     $ applyRule filterAccWindow filterAccWindowPre
+
+{- $fromRewriteRule
+== RewriteRule
+`RewriteRule` and `LabelledRewriteRule` are defined in a sub-module
+`Striot.LogicalOptimiser.RewriteRule` and re-exported here, due to
+technical restrictions with Template Haskell.
+ -}
