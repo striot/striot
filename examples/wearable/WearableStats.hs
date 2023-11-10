@@ -25,7 +25,7 @@ import WearableExample
 toSnd :: (a -> b) -> a -> (a, b)
 toSnd f a = (a, f a)
 
-lrules = LabelledRewriteRule "filterAccWindow" filterAccWindow : defaultRewriteRules
+lrules = defaultRewriteRules ++ reshapingRules
 
 opts = defaultOpts { maxNodeUtil    = 3.0
                    , bandwidthLimit = 30
