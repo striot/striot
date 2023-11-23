@@ -11,6 +11,7 @@ import Data.List (nub,sort,nubBy,intercalate)
 import Data.Maybe (fromJust, isJust)
 import Data.Text.Format.Numbers
 import Data.Text (unpack)
+import System.Directory
 import Striot.CompileIoT
 import Striot.LogicalOptimiser -- debug
 import Striot.Orchestration
@@ -24,7 +25,7 @@ import WearableExample
 toSnd :: (a -> b) -> a -> (a, b)
 toSnd f a = (a, f a)
 
-lrules = LabelledRewriteRule "filterAccWindow" filterAccWindow : defaultRewriteRules
+lrules = defaultRewriteRules ++ reshapingRules
 
 opts = defaultOpts { maxNodeUtil    = 3.0
                    , bandwidthLimit = 30
@@ -124,6 +125,7 @@ generateThesisArtefacts = do
   writeFile "wearable_winner.dot" wearableWinnerDot
   writeGraph id wearableWinnerDot "wearable_winner.png"
   writeFile "scoreBarChart.tex" chart
+  createDirectoryIfMissing False "rewritten"
   mapM_ (\(i,v) -> 
      writeGraph streamGraphToDot v ("rewritten/"++(show i)++".png")
      ) (zip [1..] (map variantGraph rewrites))
