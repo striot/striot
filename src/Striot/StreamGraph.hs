@@ -29,11 +29,15 @@ module Striot.StreamGraph ( StreamGraph(..)
                           , streamgraph
                           , streamgraph'
 
+                          -- Equality
+                          , graphEq
+
                           , htf_thisModulesTests
                           ) where
 
 import Algebra.Graph
 import Data.List (intercalate)
+import Data.Function ((&))
 import Language.Haskell.TH
 import System.IO.Unsafe (unsafePerformIO)
 import Test.Framework -- Arbitrary, etc.
@@ -253,3 +257,68 @@ prop_noShortJoin = forAll (treegraph' 3) $
 
 prop_noJoinExpand = forAll ((fmap (chOp Expand)) <$> (treegraph' 1) >>= extendTree 3) $
     (/=) Join . operator . rootLabel . head . subForest
+
+------------------------------------------------------------------------------
+-- `StreamGraph` (`Graph StreamVertex`) inherits its `Eq` instance from `Graph`,
+-- which relies upon `Eq StreamVertex`. A problem we have with graph rewriting
+-- is sometimes a graph variant is effectively equivalent but has different
+-- vertexId values. We cannot address this for `Eq` so we instead provide `graphEq`.
+--
+--  `graphEq` relies on a `StreamProg` type to ignore vertexId renumbering.
+--  `StreamProg` does not have a `vertexId` field, instead the graph
+--  structure is captured in the ADT itself.
+
+data StreamProg = StreamProg StreamOperator [Exp] String String Double [StreamProg]
+    deriving (Show, Eq)
+
+-- since Eq StreamGraph is derived via `Graph a`, we cannot provide an Eq which
+-- avoids the vertexId problem.
+graphEq :: StreamGraph -> StreamGraph -> Bool
+graphEq a b = (fromStreamGraph a) == (fromStreamGraph b)
+
+fromStreamGraph :: StreamGraph -> StreamProg
+fromStreamGraph sg = let
+    sink = (snd . head . filter ((==) Sink . operator . snd) . edgeList) sg
+    in fromStreamGraph' sg sink
+
+fromStreamGraph' :: StreamGraph -> StreamVertex -> StreamProg
+fromStreamGraph' sg v = let
+    incoming = (map fst . filter ((==) v . snd) . edgeList) sg
+    in fromStreamVertex v $ map (fromStreamGraph' sg) incoming
+
+-- construct a partially-applied StreamProg from a StreamVertex; lacking the
+-- final parent StreamProg parameter.
+fromStreamVertex :: StreamVertex -> ([StreamProg] -> StreamProg)
+fromStreamVertex (StreamVertex _ o p it ot s) = StreamProg o (map deQ p) it ot s
+
+-- test data
+sample1d = StreamProg (Source 1)   [deQ [| sourceFn |]] "IO ()" "Int"      0 []
+         & StreamProg (Filter 0.5) [deQ [| (>5) |]]     "Int"   "Int"      1 .(:[])
+         & StreamProg (Filter 0.5) [deQ [| (<8) |]]     "Int"   "Int"      1 .(:[])
+         & StreamProg Window       [deQ [| chop 1 |]]   "Int"   "[Int]"    1 .(:[])
+         & StreamProg Sink         [deQ [| sinkFn |]]   "[Int]" "[String]" 0 .(:[])
+
+sample1 = simpleStream
+  [ ((Source 1) , [[| sourceFn |]], "Int", 0)
+  , ((Filter 0.5), [[| (>5) |]], "Int", 1)
+  , ((Filter 0.5), [[| (<8) |]], "Int", 1)
+  , (Window , [[| chop 1 |]], "[Int]", 1)
+  , (Sink   , [[|sinkFn|]], "[String]", 0)
+  ]
+-- permutation of sample1 with vertexIds incremented
+sample2 = fmap (\v -> v { vertexId = vertexId v + 1 }) sample1
+-- different structure
+sample3 = simpleStream
+  [ ((Source 1) , [[| sourceFn |]], "Int", 0)
+  , ((Filter 0.5), [[|\i -> i>5 && i<8 |]], "Int", 1)
+  , (Window , [[| chop 1 |]], "[Int]", 1)
+  , (Sink   , [[|sinkFn|]], "[String]", 0)
+  ]
+-- Eq fails when the vertexIds differ,
+test_vertexId_notEq = assertNotEqual sample1 sample2
+-- but graphEq succeeds
+test_vertexId_graphEq = assertBool $ graphEq sample1 sample2
+-- sample3 is clearly different
+test_eq_diffStructure = assertNotEqual sample1 sample2
+-- and remains so in StreamProg form
+test_graphEq_diffStructure = assertBool $ not $ graphEq sample1 sample3
