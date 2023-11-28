@@ -54,5 +54,6 @@ main = do
     partitionGraph taxiQ1 parts opts
     writeFile "compose.yml" (generateDockerCompose (createPartitions taxiQ1 parts))
     let pg = createPartitions taxiQ1 parts
+    writeFile "taxiQ1.dot" $ export enumGraphStyle taxiQ1
     writeGraph (export enumGraphStyle) taxiQ1 "taxiQ1.png"
     writeGraph partitionedGraphToDot pg "partitionedTaxiQ1.png"
