@@ -289,7 +289,7 @@ fromStreamGraph' sg v = let
 -- construct a partially-applied StreamProg from a StreamVertex; lacking the
 -- final parent StreamProg parameter.
 fromStreamVertex :: StreamVertex -> ([StreamProg] -> StreamProg)
-fromStreamVertex (StreamVertex _ o p it ot s) = StreamProg o (map deQ p) it ot s
+fromStreamVertex (StreamVertex _ o p it ot s) = StreamProg o (map (unQualifyNames.deQ) p) it ot s
 
 -- test data
 sample1d = StreamProg (Source 1)   [deQ [| sourceFn |]] "IO ()" "Int"      0 []
@@ -302,7 +302,7 @@ sample1 = simpleStream
   [ ((Source 1) , [[| sourceFn |]], "Int", 0)
   , ((Filter 0.5), [[| (>5) |]], "Int", 1)
   , ((Filter 0.5), [[| (<8) |]], "Int", 1)
-  , (Window , [[| chop 1 |]], "[Int]", 1)
+  , (Window , [[| \n -> par n (chop 1) |]], "[Int]", 1)
   , (Sink   , [[|sinkFn|]], "[String]", 0)
   ]
 -- permutation of sample1 with vertexIds incremented
