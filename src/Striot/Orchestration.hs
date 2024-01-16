@@ -72,7 +72,7 @@ distributeProgram opts sg = let
 -- optimiseChoosePartitionMap?
 chopAndChange :: GenerateOpts -> StreamGraph -> Plan
 chopAndChange opts sg = case viableRewrites opts sg of
-    [] -> error "distributeProgram: no viable programs"
+    [] -> error "chopAndChange: no viable programs"
     rs -> rs & sortOn costedPlanCost & head & costedPlanPlan
 
 data CostedPlan = CostedPlan
