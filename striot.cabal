@@ -19,6 +19,7 @@ library
   exposed-modules:    Striot.FunctionalIoTtypes
                       Striot.FunctionalProcessing
                       Striot.LogicalOptimiser
+                      Striot.LogicalOptimiser.RewriteRule
                       Striot.Nodes
                       Striot.Nodes.Types
                       Striot.Nodes.TCP
@@ -113,6 +114,7 @@ test-suite test-striot
                       Striot.FunctionalIoTtypes
                       Striot.FunctionalProcessing
                       Striot.LogicalOptimiser
+                      Striot.LogicalOptimiser.RewriteRule
                       Striot.Nodes
                       Striot.Nodes.Types
                       Striot.Nodes.TCP
