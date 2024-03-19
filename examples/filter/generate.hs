@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-
-    demonstration of generating examples/merge via CompileIoT
+    demonstration of generating examples/filter via CompileIoT
  -}
 
 import Striot.CompileIoT
@@ -23,13 +23,12 @@ ssi =
  [ ((Source 1) , [source], "Int", 0)
  , ((Filter 0.5), [[| (>5) |]], "Int", 1)
  , ((Filter 0.5), [[| (<8) |]], "Int", 1)
- , (Map    , [[| id   |]], "Int", 1) -- work around bug #88
  , (Window , [[| chop 1 |]], "[Int]", 1)
  , (Sink   , [[| mapM_ $ putStrLn . ("receiving "++) . show . value |]], "[String]", 0)
  ]
 
 graph = simpleStream ssi
 
-parts = [[1,2,3,4],[5,6]]
+parts = [[1,2,3],[4,5]]
 
 main = partitionGraph graph parts opts
