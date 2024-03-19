@@ -18,7 +18,7 @@ module Striot.Jackson ( OperatorInfo(..)
                       -- defined
                       , taxiQ1Array
                       , taxiQ1Inputs
-                      , taxiQ1meanServiceTimes
+                      , taxiQ1meanServiceRates
                       -- calculated
                       , taxiQ1arrivalRates
                       , taxiQ1utilisation
@@ -64,7 +64,7 @@ test_identity2= assertEqual (identity (listArray ((0,0),(2,2)) $ [0 | x <- [1..9
 
 -- |Matrix subtraction.
 mm_subtract:: (Ix a, Integral a, Num b) => Array (a, a) b -> Array (a, a) b -> Array (a, a) b
-mm_subtract x y = listArray (bounds x) $ [(x Data.Array.! (row,column))-(y Data.Array.! (row,column))| row<-[xfrom..xto],column<-[yfrom..yto]]
+mm_subtract x y = listArray (bounds x) $ [(x ! (row,column))-(y ! (row,column))| row<-[xfrom..xto],column<-[yfrom..yto]]
                         where ((xfrom,yfrom),(xto,yto)) = bounds x
 
 test_mm_subtract1 = assertEqual (mm_subtract a b) c
@@ -82,7 +82,7 @@ test_mm_subtract2 = assertEqual (mm_subtract a b) c
 -- | Matrix multiplication.
 -- The indexes must begin at 1.
 ma_mult:: (Ix a, Integral a, Num b) => Array (a, a) b -> b -> Array (a, a) b 
-ma_mult x v   = listArray (bounds x) $ [v*(x Data.Array.! (row,column))| row<-[1..size],column<-[1..size]] 
+ma_mult x v   = listArray (bounds x) $ [v*(x ! (row,column))| row<-[1..size],column<-[1..size]] 
                           where size = fst $ snd $ bounds x
                           
 -- | Vector (1D Array) multiplication by value.
@@ -93,12 +93,12 @@ va_mult x val   = listArray (bounds x) [val*(x ! row) | row <- [from..to]]
 -- | Vector (1D Array) multiplication.
 -- The indexes must begin at 1.
 vv_mult:: (Ix a, Integral a, Num b) => Array a b -> Array a b -> Array a b
-vv_mult v1 v2 = listArray (bounds v1) $ [(v1 Data.Array.! row)*(v2 Data.Array.!row) |row <- [1..size]]
+vv_mult v1 v2 = listArray (bounds v1) $ [(v1 ! row)*(v2 ! row) |row <- [1..size]]
                           where size = snd $ bounds v1
 
 -- | Vector (1D Array) equivalent of `take`
 v_take:: Int -> Array Int b -> Array Int b
-v_take max v = listArray (1,max) $ [v Data.Array.! row |row <- [1..max]]
+v_take max v = listArray (1,max) $ [v ! row |row <- [1..max]]
 
 -- Jackson Network: lambda = (I-P')^(-1)a where a = (alpha.p0i)i=1..J
 arrivalRate:: Array (Int, Int) Double -> Array Int Double -> Double -> Array Int Double  
@@ -111,34 +111,41 @@ arrivalRate p p0i alpha = arrivalRate' p aa
 arrivalRate' p aa = mv_mult (inverse $ mm_subtract (identity p) (m_trans p)) aa
  
   
--- ρ = λ/μ is the utilization of the buffer (the average proportion of time which the server is occupied.  
+-- ρ = λ/μ is the utilisation of the buffer (the average proportion of time which the server is occupied.  
+-- special-case μ == 0: treat this as undefined and return 0
 utilisation:: Array Int Double -> Array Int Double -> Array Int Double
-utilisation arrivalRates meanServiceTimes = vv_mult arrivalRates meanServiceTimes
+utilisation arrivalRates meanServiceRates =
+    listArray (bounds arrivalRates) $ [ let
+        sr = meanServiceRates ! row
+        ar = arrivalRates ! row
+        in if sr == 0 then 0 else ar / sr | row <- [1..size]]
+    where
+        size = snd $ bounds arrivalRates
 
 -- the average number of customers in the system is ρ/(1 − ρ)
 avgeNumberOfCustomersInSystem:: Array Int Double -> Array Int Double
 avgeNumberOfCustomersInSystem utilisations = listArray (bounds utilisations) $ 
-                                                       [(utilisations Data.Array.! row)/(1.0- (utilisations Data.Array.!row)) |row <- [1..size]]
+                                                       [(utilisations ! row)/(1.0 - (utilisations ! row)) |row <- [1..size]]
                                                  where size = snd $ bounds utilisations
                                                  
 -- the average response time (total time a customer spends in the system) is 1/(μ − λ)
 avgeResponseTime:: Array Int Double -> Array Int Double -> Array Int Double
-avgeResponseTime arrivalRates meanServiceTimes = listArray (bounds arrivalRates) $ 
-                                                       [1.0/((1.0/(meanServiceTimes Data.Array.! row))-(arrivalRates Data.Array.!row)) |row <- [1..size]]
+avgeResponseTime arrivalRates meanServiceRates = listArray (bounds arrivalRates) $ 
+                                                       [1.0/((meanServiceRates ! row) - (arrivalRates ! row)) |row <- [1..size]]
                                                  where size = snd $ bounds arrivalRates
 
 stable:: Array Int Double -> Array Int Double -> Array Int Bool
-stable arrivalRates meanServiceTimes = let utils = utilisation arrivalRates meanServiceTimes in
+stable arrivalRates meanServiceRates = let utils = utilisation arrivalRates meanServiceRates in
                                            listArray (bounds arrivalRates) $ 
-                                                       [(utils Data.Array.! row) < 1/0 |row <- [1..size]]
+                                                       [(utils ! row) < 1/0 | row <- [1..size]]
                                                  where size = snd $ bounds arrivalRates
 
 --	the average time spent waiting in the queue is ρ/(μ – λ)
 avgeTimeInQueue:: Array Int Double -> Array Int Double -> Array Int Double
-avgeTimeInQueue arrivalRates meanServiceTimes = let utils = utilisation arrivalRates meanServiceTimes in
+avgeTimeInQueue arrivalRates meanServiceRates = let utils = utilisation arrivalRates meanServiceRates in
                                                        listArray (bounds arrivalRates) $ 
-                                                       [(utils Data.Array.! row)/
-                                                        ((1.0/(meanServiceTimes Data.Array.! row))-(arrivalRates Data.Array.!row))  |row <- [1..size]]
+                                                       [(utils ! row) /
+                                                        ((1.0/(meanServiceRates ! row)) - (arrivalRates ! row))  |row <- [1..size]]
                                                     where size = snd $ bounds arrivalRates
 
 
@@ -188,26 +195,26 @@ taxiQ1Array  = listArray ((1,1),(7,7)) $
  
 taxiQ1Inputs = listArray (1,7) $ [1,0,0,0,0,0,0] -- all events in the input stream are sent to node 1
 
-taxiQ1meanServiceTimes:: Array Int Double
-taxiQ1meanServiceTimes = listArray (1,7) [0,0.0001,0.0001,0.0001,0.01,0.0001,0.0001]
- 
+taxiQ1meanServiceRates:: Array Int Double
+taxiQ1meanServiceRates = listArray (1,7) [0,10000,10000,10000,10,10000,10000]
+
 taxiQ1arrivalRates:: Array Int Double
 taxiQ1arrivalRates = arrivalRate taxiQ1Array taxiQ1Inputs 1.2 -- the 1.2 is the arrival rate (in events per second) into the system
 
 test_taxiQ1arrivalRates = assertEqual taxiQ1arrivalRates $
     array (1,7) [(1,1.2),(2,1.2),(3,1.2),(4,1.14),(5,1.14),(6,1.14),(7,0.11399999999999999)]
 
-taxiQ1utilisation = utilisation taxiQ1arrivalRates taxiQ1meanServiceTimes 
+taxiQ1utilisation = utilisation taxiQ1arrivalRates taxiQ1meanServiceRates 
 
 taxiQ1avgeNumberCustomersInSystem = avgeNumberOfCustomersInSystem taxiQ1utilisation
 
-taxiQ1avgeResponseTime = avgeResponseTime taxiQ1arrivalRates taxiQ1meanServiceTimes
+taxiQ1avgeResponseTime = avgeResponseTime taxiQ1arrivalRates taxiQ1meanServiceRates
 
-taxiQ1avgeTimeInQueue = avgeTimeInQueue   taxiQ1arrivalRates taxiQ1meanServiceTimes
+taxiQ1avgeTimeInQueue = avgeTimeInQueue   taxiQ1arrivalRates taxiQ1meanServiceRates
 
 data OperatorInfo = OperatorInfo { opId        :: Int
                                  , arrRate     :: Double
-                                 , serviceTime :: Double -- XXX rename, clashes with StreamGraph
+                                 , svcRate     :: Double
                                  , util        :: Double
                                  , stab        :: Bool
                                  , custInSys   :: Double
@@ -217,15 +224,15 @@ data OperatorInfo = OperatorInfo { opId        :: Int
                                  deriving (Show,Eq)
                                  
 calcAll:: Array (Int,Int) Double -> Array Int Double -> Array Int Double -> [OperatorInfo]
-calcAll connections arrivalRates meanServiceTimes = let
-    utilisations             = utilisation arrivalRates meanServiceTimes
-    stability                = stable arrivalRates meanServiceTimes
+calcAll connections arrivalRates meanServiceRates = let
+    utilisations             = utilisation arrivalRates meanServiceRates
+    stability                = stable arrivalRates meanServiceRates
     avgeNumberOfCustInSystem = avgeNumberOfCustomersInSystem utilisations
-    avgeResponseTimes        = avgeResponseTime arrivalRates meanServiceTimes
-    avgeTimesInQueue         = avgeTimeInQueue  arrivalRates meanServiceTimes
+    avgeResponseTimes        = avgeResponseTime arrivalRates meanServiceRates
+    avgeTimesInQueue         = avgeTimeInQueue  arrivalRates meanServiceRates
 
     in map (\id -> OperatorInfo id (arrivalRates             ! id)
-                                   (meanServiceTimes         ! id)
+                                   (meanServiceRates         ! id)
                                    (utilisations             ! id)
                                    (stability                ! id)
                                    (avgeNumberOfCustInSystem ! id)
@@ -234,11 +241,11 @@ calcAll connections arrivalRates meanServiceTimes = let
            [1.. (snd $ bounds arrivalRates)]
                               
 taxiQ1Calc:: [OperatorInfo]
-taxiQ1Calc = calcAll taxiQ1Array (arrivalRate taxiQ1Array taxiQ1Inputs 1.2) taxiQ1meanServiceTimes
+taxiQ1Calc = calcAll taxiQ1Array (arrivalRate taxiQ1Array taxiQ1Inputs 1.2) taxiQ1meanServiceRates
 
 -- basic tests
 ex1   = listArray ((1,1),(3,3)) $ [1,0,0,-0.5,1,0,-0.5,0,1]                    
-test1 = (listArray ((1,1), (3,3)) $ [1,0,0,0,1,0,0,0,1]) Data.Array.! (1,1)
+test1 = (listArray ((1,1), (3,3)) $ [1,0,0,0,1,0,0,0,1]) ! (1,1)
 test2 = print $ inverse $ listArray ((1,1), (3,3)) $ [1,0,0,0,1,0,0,0,1]
 test3 = print $ inverse $ listArray ((1,1), (3,3)) $ [1,0,0,-0.5,1,0,-0.5,0,1]
 test4 = print $ mv_mult (inverse $ listArray ((1,1), (3,3)) $ [1,0,0,-0.5,1,0,-0.5,0,1]) 
@@ -311,7 +318,7 @@ deriveServiceTimes sg = let
     n  = fst (last vl)
     prop x = case lookup x vl of
         Nothing -> 0
-        Just v  -> (Striot.StreamGraph.serviceTime) v
+        Just v  -> serviceRate v
 
     in bumpIndex (1 - m) $ listArray (m,n) $ map prop [m..n]
 

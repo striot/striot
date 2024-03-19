@@ -145,13 +145,13 @@ graph = path
     -- edEvent (euclidean distance)
   , StreamVertex 2 (Filter 0.5)    [[| (\((x,y,z),vibe)->vibe == 0) |]]      "PebbleMode60"  "PebbleMode60"  1
   , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode60"  "(Int,Int,Int)" 1
-  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           2
+  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           (1/2)
 
     -- stepEvent
   , StreamVertex 5 (FilterAcc 0.5) [[| (\last new -> new) |]
                                    ,[| 0 |]
                                    ,[| (\new last ->(last>threshold) && (new<=threshold)) |]
-                                   ]                                         "Int"           "Int"           0.1
+                                   ]                                         "Int"           "Int"           10
     -- stepCount
   , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           0
   , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           0

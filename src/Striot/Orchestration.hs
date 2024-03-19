@@ -143,13 +143,15 @@ v3 = StreamVertex 2 Merge        []                  "Int" "Int" 0
 v4 = StreamVertex 3 (Filter 0.5) [[| (>3) |]]        "Int" "Int" 1
 v5 = StreamVertex 4 Sink         [[| mapM_ print |]] "Int" "Int" 0
 
--- this graph is overutilised: arrival rate at filter = 2 events/tu, service time
+-- this graph is overutilised: arrival rate at filter = 2 events/tu, service rate
 -- 1 event/tu
 graph = overlay (path [v1,v3,v4,v5]) (path [v2,v3])
 
+test_graph_notviable = assertBool (isOverUtilised . calcAllSg $ graph)
+
 tooMuch = simpleStream
-    [ (Source 1, [[| return 1 |]],    "Int", 0)
-    , (Map,      [[| (+1)     |]],    "Int", 2)
+    [ (Source 2, [[| return 1 |]],    "Int", 0)
+    , (Map,      [[| (+1)     |]],    "Int", 1)
     , (Sink,     [[| mapM_ print |]], "Int", 0)
     ]
 

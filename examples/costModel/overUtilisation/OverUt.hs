@@ -10,7 +10,7 @@ import Algebra.Graph
 import Data.Function ((&))
 import Data.Maybe
 import Striot.CompileIoT
-import Striot.Jackson hiding (serviceTime)
+import Striot.Jackson
 import Striot.LogicalOptimiser
 import Striot.StreamGraph
 import Striot.VizGraph

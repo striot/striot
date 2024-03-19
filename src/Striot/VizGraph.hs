@@ -174,9 +174,9 @@ jacksonStyle graph = baseGraphStyle
     } where
     jackson = map (\oi -> (opId oi, oi)) (calcAllSg graph) -- (Int, [OperatorInfo])
 
-    srvRate v = case Striot.StreamGraph.serviceTime v of
+    srvRate v = case serviceRate v of
         0 -> "" -- effectively undefined/not useful
-        t -> "μ = " ++ wrap (show (1 / t))
+        t -> "μ = " ++ wrap (show t)
 
     wrap s = "<SUP>"++s++"</SUP>/<SUB>s</SUB>"
 
