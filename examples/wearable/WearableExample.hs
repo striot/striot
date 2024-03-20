@@ -139,22 +139,22 @@ main6 = do
 
 
 -- corresponding to "main"
-graph = path
-  [ StreamVertex 1 (Source 1)      [[|sampleDataGenerator jan_1_1900_time 10 rs|]]
-                                                                             "IO ()"        "PebbleMode60"   1
+graph = path            -- 25 Hz, per Path2IOT paper
+  [ StreamVertex 1 (Source 25)      [[|sampleDataGenerator jan_1_1900_time 10 rs|]]
+                                                                             "IO ()"        "PebbleMode60"   (1/25)
     -- edEvent (euclidean distance)
-  , StreamVertex 2 (Filter 0.5)    [[| (\((x,y,z),vibe)->vibe == 0) |]]      "PebbleMode60"  "PebbleMode60"  1
-  , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode60"  "(Int,Int,Int)" 1
-  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           2
+  , StreamVertex 2 (Filter 0.5)    [[| (\((x,y,z),vibe)->vibe == 0) |]]      "PebbleMode60"  "PebbleMode60"  (1/25)
+  , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode60"  "(Int,Int,Int)" (1/25)
+  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           (2/25)
 
     -- stepEvent
   , StreamVertex 5 (FilterAcc 0.5) [[| (\last new -> new) |]
                                    ,[| 0 |]
                                    ,[| (\new last ->(last>threshold) && (new<=threshold)) |]
-                                   ]                                         "Int"           "Int"           0.1
+                                   ]                                         "Int"           "Int"           (2/25)
     -- stepCount
-  , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           0
-  , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           0
+  , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           (2/25)
+  , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           (2/25)
 
-  , StreamVertex 8 Sink            [[| print.take 100 |]]                    "Int"           "IO ()"         0
+  , StreamVertex 8 Sink            [[| print.take 100 |]]                    "Int"           "IO ()"         (2/25)
   ]
