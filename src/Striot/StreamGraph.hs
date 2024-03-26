@@ -60,7 +60,7 @@ data StreamVertex = StreamVertex
     , parameters :: [ExpQ]
     , intype     :: String
     , outtype    :: String
-    , serviceTime:: Double
+    , serviceRate:: Double -- number of events processed per time interval
     }
 
 instance Eq StreamVertex where
@@ -69,7 +69,7 @@ instance Eq StreamVertex where
                  , intype a   == intype b
                  , outtype a  == outtype b
                  , (map showParam (parameters a)) == (map showParam (parameters b))
-                 , serviceTime a == serviceTime b
+                 , serviceRate a == serviceRate b
                  ]
 
 instance Show StreamVertex where
@@ -138,8 +138,8 @@ simpleStream tupes = path lst
     where
         intypes = "IO ()" : (map (\(_,_,ty,_) -> ty) (init tupes))
         tupes3 = zip3 [1..] intypes tupes
-        lst = map (\ (i,intype,(op,params,outtype,sTime)) ->
-            StreamVertex i op params intype outtype sTime) tupes3
+        lst = map (\ (i,intype,(op,params,outtype,srate)) ->
+            StreamVertex i op params intype outtype srate) tupes3
 
 
 ------------------------------------------------------------------------------
