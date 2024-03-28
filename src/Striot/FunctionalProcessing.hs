@@ -117,6 +117,7 @@ chop wLength s = chop' wLength $ filter dataEvent s
 
 chopTime :: Int -> WindowMaker alpha -- N.B. discards events without a timestamp
 chopTime _       []                         = []
+chopTime t ((Event Nothing _):s)            = chopTime t s
 chopTime tLength s@((Event (Just t) _):_) = chopTime' (milliToTimeDiff tLength) t $ filter timedEvent s
     where chopTime' :: NominalDiffTime -> UTCTime -> WindowMaker alpha -- the first argument is in milliseconds
           chopTime' _    _      []    = []
