@@ -1,6 +1,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module WearableExample where
+module WearableExample ( sampleDataGenerator
+                       , PebbleMode60
+                       , graph
+                       , sampleInput
+                       , intSqrt
+                       , threshold
+                       ) where
 
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
@@ -137,10 +143,20 @@ main6 = do
   let rs = randomRs (0,99) g :: [Int]
   print.take 100 $ streamWindow (chopTime 120) $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
+sampleInput :: IO PebbleMode60
+sampleInput = do
+  g <- getStdGen -- this is re-seeding so each event is the same
+  let rands = randomRs (0,99) g :: [Int]
+      xyz = (rands !! 0, rands !! 1, rands !! 2)
+      vibe = fromEnum (rands !! 3 < 10) -- :: Int
+      payload = (xyz, vibe)
+  -- XXX: sleep for a bit so this function emits at 25 Hz
+  print $ "emitting " ++ (show payload)
+  return payload
 
 -- corresponding to "main"
 graph = path            -- 25 Hz, per Path2IOT paper
-  [ StreamVertex 1 (Source 25)      [[|sampleDataGenerator jan_1_1900_time 10 rs|]]
+  [ StreamVertex 1 (Source 25)      [[| sampleInput |]]
                                                                              "IO ()"        "PebbleMode60"   25
     -- from sample dataset, 11 vibe events in 918150 samples
   , StreamVertex 2 (Filter (1-(11/918150))) [[| (\((x,y,z),vibe)->vibe == 0) |]] "PebbleMode60"  "PebbleMode60"  25
