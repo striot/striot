@@ -14,6 +14,7 @@ import Striot.StreamGraph
 import Striot.Partition
 
 import Algebra.Graph
+import Control.Monad (replicateM)
 import System.Random
 import System.IO
 import Data.Time (UTCTime)
@@ -145,10 +146,9 @@ main6 = do
 
 sampleInput :: IO PebbleMode60
 sampleInput = do
-  g <- getStdGen -- this is re-seeding so each event is the same
-  let rands = randomRs (0,99) g :: [Int]
-      xyz = (rands !! 0, rands !! 1, rands !! 2)
-      vibe = fromEnum (rands !! 3 < 10) -- :: Int
+  rands <- replicateM 4 (getStdRandom (randomR (0,99)) :: IO Int)
+  let xyz = (rands !! 0, rands !! 1, rands !! 2)
+      vibe = fromEnum (rands !! 3 < 10)
       payload = (xyz, vibe)
   -- XXX: sleep for a bit so this function emits at 25 Hz
   print $ "emitting " ++ (show payload)
