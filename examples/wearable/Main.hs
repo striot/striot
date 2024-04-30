@@ -1,7 +1,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 
+import Algebra.Graph -- path
+
 import Striot.CompileIoT
 import Striot.CompileIoT.Compose
+import Striot.StreamGraph
 
 import WearableExample
 
@@ -12,10 +15,26 @@ opts = defaultOpts { imports = imports defaultOpts ++
                         , "Data.Maybe" -- fromJust
                         , "WearableExample"
                         ]
+                   , Striot.CompileIoT.preSource = Just "preSource"
                    , packages = []
                    }
 
+-- example graph which reports the arrival rate in Hz
+calcArrivalRate = path
+  [ StreamVertex 1 (Source 25) [[| sampleInput |]]   "IO ()"          "PebbleMode60"   25
+  , StreamVertex 2 Window      [[| chopTime 1000 |]] "PebbleMode60"   "[PebbleMode60]" 25
+  , StreamVertex 3 Map         [[| length |]]        "[PebbleMode60]" "Int"            25
+  , StreamVertex 4 Sink        [[| mapM_ print |]]   "Int"            "IO ()"          25
+  ]
+
+useCsvData = path
+  [ StreamVertex 1 (Source 25) [[| source |]]        "IO ()"          "[PebbleMode60]" 25
+  , StreamVertex 2 Expand      []                    "[PebbleMode60]" "PebbleMode60"   25
+  , StreamVertex 3 Sink        [[| mapM_ print |]]   "PebbleMode60"   "IO ()"          25
+  ]
+
+
 main = do
-    partitionGraph graph parts opts
+    partitionGraph useCsvData [[1,2],[3]] opts
     let partitionedGraph = createPartitions graph parts
     writeFile "compose.yml" (generateDockerCompose partitionedGraph)
