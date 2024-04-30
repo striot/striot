@@ -62,7 +62,7 @@ MATCH RECOGNIZE (MEASURES A AS ed1, B AS ed2 PATTERN (A B) DEFINE A AS (A.ed > T
 -}
 
 threshold :: Int
-threshold = 5000 -- made up number
+threshold = 100 -- made up number
 
 stepEvent :: Stream Int -> Stream Int -- input is (ed,ts)
 stepEvent s = streamFilterAcc (\last new -> new) 0 (\new last ->(last>threshold) && (new<=threshold)) s
@@ -184,5 +184,5 @@ graph = path            -- 25 Hz, per Path2IOT paper
   , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           25
   , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           25
 
-  , StreamVertex 8 Sink            [[| print.take 100 |]]                    "Int"           "IO ()"         25
+  , StreamVertex 8 Sink            [[| mapM_ print |]]                    "Int"           "IO ()"         25
   ]
