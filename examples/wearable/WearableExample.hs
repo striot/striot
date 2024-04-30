@@ -6,6 +6,10 @@ module WearableExample ( sampleDataGenerator
                        , sampleInput
                        , intSqrt
                        , threshold
+
+                       , preSource
+                       , source
+                       , csvLineToPebbleMode60s
                        ) where
 
 import Striot.FunctionalIoTtypes
@@ -18,6 +22,8 @@ import Control.Concurrent
 import Control.Monad (replicateM)
 import System.Random
 import System.IO
+import System.Posix.IO -- openFd, OpenFileFlags, stdInput
+import Data.List.Split
 import Data.Time (UTCTime)
 import Data.Time.Calendar
 import Data.Time.Clock
@@ -155,15 +161,6 @@ sampleInput = do
   threadDelay (1000*1000 `div` 25) -- sleep to approximate 25Hz emission rate
   return payload
 
-{- example graph which reports the arrival rate in Hz
-graph = path
-  [ StreamVertex 1 (Source 25) [[| sampleInput |]]   "IO ()"          "PebbleMode60"   25
-  , StreamVertex 2 Window      [[| chopTime 1000 |]] "PebbleMode60"   "[PebbleMode60]" 25
-  , StreamVertex 3 Map         [[| length |]]        "[PebbleMode60]" "Int"            25
-  , StreamVertex 4 Sink        [[| mapM_ print |]]   "Int"            "IO ()"          25
-  ]
--}
-
 -- corresponding to "main"
 graph = path            -- 25 Hz, per Path2IOT paper
   [ StreamVertex 1 (Source 25)      [[| sampleInput |]]
@@ -186,3 +183,23 @@ graph = path            -- 25 Hz, per Path2IOT paper
 
   , StreamVertex 8 Sink            [[| mapM_ print |]]                    "Int"           "IO ()"         25
   ]
+
+------------------------------------------------------------------------------
+-- CSV stuff
+
+csv = "pebbleRawAccel_1806-02.csv"
+
+preSource = do
+    fd <- openFd csv ReadOnly Nothing (OpenFileFlags False False False False False)
+    dupTo fd stdInput
+
+-- each line has a timestamp followed by ten readings
+csvLineToPebbleMode60s :: [String] -> [PebbleMode60]
+csvLineToPebbleMode60s (timestamp:fields) =
+  take 10
+    $ map (\(x:y:z:w:[]) -> ((x,y,z),w))
+    $ chunksOf 4
+    $ map (read :: String -> Int)
+    $ fields
+
+source = getLine >>= return . csvLineToPebbleMode60s . splitOn ","
