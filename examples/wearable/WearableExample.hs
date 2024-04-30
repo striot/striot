@@ -10,6 +10,7 @@ module WearableExample ( sampleDataGenerator
                        , preSource
                        , source
                        , csvLineToPebbleMode60s
+                       , pebbleTimes
                        ) where
 
 import Striot.FunctionalIoTtypes
@@ -24,7 +25,7 @@ import System.Random
 import System.IO
 import System.Posix.IO -- openFd, OpenFileFlags, stdInput
 import Data.List.Split
-import Data.Time (UTCTime)
+import Data.Time
 import Data.Time.Calendar
 import Data.Time.Clock
 
@@ -194,12 +195,31 @@ preSource = do
     dupTo fd stdInput
 
 -- each line has a timestamp followed by ten readings
-csvLineToPebbleMode60s :: [String] -> [PebbleMode60]
+csvLineToPebbleMode60s :: [String] -> [(Timestamp,PebbleMode60)]
 csvLineToPebbleMode60s (timestamp:fields) =
-  take 10
-    $ map (\(x:y:z:w:[]) -> ((x,y,z),w))
+  let ts = parseTimeField timestamp
+  in take 10
+    $ map (\(x:y:z:w:[]) -> (ts,((x,y,z),w)))
     $ chunksOf 4
     $ map (read :: String -> Int)
     $ fields
 
+{- 1529718763606 in milliseconds =
+   Saturday, 23 June 2018 01:52:43.606 UTC
+   See also
+   https://www.williamyaoh.com/posts/2019-09-16-time-cheatsheet.html
+ -}
+
+-- convert CSV timestamp field (ms since epoch) to Timestamp
+parseTimeField :: String -> UTCTime
+parseTimeField timestamp = let -- s is e.g. "1529718763606"
+  (sS,mS) = splitAt 10 timestamp
+  ts = parseTimeOrError True defaultTimeLocale "%s" sS  :: UTCTime
+  ms = parseTimeOrError True defaultTimeLocale "%s" ("0.00"++mS)
+  in addUTCTime ms ts
+
 source = getLine >>= return . csvLineToPebbleMode60s . splitOn ","
+
+-- special window maker to set event timestamps from source data
+pebbleTimes :: WindowMaker (Timestamp,PebbleMode60)
+pebbleTimes = map (\(Event _ v) -> [Event (fmap fst v) v])
