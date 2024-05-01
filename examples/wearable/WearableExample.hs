@@ -218,7 +218,9 @@ parseTimeField timestamp = let -- s is e.g. "1529718763606"
   ms = parseTimeOrError True defaultTimeLocale "%s" ("0.00"++mS)
   in addUTCTime ms ts
 
-source = getLine >>= return . csvLineToPebbleMode60s . splitOn ","
+source = do
+  threadDelay 1000 -- µs
+  getLine >>= return . csvLineToPebbleMode60s . splitOn ","
 
 -- special window maker to set event timestamps from source data
 pebbleTimes :: WindowMaker (Timestamp,PebbleMode60)

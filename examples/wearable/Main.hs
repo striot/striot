@@ -27,17 +27,19 @@ calcArrivalRate = path
   , StreamVertex 4 Sink        [[| mapM_ print |]]   "Int"            "IO ()"          25
   ]
 
+-- read CSV data, translate to Stream PebbleMode60, count records
 useCsvData = path
   [ StreamVertex 1 (Source 25) [[| source |]]        "IO ()"                      "[(Timestamp,PebbleMode60)]" 25
   , StreamVertex 2 Expand      []                    "[(Timestamp,PebbleMode60)]" "(Timestamp,PebbleMode60)"   25
   , StreamVertex 3 Window      [[| pebbleTimes |]]   "(Timestamp,PebbleMode60)"   "[(Timestamp,PebbleMode60)]" 25
   , StreamVertex 4 Expand      []                    "[(Timestamp,PebbleMode60)]" "(Timestamp,PebbleMode60)"   25
   , StreamVertex 5 Map         [[| snd |]]           "(Timestamp,PebbleMode60)"   "PebbleMode60"               25
-  , StreamVertex 6 Sink        [[| mapM_ print |]]   "PebbleMode60"               "IO ()"                      25
+  , StreamVertex 6 Scan        [[| (\c _ -> c+1) |], [| 0 |]] "(Timestamp,PebbleMode60)" "Int"       25
+  , StreamVertex 7 Sink        [[| mapM_ print |]]   "Int"               "IO ()"                      25
   ]
 
 
 main = do
-    partitionGraph useCsvData [[1,2,3,4],[5,6]] opts
+    partitionGraph useCsvData [[1,2,3,4,5],[6,7]] opts
     let partitionedGraph = createPartitions graph parts
     writeFile "compose.yml" (generateDockerCompose partitionedGraph)
