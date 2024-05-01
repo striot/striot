@@ -18,12 +18,15 @@ import Striot.FunctionalProcessing
 import Striot.StreamGraph
 import Striot.Partition
 
+import Striot.Simple
+
 import Algebra.Graph
 import Control.Concurrent
 import Control.Monad (replicateM)
 import System.Random
 import System.IO
 import System.Posix.IO -- openFd, OpenFileFlags, stdInput
+import Data.Function ((&))
 import Data.List.Split
 import Data.Time
 import Data.Time.Calendar
@@ -225,3 +228,40 @@ source = do
 -- special window maker to set event timestamps from source data
 pebbleTimes :: WindowMaker (Timestamp,PebbleMode60)
 pebbleTimes = map (\(Event _ v) -> [Event (fmap fst v) v])
+
+------------------------------------------------------------------------------
+-- Explore the data-set using the Simple interface
+--
+-- mkStream :: [a] -> Stream a
+-- unStream :: Stream a -> [a]
+
+-- common bit of stream processing for the functions that follow.
+-- this unpacks the ten readings on each CSV line into separate
+-- `Event PebbleMode60` with Event timestamps corresponding to the
+-- dataset.`
+pebbleStream :: Stream [String] -> Stream PebbleMode60
+pebbleStream rows = rows 
+          & streamMap csvLineToPebbleMode60s
+          & streamExpand                     -- :: (Timestamp,PebbleMode60)
+          & streamWindow pebbleTimes         -- :: [(Timestamp,PebbleMode60)]
+          & streamExpand                     -- :: (Timestamp,PebbleMode60)
+          & streamMap snd                    -- :: PebbleMode60
+ 
+numberOfSamples = do
+  csvFile <- readFile csv
+  print   $ mkStream (map (splitOn ",") (lines csvFile))
+          & pebbleStream
+          & streamScan (\c _ -> c+1) 0
+          & unStream
+          & last
+
+-- this reports on the number of events grouped into windows of 1s.
+-- TODO better would be a rolling recalculated average across the
+-- whole data-set
+arrivalRate = do
+  csvFile <- readFile csv
+  print   $ mkStream (map (splitOn ",") (lines csvFile))
+          & pebbleStream
+          & streamWindow (chopTime 1000)
+          & streamMap length
+          & unStream
