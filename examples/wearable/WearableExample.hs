@@ -247,6 +247,7 @@ pebbleStream rows = rows
           & streamExpand                     -- :: (Timestamp,PebbleMode60)
           & streamMap snd                    -- :: PebbleMode60
  
+-- answer is 918150
 numberOfSamples = do
   csvFile <- readFile csv
   print   $ mkStream (map (splitOn ",") (lines csvFile))
@@ -258,6 +259,7 @@ numberOfSamples = do
 -- this reports on the number of events grouped into windows of 1s.
 -- TODO better would be a rolling recalculated average across the
 -- whole data-set
+-- this reports 20Hz
 arrivalRate = do
   csvFile <- readFile csv
   print   $ mkStream (map (splitOn ",") (lines csvFile))
@@ -265,3 +267,25 @@ arrivalRate = do
           & streamWindow (chopTime 1000)
           & streamMap length
           & unStream
+          & last
+
+-- attempt a running average Hz
+-- answer is 7.65 Hz due to the huge outliers in the set
+arrivalRate' = do
+  csvFile <- readFile csv
+  mapM_ print   $ mkStream (map (splitOn ",") (lines csvFile))
+          & pebbleStream
+          & streamWindow (chopTime 1000)
+          & streamMap length
+          & streamScan (\(count,sum,_,_) n -> let
+            count' = count+1
+            sum' = sum+n
+            avg' = (fromIntegral sum') / (fromIntegral count')
+            in (count',sum',n,avg')) (0,0,0,0.0::Double)
+          & unStream
+          & last
+-- XXX the stream includes several 0-length windows emitted by
+-- chopTime. How is this possible?
+
+-- could we detect when the arrival rate dropped below a threshold
+-- (say 24Hz) and segment the data at that point?
