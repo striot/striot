@@ -263,13 +263,13 @@ arrivalRate csvFile = mkStream (map (splitOn ",") (lines csvFile))
                     & streamWindow (chopTime 1000)
                     & streamMap length
                     & unStream
-                    & last
 
 -- attempt a running average Hz
--- answer is 7.65 Hz due to the huge outliers in the set
+-- answer is 23.51 Hz
 arrivalRate' csvFile = mkStream (map (splitOn ",") (lines csvFile))
                      & pebbleStream
                      & streamWindow (chopTime 1000)
+                     & streamFilter (not . null) -- see below
                      & streamMap length
                      & streamScan (\(count,sum,_,_) n -> let
                        count' = count+1
@@ -277,9 +277,12 @@ arrivalRate' csvFile = mkStream (map (splitOn ",") (lines csvFile))
                        avg' = (fromIntegral sum') / (fromIntegral count')
                        in (count',sum',n,avg')) (0,0,0,0.0::Double)
                      & unStream
-                     & last
--- XXX the stream includes several 0-length windows emitted by
--- chopTime. How is this possible?
 
--- could we detect when the arrival rate dropped below a threshold
--- (say 24Hz) and segment the data at that point?
+-- chopTime emits 0-length lists for time intervals which do not have
+-- any events in them. I.e.,
+--  [10,10,10,40] & streamWindow (chopTime 10) => [[10,10,10],[],[],[40]]
+-- two empty lists emitted for the time intervals +20 and +30. These
+-- were emitted when the Event for interval +40 arrived.
+-- for arrivalRate', filtering out the empty lists means we are measuring
+-- the arrival rate of disjoint "sessions".
+-- We could look at segmenting the data into separate sessions
