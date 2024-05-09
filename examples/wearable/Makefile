@@ -1,4 +1,5 @@
-GHC := stack ghc -- -XTemplateHaskell
+GHC_PREFIX = stack
+GHC := $(GHC_PREFIX) ghc -- -XTemplateHaskell
 
 run: nodes
 	docker-compose up --build
@@ -28,6 +29,9 @@ Main: Main.hs
 node1/pebbleRawAccel_1806-02.csv: pebbleRawAccel_1806-02.csv
 	cp pebbleRawAccel_1806-02.csv node1
 
+bench:
+	$(GHC_PREFIX) runghc Criterion.hs -- --output Criterion.html
+
 clean:
 	rm -f \
 	    Main.hi Main.o \
@@ -39,7 +43,9 @@ clean:
 	    node1/pebbleRawAccel_1806-02.csv \
 	    node1/WearableExample.hs node2/WearableExample.hs node3/WearableExample.hs \
 	    node1/Dockerfile node2/Dockerfile node3/Dockerfile \
-	    compose.yml
+	    compose.yml \
+	    Criterion.html \
+	
 	-rmdir node1 node2 node3
 
-.PHONY: clean nodes gen
+.PHONY: clean nodes gen bench
