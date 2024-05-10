@@ -30,7 +30,7 @@ node1/pebbleRawAccel_1806-02.csv: pebbleRawAccel_1806-02.csv
 	cp pebbleRawAccel_1806-02.csv node1
 
 bench:
-	$(GHC_PREFIX) runghc Criterion.hs -- --output Criterion.html
+	$(GHC_PREFIX) runghc Criterion.hs -- --output Criterion.html $(bmark)
 
 clean:
 	rm -f \
