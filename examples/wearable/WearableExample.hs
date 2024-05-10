@@ -1,16 +1,37 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module WearableExample where
+module WearableExample ( sampleDataGenerator
+                       , PebbleMode60
+                       , graph
+                       , sampleInput
+                       , intSqrt
+                       , threshold
+
+                       , preSource
+                       , source
+                       , csvLineToPebbleMode60s
+                       , pebbleTimes
+
+                       , pebbleStream
+
+                       ) where
 
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
 import Striot.StreamGraph
 import Striot.Partition
 
+import Striot.Simple
+
 import Algebra.Graph
+import Control.Concurrent
+import Control.Monad (replicateM)
 import System.Random
 import System.IO
-import Data.Time (UTCTime)
+import System.Posix.IO -- openFd, OpenFileFlags, stdInput
+import Data.Function ((&))
+import Data.List.Split
+import Data.Time
 import Data.Time.Calendar
 import Data.Time.Clock
 
@@ -54,7 +75,7 @@ MATCH RECOGNIZE (MEASURES A AS ed1, B AS ed2 PATTERN (A B) DEFINE A AS (A.ed > T
 -}
 
 threshold :: Int
-threshold = 5000 -- made up number
+threshold = 100 -- made up number
 
 stepEvent :: Stream Int -> Stream Int -- input is (ed,ts)
 stepEvent s = streamFilterAcc (\last new -> new) 0 (\new last ->(last>threshold) && (new<=threshold)) s
@@ -137,24 +158,134 @@ main6 = do
   let rs = randomRs (0,99) g :: [Int]
   print.take 100 $ streamWindow (chopTime 120) $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
+sampleInput :: IO PebbleMode60
+sampleInput = do
+  rands <- replicateM 4 (getStdRandom (randomR (0,99)) :: IO Int)
+  let xyz = (rands !! 0, rands !! 1, rands !! 2)
+      vibe = fromEnum (rands !! 3 < 10)
+      payload = (xyz, vibe)
+  print $ "emitting " ++ (show payload)
+  threadDelay (1000*1000 `div` 25) -- sleep to approximate 25Hz emission rate
+  return payload
 
 -- corresponding to "main"
-graph = path
-  [ StreamVertex 1 (Source 1)      [[|sampleDataGenerator jan_1_1900_time 10 rs|]]
-                                                                             "IO ()"        "PebbleMode60"   1
+graph = path            -- 25 Hz, per Path2IOT paper
+  [ StreamVertex 1 (Source 25)      [[| sampleInput |]]
+                                                                             "IO ()"        "PebbleMode60"   25
+    -- from sample dataset, 11 vibe events in 918150 samples
+  , StreamVertex 2 (Filter (1-(11/918150))) [[| (\((x,y,z),vibe)->vibe == 0) |]] "PebbleMode60"  "PebbleMode60"  25
+
     -- edEvent (euclidean distance)
-  , StreamVertex 2 (Filter 0.5)    [[| (\((x,y,z),vibe)->vibe == 0) |]]      "PebbleMode60"  "PebbleMode60"  1
-  , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode60"  "(Int,Int,Int)" 1
-  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           (1/2)
+  , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode60"  "(Int,Int,Int)" 25
+  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           25
 
     -- stepEvent
   , StreamVertex 5 (FilterAcc 0.5) [[| (\last new -> new) |]
                                    ,[| 0 |]
                                    ,[| (\new last ->(last>threshold) && (new<=threshold)) |]
-                                   ]                                         "Int"           "Int"           10
+                                   ]                                         "Int"           "Int"           25
     -- stepCount
-  , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           0
-  , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           0
+  , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           25
+  , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           25
 
-  , StreamVertex 8 Sink            [[| print.take 100 |]]                    "Int"           "IO ()"         0
+  , StreamVertex 8 Sink            [[| mapM_ print |]]                    "Int"           "IO ()"         25
   ]
+
+------------------------------------------------------------------------------
+-- CSV stuff
+
+csv = "pebbleRawAccel_1806-02.csv"
+
+preSource = do
+    fd <- openFd csv ReadOnly Nothing (OpenFileFlags False False False False False)
+    dupTo fd stdInput
+
+-- each line has a timestamp followed by ten readings
+csvLineToPebbleMode60s :: [String] -> [(Timestamp,PebbleMode60)]
+csvLineToPebbleMode60s (timestamp:fields) =
+  let ts = parseTimeField timestamp
+  in take 10
+    $ map (\(x:y:z:w:[]) -> (ts,((x,y,z),w)))
+    $ chunksOf 4
+    $ map (read :: String -> Int)
+    $ fields
+
+{- 1529718763606 in milliseconds =
+   Saturday, 23 June 2018 01:52:43.606 UTC
+   See also
+   https://www.williamyaoh.com/posts/2019-09-16-time-cheatsheet.html
+ -}
+
+-- convert CSV timestamp field (ms since epoch) to Timestamp
+parseTimeField :: String -> UTCTime
+parseTimeField timestamp = let -- s is e.g. "1529718763606"
+  (sS,mS) = splitAt 10 timestamp
+  ts = parseTimeOrError True defaultTimeLocale "%s" sS  :: UTCTime
+  ms = parseTimeOrError True defaultTimeLocale "%s" ("0.00"++mS)
+  in addUTCTime ms ts
+
+source = do
+  threadDelay 1000 -- µs
+  getLine >>= return . csvLineToPebbleMode60s . splitOn ","
+
+-- special window maker to set event timestamps from source data
+pebbleTimes :: WindowMaker (Timestamp,PebbleMode60)
+pebbleTimes = map (\(Event _ v) -> [Event (fmap fst v) v])
+
+------------------------------------------------------------------------------
+-- Explore the data-set using the Simple interface
+--
+-- mkStream :: [a] -> Stream a
+-- unStream :: Stream a -> [a]
+
+-- common bit of stream processing for the functions that follow.
+-- this unpacks the ten readings on each CSV line into separate
+-- `Event PebbleMode60` with Event timestamps corresponding to the
+-- dataset.`
+pebbleStream :: Stream [String] -> Stream PebbleMode60
+pebbleStream rows = rows 
+          & streamMap csvLineToPebbleMode60s
+          & streamExpand                     -- :: (Timestamp,PebbleMode60)
+          & streamWindow pebbleTimes         -- :: [(Timestamp,PebbleMode60)]
+          & streamExpand                     -- :: (Timestamp,PebbleMode60)
+          & streamMap snd                    -- :: PebbleMode60
+ 
+-- answer is 918150
+numberOfSamples csvFile = mkStream (map (splitOn ",") (lines csvFile))
+                        & pebbleStream
+                        & streamScan (\c _ -> c+1) 0
+                        & unStream
+                        & last
+
+-- this reports on the number of events grouped into windows of 1s.
+-- TODO better would be a rolling recalculated average across the
+-- whole data-set
+-- this reports 20Hz
+arrivalRate csvFile = mkStream (map (splitOn ",") (lines csvFile))
+                    & pebbleStream
+                    & streamWindow (chopTime 1000)
+                    & streamMap length
+                    & unStream
+
+-- attempt a running average Hz
+-- answer is 23.51 Hz
+arrivalRate' csvFile = mkStream (map (splitOn ",") (lines csvFile))
+                     & pebbleStream
+                     & streamWindow (chopTime 1000)
+                     & streamFilter (not . null) -- see below
+                     & streamMap length
+                     & streamScan (\(count,sum,_,_) n -> let
+                       count' = count+1
+                       sum' = sum+n
+                       avg' = (fromIntegral sum') / (fromIntegral count')
+                       in (count',sum',n,avg')) (0,0,0,0.0::Double)
+                     & unStream
+
+-- chopTime emits 0-length lists for time intervals which do not have
+-- any events in them. I.e.,
+--  [10,10,10,40] & streamWindow (chopTime 10) => [[10,10,10],[],[],[40]]
+-- two empty lists emitted for the time intervals +20 and +30. These
+-- were emitted when the Event for interval +40 arrived.
+-- for arrivalRate', filtering out the empty lists means we are measuring
+-- the arrival rate of disjoint "sessions".
+-- We could look at segmenting the data into separate sessions
