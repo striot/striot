@@ -25,7 +25,7 @@ Main: Main.hs
 	$(GHC) -i../../src Main.hs
 
 bench:
-	$(GHC_PREFIX) runghc Criterion.hs -- --output Criterion.html
+	$(GHC_PREFIX) runghc Criterion.hs -- --output Criterion.html $(bmark)
 
 clean:
 	rm -f \
