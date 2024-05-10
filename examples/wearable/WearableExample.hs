@@ -11,6 +11,9 @@ module WearableExample ( sampleDataGenerator
                        , source
                        , csvLineToPebbleMode60s
                        , pebbleTimes
+
+                       , pebbleStream
+
                        ) where
 
 import Striot.FunctionalIoTtypes

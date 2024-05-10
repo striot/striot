@@ -1,13 +1,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-
-import WearableExample
-import Criterion.Main
-import Data.Time -- UTCTime
-import Data.Time.Calendar -- Day
-import Data.Function ((&))
-import Striot.Simple
 import Control.DeepSeq
+import Criterion.Main
+import Data.Function ((&))
+import Data.List.Split
+import Data.Time.Calendar -- Day
+import Data.Time -- UTCTime
+import Striot.Simple
+import System.IO.Strict (readFile)
+import WearableExample
 
 ------------------------------------------------------------------------------
 
@@ -50,28 +51,40 @@ instance NFData a => NFData (Event a) where
 
 ------------------------------------------------------------------------------
 
-main = defaultMain [
-  bgroup "wearable" [ bench "vibeFilterYes" $ whnf vibeFilter ((0,0,0),0)
-                    , bench "vibeFilterNo"  $ whnf vibeFilter ((0,0,0),1)
-                    ]
- ,bgroup "squares"  [ bench "squares1"      $ whnf squares ((1,1,1),0)
-                    , bench "squares4"      $ whnf squares ((4,4,4),0)
-                    ]
- ,bgroup "intsqrt"  [ bench "intsqrt0"      $ whnf appIntSqrt (0,0,0)
-                    , bench "intsqrt1"      $ whnf appIntSqrt (1,1,1)
-                    , bench "intsqrt8"      $ whnf appIntSqrt (8,8,8)
-                    ] 
- ,bgroup "filterAcc"[ bench "filterAcc1"    $ whnf filterThresh (50, 0)
-                    , bench "filterAcc2"    $ whnf filterThresh (50, 120)
-                    , bench "filterAcc3"    $ whnf filterThresh (150,120)
-                    ]
+main = do
 
-  -- nf to fully evaluate constructors, ideally precalc away the cost of snoc
- ,bgroup "chopTime" [ bench "chopTimeIn"    $ nf chopTime120 inEvent
-                    , bench "chopTimeOut"   $ nf chopTime120 outEvent
-                    ]
+  let csv = "pebbleRawAccel_1806-02.csv"
+  csvFile <- System.IO.Strict.readFile csv
+  let str = mkStream (map (splitOn ",") (lines csvFile))
+          & pebbleStream  -- Stream PebbleMode60
 
- ,bgroup "length"   [ bench "length25"      $ whnf length (take 25 [0..])
-                    , bench "length24"      $ whnf length (take 24 [0..])
-                    ]
-  ]
+  -- belt and braces
+  print $ str `deepseq` "CSV loaded"
+
+  defaultMain [
+    bgroup "vibe"     [ bench "vibeFilterYes" $ whnf vibeFilter ((0,0,0),0)
+                      , bench "vibeFilterNo"  $ whnf vibeFilter ((0,0,0),1)
+                      ]
+   ,bgroup "vibeIO"   [ bench "vibeFilter"    $ nf (map vibeFilter) (unStream str)
+                      ]
+   ,bgroup "squares"  [ bench "squares1"      $ whnf squares ((1,1,1),0)
+                      , bench "squares4"      $ whnf squares ((4,4,4),0)
+                      ]
+   ,bgroup "intsqrt"  [ bench "intsqrt0"      $ whnf appIntSqrt (0,0,0)
+                      , bench "intsqrt1"      $ whnf appIntSqrt (1,1,1)
+                      , bench "intsqrt8"      $ whnf appIntSqrt (8,8,8)
+                      ] 
+   ,bgroup "filterAcc"[ bench "filterAcc1"    $ whnf filterThresh (50, 0)
+                      , bench "filterAcc2"    $ whnf filterThresh (50, 120)
+                      , bench "filterAcc3"    $ whnf filterThresh (150,120)
+                      ]
+
+    -- nf to fully evaluate constructors, ideally precalc away the cost of snoc
+   ,bgroup "chopTime" [ bench "chopTimeIn"    $ nf chopTime120 inEvent
+                      , bench "chopTimeOut"   $ nf chopTime120 outEvent
+                      ]
+
+   ,bgroup "length"   [ bench "length25"      $ whnf length (take 25 [0..])
+                      , bench "length24"      $ whnf length (take 24 [0..])
+                      ]
+    ]
