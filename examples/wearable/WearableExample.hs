@@ -30,6 +30,7 @@ import System.Random
 import System.IO
 import System.Posix.IO -- openFd, OpenFileFlags, stdInput
 import Data.Function ((&))
+import Data.List -- intercalate
 import Data.List.Split
 import Data.Time
 import Data.Time.Calendar
@@ -210,6 +211,20 @@ csvLineToPebbleMode60s (timestamp:fields) =
     $ map (read :: String -> Int)
     $ fields
 
+-- csvLines :: [String]
+-- csvLines <- return . lines =<< readFile csv
+
+-- produce one-record-per-line CSV for easier debugging
+csvLineToRecordLines :: String -> [[String]]
+csvLineToRecordLines line = let
+  ts:fields = splitOn "," line
+  in fields & chunksOf 4 & take 10 & map (ts:)
+
+recordLineToPebbleMode60 csv = let
+  [x,y,z,v] = map (read :: String -> Int) (tail csv)
+  ts = parseTimeField (head csv)
+  in (ts,((x,y,z),v))
+
 {- 1529718763606 in milliseconds =
    Saturday, 23 June 2018 01:52:43.606 UTC
    See also
@@ -237,6 +252,9 @@ pebbleTimes = map (\(Event _ v) -> [Event (fmap fst v) v])
 --
 -- mkStream :: [a] -> Stream a
 -- unStream :: Stream a -> [a]
+
+-- GHCi:
+-- csvFile <- readFile csv
 
 -- common bit of stream processing for the functions that follow.
 -- this unpacks the ten readings on each CSV line into separate
@@ -280,6 +298,42 @@ arrivalRate' csvFile = mkStream (map (splitOn ",") (lines csvFile))
                        avg' = (fromIntegral sum') / (fromIntegral count')
                        in (count',sum',n,avg')) (0,0,0,0.0::Double)
                      & unStream
+
+-- as above, but consuming the one-record-per-line format
+-- don't need to bother with PebbleMode60
+-- but perhaps DO need to do some Event timestamp remapping
+
+-- let lines = concatMap csvLineToRecordLines csvLines
+
+-- receives: csvLines
+arrivalRate'' lines = lines
+                    & concatMap csvLineToRecordLines
+                    & mkStream
+                    -- copy data timestamp to Event
+                    & streamWindow pebbleTimes' & streamExpand
+                    -- make all fields Ints for convenience?
+                    & streamMap (map (read :: String -> Int))
+                    & streamWindow (chopTime 1000)
+                    -- NOTE : not filtering empty lists this time
+
+                    ---- give each window an ID
+                    -- & streamScan (\(i,_) w -> (i+1,w)) (0,undefined)
+
+                    -- give each window a 'session' ID. Empty windows
+                    -- trigger a new session. Needs a bit more work...
+
+                    & streamScan (\(i,lastw) w -> let
+                      thisWindowFull  = not (null w)
+                      lastWindowEmpty = null lastw
+                      sId = if thisWindowFull && lastWindowEmpty
+                            then i+1 else i
+                      in (sId,w))
+                      (0,[])
+
+                    & unStream
+
+pebbleTimes' :: WindowMaker [String]
+pebbleTimes' = map $ \(Event _ d) -> [ Event (fmap (parseTimeField . head) d) d ]
 
 -- chopTime emits 0-length lists for time intervals which do not have
 -- any events in them. I.e.,
