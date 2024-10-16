@@ -309,31 +309,29 @@ arrivalRate' csvFile = mkStream (map (splitOn ",") (lines csvFile))
 arrivalRate'' lines = lines
                     & concatMap csvLineToRecordLines
                     & mkStream
+                    & streamMap recordLineToPebbleMode60
+
                     -- copy data timestamp to Event
-                    & streamWindow pebbleTimes' & streamExpand
-                    -- make all fields Ints for convenience?
-                    & streamMap (map (read :: String -> Int))
+                    & streamWindow pebbleTimes & streamExpand
+
                     & streamWindow (chopTime 1000)
                     -- NOTE : not filtering empty lists this time
 
-                    ---- give each window an ID
-                    -- & streamScan (\(i,_) w -> (i+1,w)) (0,undefined)
-
                     -- give each window a 'session' ID. Empty windows
-                    -- trigger a new session. Needs a bit more work...
-
+                    -- trigger a new session.
                     & streamScan (\(i,lastw) w -> let
-                      thisWindowFull  = not (null w)
+                      thisWindowEmpty = null w
                       lastWindowEmpty = null lastw
-                      sId = if thisWindowFull && lastWindowEmpty
-                            then i+1 else i
+                      xor = (/=)
+
+                      sId = if thisWindowEmpty `xor` lastWindowEmpty
+                            then i+1
+                            else i
+  
                       in (sId,w))
                       (0,[])
 
                     & unStream
-
-pebbleTimes' :: WindowMaker [String]
-pebbleTimes' = map $ \(Event _ d) -> [ Event (fmap (parseTimeField . head) d) d ]
 
 -- chopTime emits 0-length lists for time intervals which do not have
 -- any events in them. I.e.,
