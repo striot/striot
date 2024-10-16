@@ -335,6 +335,9 @@ arrivalRate'' lines = lines
                       in (sId,max lasti sId,w))
                       (0,0,[])
 
+                    & streamMap (\(sId, oldSiD, w) -> (sId,w))
+                    & streamFilter ((>0) . fst)
+
                     & unStream
 
 -- chopTime emits 0-length lists for time intervals which do not have
