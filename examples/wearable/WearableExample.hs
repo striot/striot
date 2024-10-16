@@ -318,18 +318,22 @@ arrivalRate'' lines = lines
                     -- NOTE : not filtering empty lists this time
 
                     -- give each window a 'session' ID. Empty windows
-                    -- trigger a new session.
-                    & streamScan (\(i,lastw) w -> let
+                    -- are assigned session 0. Accumulator type:
+                    --  - current window ID
+                    --  - latest non-0 window ID
+                    --  - payload
+                    & streamScan (\(i,lasti,lastw) w -> let
                       thisWindowEmpty = null w
                       lastWindowEmpty = null lastw
                       xor = (/=)
 
                       sId = if thisWindowEmpty `xor` lastWindowEmpty
-                            then i+1
+                            then if   thisWindowEmpty
+                                 then 0
+                                 else lasti+1
                             else i
-  
-                      in (sId,w))
-                      (0,[])
+                      in (sId,max lasti sId,w))
+                      (0,0,[])
 
                     & unStream
 
