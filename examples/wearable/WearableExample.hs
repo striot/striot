@@ -301,7 +301,7 @@ arrivalRate' csvFile = mkStream (map (splitOn ",") (lines csvFile))
 
 -- convert csvLines into one-PebbleMode60-per-line with corrected
 -- Event timestamps, collects 1000s windows and assigned a 'session
--- ID' (0-length windows break sessions up).
+-- ID' (0-length windows break sessions up). Discard empty windows.
 windowSession lines = lines
                     & concatMap csvLineToRecordLines
                     & mkStream
@@ -332,8 +332,8 @@ windowSession lines = lines
                       (0,0,[])
 
                     & streamMap (\(sId, oldSiD, w) -> (sId,w))
-                    -- discard empty windows (disabled)
-                    -- & streamFilter ((>0) . fst)
+                    -- discard empty windows
+                    & streamFilter ((>0) . fst)
 
 -- chopTime emits 0-length lists for time intervals which do not have
 -- any events in them. I.e.,
