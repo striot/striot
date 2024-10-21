@@ -348,21 +348,34 @@ windowSession lines = lines
 -- session spans.
 -- Start by collecting the start time
 
-dummyTS = read "0000-01-01 00:00:00 +0000" :: Timestamp
+dummyTS = read "0000-01-01 00:00:00.00000 +0000" :: Timestamp
 
 getFirstTs :: (a, [(Timestamp, PebbleMode60)]) -> Timestamp
 getFirstTs (_, []) = dummyTS
 getFirstTs (_, ws) = fst (head ws)
 
+getLastTs :: (a, [(Timestamp, PebbleMode60)]) -> Timestamp
+getLastTs (_, []) = dummyTS
+getLastTs (_, ws) = fst (last ws)
+
+fst3 (x,_,_) = x
+snd3 (_,x,_) = x
+
+groupBySessionId :: WindowMaker (Int, Timestamp, Timestamp)
+groupBySessionId = groupBy (\e f -> fmap fst3 (value e) == fmap fst3 (value f))
+
 sessionLength ws = ws
                  -- temporarily throw away the actual data
                  & streamScan (\oldw w -> let
                    -- is this a new session?
-                   start = if   fst oldw /= fst w
+                   start = if   fst3 oldw /= fst w
                            then getFirstTs w
-                           else snd oldw
-                   in  (fst w, start)
+                           else snd3 oldw
+                   end = getLastTs w
+                   in  (fst w, start, end)
                    )
-                   (0, undefined)
+                   (0, undefined, undefined)
 
-                 & unStream
+                 -- only emit the last event for a given session ID
+                 & streamWindow groupBySessionId
+                 & streamMap last
