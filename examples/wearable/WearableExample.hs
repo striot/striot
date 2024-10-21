@@ -299,14 +299,10 @@ arrivalRate' csvFile = mkStream (map (splitOn ",") (lines csvFile))
                        in (count',sum',n,avg')) (0,0,0,0.0::Double)
                      & unStream
 
--- as above, but consuming the one-record-per-line format
--- don't need to bother with PebbleMode60
--- but perhaps DO need to do some Event timestamp remapping
-
--- let lines = concatMap csvLineToRecordLines csvLines
-
--- receives: csvLines
-arrivalRate'' lines = lines
+-- convert csvLines into one-PebbleMode60-per-line with corrected
+-- Event timestamps, collects 1000s windows and assigned a 'session
+-- ID' (0-length windows break sessions up).
+windowSession lines = lines
                     & concatMap csvLineToRecordLines
                     & mkStream
                     & streamMap recordLineToPebbleMode60
@@ -336,9 +332,8 @@ arrivalRate'' lines = lines
                       (0,0,[])
 
                     & streamMap (\(sId, oldSiD, w) -> (sId,w))
-                    & streamFilter ((>0) . fst)
-
-                    & unStream
+                    -- discard empty windows (disabled)
+                    -- & streamFilter ((>0) . fst)
 
 -- chopTime emits 0-length lists for time intervals which do not have
 -- any events in them. I.e.,
@@ -348,3 +343,26 @@ arrivalRate'' lines = lines
 -- for arrivalRate', filtering out the empty lists means we are measuring
 -- the arrival rate of disjoint "sessions".
 -- We could look at segmenting the data into separate sessions
+
+-- receive session-ID-labelled windows; determine how long each
+-- session spans.
+-- Start by collecting the start time
+
+dummyTS = read "0000-01-01 00:00:00 +0000" :: Timestamp
+
+getFirstTs :: (a, [(Timestamp, PebbleMode60)]) -> Timestamp
+getFirstTs (_, []) = dummyTS
+getFirstTs (_, ws) = fst (head ws)
+
+sessionLength ws = ws
+                 -- temporarily throw away the actual data
+                 & streamScan (\oldw w -> let
+                   -- is this a new session?
+                   start = if   fst oldw /= fst w
+                           then getFirstTs w
+                           else snd oldw
+                   in  (fst w, start)
+                   )
+                   (0, undefined)
+
+                 & unStream
