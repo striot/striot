@@ -35,6 +35,7 @@ import Data.List.Split
 import Data.Time
 import Data.Time.Calendar
 import Data.Time.Clock
+import Data.Fixed
 
 type AccelVal = Int
 
@@ -392,24 +393,24 @@ sessionDelta ws = ws
                   lastSessionEnd = fth4 oldw
                   sessionEnd     = thd3 w
                   sessionStart   = snd3 w
-                  delta          = diffUTCTime sessionStart lastSessionEnd
+                  delta          = ( picoToInt
+                                   . nominalDiffTimeToSeconds
+                                   . diffUTCTime sessionStart) lastSessionEnd
                   sId            = fst3 w
                   in (sId, delta, sessionStart, sessionEnd)
                 )
                 ( let sId          = 0
-                      delta        = 0 :: NominalDiffTime
+                      delta        = 0 :: Int
                       sessionStart = dummyTS
                       sessionEnd   = dummyTS
                   in (sId, delta, sessionStart, sessionEnd))
+
                 -- temporarily throw away some fields for clarity
                 & streamMap (\(w,x,y,z) -> (w,x))
-
+ 
+picoToInt :: {- Data.Fixed. -} Pico -> Int
 picoToInt p = let
   (i, f) = properFraction p
   in if   f >= 0.5
      then i + 1
      else i
-
-sessionDelta' ws = sessionDelta ws
-                 & streamMap (\(sId, d) -> 
-                    (sId, picoToInt (nominalDiffTimeToSeconds d), d))
