@@ -403,3 +403,13 @@ sessionDelta ws = ws
                   in (sId, delta, sessionStart, sessionEnd))
                 -- temporarily throw away some fields for clarity
                 & streamMap (\(w,x,y,z) -> (w,x))
+
+picoToInt p = let
+  (i, f) = properFraction p
+  in if   f >= 0.5
+     then i + 1
+     else i
+
+sessionDelta' ws = sessionDelta ws
+                 & streamMap (\(sId, d) -> 
+                    (sId, picoToInt (nominalDiffTimeToSeconds d), d))
