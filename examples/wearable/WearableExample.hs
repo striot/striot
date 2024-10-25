@@ -360,6 +360,9 @@ getLastTs (_, ws) = fst (last ws)
 
 fst3 (x,_,_) = x
 snd3 (_,x,_) = x
+thd3 (_,_,x) = x
+
+fth4 (_,_,_,x) = x
 
 groupBySessionId :: WindowMaker (Int, Timestamp, Timestamp)
 groupBySessionId = groupBy (\e f -> fmap fst3 (value e) == fmap fst3 (value f))
@@ -379,3 +382,24 @@ sessionLength ws = ws
                  -- only emit the last event for a given session ID
                  & streamWindow groupBySessionId
                  & streamMap last
+
+
+
+-- sessionDelta: calculate the time difference since the previous
+-- session closed. Value for first session will be bogus
+sessionDelta ws = ws
+                & streamScan (\oldw w -> let
+                  lastSessionEnd = fth4 oldw
+                  sessionEnd     = thd3 w
+                  sessionStart   = snd3 w
+                  delta          = diffUTCTime sessionStart lastSessionEnd
+                  sId            = fst3 w
+                  in (sId, delta, sessionStart, sessionEnd)
+                )
+                ( let sId          = 0
+                      delta        = 0 :: NominalDiffTime
+                      sessionStart = dummyTS
+                      sessionEnd   = dummyTS
+                  in (sId, delta, sessionStart, sessionEnd))
+                -- temporarily throw away some fields for clarity
+                & streamMap (\(w,x,y,z) -> (w,x))
