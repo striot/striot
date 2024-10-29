@@ -438,5 +438,18 @@ addSession lines = lines
     )
     (0, dummyTS, ((0,0,0),0))
 
-  -- to simplify debugging/output
-  & unStream
+selectSession sId = streamFilter ((==sId) . fst3)
+
+-- another arrival rate, this time consuming the output of addSession
+-- or selectSession
+
+arrivalRate'' :: Stream a -> [(Int, Int, Int, Double)]
+arrivalRate'' s = s
+                & streamWindow (chopTime 1000)
+                & streamMap length
+                & streamScan (\(count,sum,_,_) n -> let
+                  count' = count+1
+                  sum' = sum+n
+                  avg' = (fromIntegral sum') / (fromIntegral count')
+                  in (count',sum',n,avg')) (0,0,0,0.0::Double)
+                & unStream
