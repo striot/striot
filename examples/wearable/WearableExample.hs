@@ -261,13 +261,12 @@ pebbleTimes = map (\(Event _ v) -> [Event (fmap fst v) v])
 -- this unpacks the ten readings on each CSV line into separate
 -- `Event PebbleMode60` with Event timestamps corresponding to the
 -- dataset.`
-pebbleStream :: Stream [String] -> Stream PebbleMode60
+pebbleStream :: Stream [String] -> Stream (Timestamp, PebbleMode60)
 pebbleStream rows = rows 
           & streamMap csvLineToPebbleMode60s
           & streamExpand                     -- :: (Timestamp,PebbleMode60)
           & streamWindow pebbleTimes         -- :: [(Timestamp,PebbleMode60)]
           & streamExpand                     -- :: (Timestamp,PebbleMode60)
-          & streamMap snd                    -- :: PebbleMode60
  
 -- answer is 918150
 numberOfSamples csvFile = mkStream (map (splitOn ",") (lines csvFile))
@@ -303,6 +302,7 @@ arrivalRate' csvFile = mkStream (map (splitOn ",") (lines csvFile))
 -- convert csvLines into one-PebbleMode60-per-line with corrected
 -- Event timestamps, collects 1000s windows and assigned a 'session
 -- ID' (0-length windows break sessions up). Discard empty windows.
+windowSession :: [String] -> Stream (Int, [(Timestamp, PebbleMode60)])
 windowSession lines = lines
                     & concatMap csvLineToRecordLines
                     & mkStream
@@ -368,6 +368,7 @@ fth4 (_,_,_,x) = x
 groupBySessionId :: WindowMaker (Int, Timestamp, Timestamp)
 groupBySessionId = groupBy (\e f -> fmap fst3 (value e) == fmap fst3 (value f))
 
+sessionLength :: Stream (Int, [(Timestamp, PebbleMode60)]) -> Stream (Int, Timestamp, Timestamp)
 sessionLength ws = ws
                  -- temporarily throw away the actual data
                  & streamScan (\oldw w -> let
@@ -388,6 +389,8 @@ sessionLength ws = ws
 
 -- sessionDelta: calculate the time difference since the previous
 -- session closed. Value for first session will be bogus
+
+sessionDelta  :: Stream (Int, Timestamp, Timestamp) -> Stream (Int, Int)
 sessionDelta ws = ws
                 & streamScan (\oldw w -> let
                   lastSessionEnd = fth4 oldw
@@ -419,6 +422,7 @@ picoToInt p = let
 
 -- add a session ID label to each sample. Sessions are delineated by
 -- intervals of 15 minutes or longer between successive samples.
+addSession :: [String] -> Stream (Int, Timestamp, PebbleMode60)
 addSession lines = lines
   & concatMap csvLineToRecordLines
   & mkStream
