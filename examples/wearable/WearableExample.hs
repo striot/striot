@@ -414,3 +414,29 @@ picoToInt p = let
   in if   f >= 0.5
      then i + 1
      else i
+
+------------------------------------------------------------------------------
+
+-- add a session ID label to each sample. Sessions are delineated by
+-- intervals of 15 minutes or longer between successive samples.
+addSession lines = lines
+  & concatMap csvLineToRecordLines
+  & mkStream
+  & streamMap recordLineToPebbleMode60
+  -- copy data timestamp to Event
+  & streamWindow pebbleTimes & streamExpand
+
+  -- add a session ID.
+  & streamScan
+    (\(oldSId, oldTS, _) (ts,payload) -> let
+      interval = 15 * 60 -- 15 minutes
+      sId      = if   diffUTCTime ts oldTS > interval
+                 then oldSId + 1
+                 else oldSId
+
+      in (sId, ts,payload)
+    )
+    (0, dummyTS, ((0,0,0),0))
+
+  -- to simplify debugging/output
+  & unStream
