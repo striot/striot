@@ -261,43 +261,98 @@ pebbleTimes = map (\(Event _ v) -> [Event (fmap fst v) v])
 -- this unpacks the ten readings on each CSV line into separate
 -- `Event PebbleMode60` with Event timestamps corresponding to the
 -- dataset.`
-pebbleStream :: Stream [String] -> Stream (Timestamp, PebbleMode60)
-pebbleStream rows = rows 
-          & streamMap csvLineToPebbleMode60s
-          & streamExpand                     -- :: (Timestamp,PebbleMode60)
+pebbleStream :: String -> Stream (Timestamp, PebbleMode60)
+pebbleStream str = str
+          & lines
+          & concatMap csvLineToRecordLines
+          & mkStream
+          & streamMap recordLineToPebbleMode60
           & streamWindow pebbleTimes         -- :: [(Timestamp,PebbleMode60)]
           & streamExpand                     -- :: (Timestamp,PebbleMode60)
  
--- answer is 918150
-numberOfSamples csvFile = mkStream (map (splitOn ",") (lines csvFile))
-                        & pebbleStream
-                        & streamScan (\c _ -> c+1) 0
-                        & unStream
-                        & last
+-- λ> pebbleStream csvFile & numberOfSamples 
+-- 918150
+numberOfSamples :: Stream (Timestamp, PebbleMode60) -> Int
+numberOfSamples str = str
+                    & streamScan (\c _ -> c+1) 0
+                    & unStream
+                    & last
 
 -- this reports on the number of events grouped into windows of 1s.
 -- TODO better would be a rolling recalculated average across the
 -- whole data-set
 -- this reports 20Hz
-arrivalRate csvFile = mkStream (map (splitOn ",") (lines csvFile))
-                    & pebbleStream
-                    & streamWindow (chopTime 1000)
-                    & streamMap length
-                    & unStream
+arrivalRate :: Stream a -> Int
+arrivalRate str = str
+                & streamWindow (chopTime 1000)
+                & streamMap length
+                & unStream
+                & last
 
--- attempt a running average Hz
--- answer is 23.51 Hz
-arrivalRate' csvFile = mkStream (map (splitOn ",") (lines csvFile))
-                     & pebbleStream
-                     & streamWindow (chopTime 1000)
-                     & streamFilter (not . null) -- see below
-                     & streamMap length
-                     & streamScan (\(count,sum,_,_) n -> let
-                       count' = count+1
-                       sum' = sum+n
-                       avg' = (fromIntegral sum') / (fromIntegral count')
-                       in (count',sum',n,avg')) (0,0,0,0.0::Double)
-                     & unStream
+-- running average Hz
+-- λ> pebbleStream csvFile & arrivalRate'
+-- 23.51336816226183
+-- chopTime emits 0-length lists for time intervals which do not have
+-- any events in them. I.e.,
+--  [10,10,10,40] & streamWindow (chopTime 10) => [[10,10,10],[],[],[40]]
+-- two empty lists emitted for the time intervals +20 and +30. These
+-- were emitted when the Event for interval +40 arrived.
+-- filtering out the empty lists means we are measuring
+-- the combined arrival rate of disjoint "sessions".
+arrivalRate' :: Stream a -> Double
+arrivalRate' str = str
+                 & streamWindow (chopTime 1000)
+                 & streamFilter (not . null) -- see above
+                 & streamMap length
+                 & streamScan (\(count,sum,_,_) n -> let
+                   count' = count+1
+                   sum' = sum+n
+                   avg' = (fromIntegral sum') / (fromIntegral count')
+                   in (count',sum',n,avg')) (0,0,0,0.0::Double)
+                 & streamMap fth4
+                 & unStream
+                 & last
+
+-- another arrivalRate, this time don't filter out empty windows.
+-- For the whole CSV: 7.651951428880981
+-- For example sub-"sessions":
+--    1 20.947272312257475
+--    2 20.89397496087637
+--    3 18.902333621434746
+--    4 23.577981651376145
+--    5 20.6850436681222
+--    6 12.249488752556237
+arrivalRate'' :: Stream a -> Double
+arrivalRate'' s = s
+                & streamWindow (chopTime 1000)
+                & streamMap length
+                & streamScan (\(count,sum,_,_) n -> let
+                  count' = count+1
+                  sum' = sum+n
+                  avg' = (fromIntegral sum') / (fromIntegral count')
+                  in (count',sum',n,avg')) (0,0,0,0.0::Double)
+                & streamMap fth4
+                & unStream
+                & last
+
+-- add a session ID label to each sample. Sessions are delineated by
+-- intervals of 15 minutes or longer between successive samples.
+addSession :: Stream (Timestamp, PebbleMode60) -> Stream (Int, Timestamp, PebbleMode60)
+addSession = streamScan
+    (\(oldSId, oldTS, _) (ts,payload) -> let
+      interval = 15 * 60 -- 15 minutes
+      sId      = if   diffUTCTime ts oldTS > interval
+                 then oldSId + 1
+                 else oldSId
+
+      in (sId, ts, payload)
+    )
+    (0, dummyTS, ((0,0,0),0))
+
+selectSession sId = streamFilter ((==sId) . fst3)
+
+------------------------------------------------------------------------------
+-- functions that operate on batches of samples
 
 -- convert csvLines into one-PebbleMode60-per-line with corrected
 -- Event timestamps, collects 1000s windows and assigned a 'session
@@ -336,19 +391,6 @@ windowSession lines = lines
                     -- discard empty windows
                     & streamFilter ((>0) . fst)
 
--- chopTime emits 0-length lists for time intervals which do not have
--- any events in them. I.e.,
---  [10,10,10,40] & streamWindow (chopTime 10) => [[10,10,10],[],[],[40]]
--- two empty lists emitted for the time intervals +20 and +30. These
--- were emitted when the Event for interval +40 arrived.
--- for arrivalRate', filtering out the empty lists means we are measuring
--- the arrival rate of disjoint "sessions".
--- We could look at segmenting the data into separate sessions
-
--- receive session-ID-labelled windows; determine how long each
--- session spans.
--- Start by collecting the start time
-
 dummyTS = read "0000-01-01 00:00:00.00000 +0000" :: Timestamp
 
 getFirstTs :: (a, [(Timestamp, PebbleMode60)]) -> Timestamp
@@ -368,6 +410,8 @@ fth4 (_,_,_,x) = x
 groupBySessionId :: WindowMaker (Int, Timestamp, Timestamp)
 groupBySessionId = groupBy (\e f -> fmap fst3 (value e) == fmap fst3 (value f))
 
+-- receive session-ID-labelled windows; determine how long each
+-- session spans.
 sessionLength :: Stream (Int, [(Timestamp, PebbleMode60)]) -> Stream (Int, Timestamp, Timestamp)
 sessionLength ws = ws
                  -- temporarily throw away the actual data
@@ -384,8 +428,6 @@ sessionLength ws = ws
                  -- only emit the last event for a given session ID
                  & streamWindow groupBySessionId
                  & streamMap last
-
-
 
 -- sessionDelta: calculate the time difference since the previous
 -- session closed. Value for first session will be bogus
@@ -411,7 +453,7 @@ sessionDelta ws = ws
                 -- temporarily throw away some fields for clarity
                 & streamMap (\(w,x,y,z) -> (w,x))
  
-picoToInt :: {- Data.Fixed. -} Pico -> Int
+picoToInt :: Pico -> Int
 picoToInt p = let
   (i, f) = properFraction p
   in if   f >= 0.5
@@ -419,41 +461,3 @@ picoToInt p = let
      else i
 
 ------------------------------------------------------------------------------
-
--- add a session ID label to each sample. Sessions are delineated by
--- intervals of 15 minutes or longer between successive samples.
-addSession :: [String] -> Stream (Int, Timestamp, PebbleMode60)
-addSession lines = lines
-  & concatMap csvLineToRecordLines
-  & mkStream
-  & streamMap recordLineToPebbleMode60
-  -- copy data timestamp to Event
-  & streamWindow pebbleTimes & streamExpand
-
-  -- add a session ID.
-  & streamScan
-    (\(oldSId, oldTS, _) (ts,payload) -> let
-      interval = 15 * 60 -- 15 minutes
-      sId      = if   diffUTCTime ts oldTS > interval
-                 then oldSId + 1
-                 else oldSId
-
-      in (sId, ts,payload)
-    )
-    (0, dummyTS, ((0,0,0),0))
-
-selectSession sId = streamFilter ((==sId) . fst3)
-
--- another arrival rate, this time consuming the output of addSession
--- or selectSession
-
-arrivalRate'' :: Stream a -> [(Int, Int, Int, Double)]
-arrivalRate'' s = s
-                & streamWindow (chopTime 1000)
-                & streamMap length
-                & streamScan (\(count,sum,_,_) n -> let
-                  count' = count+1
-                  sum' = sum+n
-                  avg' = (fromIntegral sum') / (fromIntegral count')
-                  in (count',sum',n,avg')) (0,0,0,0.0::Double)
-                & unStream
