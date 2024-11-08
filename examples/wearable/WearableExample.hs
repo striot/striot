@@ -37,6 +37,8 @@ import Data.Time.Calendar
 import Data.Time.Clock
 import Data.Fixed
 
+import qualified Data.IntMap.Strict as M
+
 type AccelVal = Int
 
 type Accelerometer = (AccelVal,AccelVal,AccelVal) -- X,Y,Z accelerometer values
@@ -350,6 +352,13 @@ selectSession sId = streamFilter ((==sId) . fst3)
 
 sessionLength :: Stream (Int, Timestamp, PebbleMode60) -> Stream (Timestamp, Timestamp)
 sessionLength s@((Event (Just startTS) _):_) = streamMap ((,) startTS . snd3) s
+
+-- frequency distribution of arrival rates as the stream progresses
+-- str & arrivalRate'' & ratefreq
+rateFreq :: Stream Double -> Stream (M.IntMap Int)
+rateFreq s = s
+           & streamMap (round :: Double -> Int)
+           & streamScan (\m i -> M.insertWith (+) i 1 m) M.empty
 
 ------------------------------------------------------------------------------
 -- functions that operate on batches of samples
