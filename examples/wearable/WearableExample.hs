@@ -290,7 +290,7 @@ arrivalRate str = str
                 & last
 
 -- running average Hz
--- λ> pebbleStream csvFile & arrivalRate'
+-- λ> pebbleStream csvFile & arrivalRate' & unStream & last
 -- 23.51336816226183
 -- chopTime emits 0-length lists for time intervals which do not have
 -- any events in them. I.e.,
@@ -299,7 +299,7 @@ arrivalRate str = str
 -- were emitted when the Event for interval +40 arrived.
 -- filtering out the empty lists means we are measuring
 -- the combined arrival rate of disjoint "sessions".
-arrivalRate' :: Stream a -> Double
+arrivalRate' :: Stream a -> Stream Double
 arrivalRate' str = str
                  & streamWindow (chopTime 1000)
                  & streamFilter (not . null) -- see above
@@ -310,8 +310,6 @@ arrivalRate' str = str
                    avg' = (fromIntegral sum') / (fromIntegral count')
                    in (count',sum',n,avg')) (0,0,0,0.0::Double)
                  & streamMap fth4
-                 & unStream
-                 & last
 
 -- another arrivalRate, this time don't filter out empty windows.
 -- For the whole CSV: 7.651951428880981
@@ -322,7 +320,7 @@ arrivalRate' str = str
 --    4 23.577981651376145
 --    5 20.6850436681222
 --    6 12.249488752556237
-arrivalRate'' :: Stream a -> Double
+arrivalRate'' :: Stream a -> Stream Double
 arrivalRate'' s = s
                 & streamWindow (chopTime 1000)
                 & streamMap length
@@ -332,8 +330,6 @@ arrivalRate'' s = s
                   avg' = (fromIntegral sum') / (fromIntegral count')
                   in (count',sum',n,avg')) (0,0,0,0.0::Double)
                 & streamMap fth4
-                & unStream
-                & last
 
 -- add a session ID label to each sample. Sessions are delineated by
 -- intervals of 15 minutes or longer between successive samples.
