@@ -14,6 +14,10 @@ module WearableExample ( sampleDataGenerator
 
                        , pebbleStream
 
+                       -- input data and stats about it
+                       , session1Input
+                       , avgArrivalRate
+
                        ) where
 
 import Striot.FunctionalIoTtypes
@@ -198,7 +202,7 @@ graph = path            -- 25 Hz, per Path2IOT paper
 ------------------------------------------------------------------------------
 -- CSV stuff
 
-csv = "pebbleRawAccel_1806-02.csv"
+csv = "session1.csv"
 
 preSource = do
     fd <- openFd csv ReadOnly Nothing (OpenFileFlags False False False False False)
@@ -332,6 +336,19 @@ arrivalRate'' s = s
                   avg' = (fromIntegral sum') / (fromIntegral count')
                   in (count',sum',n,avg')) (0,0,0,0.0::Double)
                 & streamMap fth4
+
+-- from the above, for session 1:
+avgArrivalRate = 20.947272312257475 :: Double
+
+session1Input :: IO (Timestamp,PebbleMode60)
+session1Input = do
+  line <- getLine -- reading from stdin, as set up by preSource
+  -- example line:
+  -- 1529598787929,((-8,-16,-1000),0)
+  let ts = parseTimeField (take 13 line)
+  let p  = read (drop 14 line) :: PebbleMode60
+  return (ts,p)
+
 
 -- add a session ID label to each sample. Sessions are delineated by
 -- intervals of 15 minutes or longer between successive samples.
