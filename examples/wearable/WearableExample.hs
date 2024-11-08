@@ -351,6 +351,10 @@ addSession = streamScan
 
 selectSession sId = streamFilter ((==sId) . fst3)
 
+
+sessionLength :: Stream (Int, Timestamp, PebbleMode60) -> Stream (Timestamp, Timestamp)
+sessionLength s@((Event (Just startTS) _):_) = streamMap ((,) startTS . snd3) s
+
 ------------------------------------------------------------------------------
 -- functions that operate on batches of samples
 
@@ -412,8 +416,8 @@ groupBySessionId = groupBy (\e f -> fmap fst3 (value e) == fmap fst3 (value f))
 
 -- receive session-ID-labelled windows; determine how long each
 -- session spans.
-sessionLength :: Stream (Int, [(Timestamp, PebbleMode60)]) -> Stream (Int, Timestamp, Timestamp)
-sessionLength ws = ws
+windowSessionLength :: Stream (Int, [(Timestamp, PebbleMode60)]) -> Stream (Int, Timestamp, Timestamp)
+windowSessionLength ws = ws
                  -- temporarily throw away the actual data
                  & streamScan (\oldw w -> let
                    -- is this a new session?
