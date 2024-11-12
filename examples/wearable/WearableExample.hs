@@ -353,6 +353,7 @@ preSource = do
     dupTo fd stdInput
 
 -- parses a line from "session"-format CSV: timestamp,((x,y,z),vibe)
+parseSessionLine :: String -> (UTCTime, PebbleMode60)
 parseSessionLine line = let
   ts = parseTimeField (take 13 line)
   p  = read (drop 14 line) :: PebbleMode60
@@ -360,7 +361,9 @@ parseSessionLine line = let
 
 -- reading from stdin
 session1Input :: IO (Timestamp,PebbleMode60)
-session1Input = getLine >>= return . parseSessionLine
+session1Input = do
+--  threadDelay 1000 -- µs
+  getLine >>= return . parseSessionLine
 
 ------------------------------------------------------------------------------
 -- identifying 'sessions' from a stream (without batching into windows)
