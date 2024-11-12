@@ -25,6 +25,7 @@ appIntSqrt :: (Int,Int,Int) -> Int
 appIntSqrt (x,y,z) = intSqrt (x+y+z)
 
 -- we measure the predicate but not the accumulator update function
+-- XXX: replace threshold with something non-arbitrary
 filterThresh :: (Int,Int) -> Bool
 filterThresh = uncurry (\new last -> (last>threshold) && (new<=threshold))
 
@@ -53,30 +54,37 @@ instance NFData a => NFData (Event a) where
 
 main = do
 
-  let csv = "pebbleRawAccel_1806-02.csv"
-  csvFile <- System.IO.Strict.readFile csv
-  let str = mkStream (map (splitOn ",") (lines csvFile))
-          & pebbleStream  -- Stream PebbleMode60
+  csvFile <- System.IO.Strict.readFile "session1.csv"
+
+  let str = csvFile
+          & lines
+          & mkStream
+          & streamMap parseSessionLine
+          & streamWindow pebbleTimes
+          & streamExpand
+          & streamMap snd -- :: Stream PebbleMode60
 
   -- belt and braces
   print $ str `deepseq` "CSV loaded"
 
   defaultMain [
-    bgroup "vibe"     [ bench "vibeFilterYes" $ whnf vibeFilter ((0,0,0),0)
-                      , bench "vibeFilterNo"  $ whnf vibeFilter ((0,0,0),1)
+    bgroup "vibe"     [ bench "vibeFilterYes" $ nf vibeFilter ((0,0,0),0)
+                      , bench "vibeFilterNo"  $ nf vibeFilter ((0,0,0),1)
                       ]
+   {-
    ,bgroup "vibeIO"   [ bench "vibeFilter"    $ nf (map vibeFilter) (unStream str)
                       ]
-   ,bgroup "squares"  [ bench "squares1"      $ whnf squares ((1,1,1),0)
-                      , bench "squares4"      $ whnf squares ((4,4,4),0)
+    -}
+   ,bgroup "squares"  [ bench "squares1"      $ nf squares ((1,1,1),0)
+                      , bench "squares4"      $ nf squares ((4,4,4),0)
                       ]
-   ,bgroup "intsqrt"  [ bench "intsqrt0"      $ whnf appIntSqrt (0,0,0)
-                      , bench "intsqrt1"      $ whnf appIntSqrt (1,1,1)
-                      , bench "intsqrt8"      $ whnf appIntSqrt (8,8,8)
+   ,bgroup "intsqrt"  [ bench "intsqrt0"      $ nf appIntSqrt (0,0,0)
+                      , bench "intsqrt1"      $ nf appIntSqrt (1,1,1)
+                      , bench "intsqrt8"      $ nf appIntSqrt (8,8,8)
                       ] 
-   ,bgroup "filterAcc"[ bench "filterAcc1"    $ whnf filterThresh (50, 0)
-                      , bench "filterAcc2"    $ whnf filterThresh (50, 120)
-                      , bench "filterAcc3"    $ whnf filterThresh (150,120)
+   ,bgroup "filterAcc"[ bench "filterAcc1"    $ nf filterThresh (50, 0)
+                      , bench "filterAcc2"    $ nf filterThresh (50, 120)
+                      , bench "filterAcc3"    $ nf filterThresh (150,120)
                       ]
 
     -- nf to fully evaluate constructors, ideally precalc away the cost of snoc
@@ -84,7 +92,7 @@ main = do
                       , bench "chopTimeOut"   $ nf chopTime120 outEvent
                       ]
 
-   ,bgroup "length"   [ bench "length25"      $ whnf length (take 25 [0..])
-                      , bench "length24"      $ whnf length (take 24 [0..])
+   ,bgroup "length"   [ bench "length25"      $ nf length (take 25 [0..])
+                      , bench "length24"      $ nf length (take 24 [0..])
                       ]
     ]

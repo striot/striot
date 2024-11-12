@@ -7,6 +7,10 @@ module WearableExample ( sampleDataGenerator
                        , intSqrt
                        , threshold
 
+                       -- used by Criterion for benchmarking
+                       , parseTimeField
+                       , parseSessionLine
+
                        -- used by Main.hs for StreamGraph
                        , pebbleTimes
                        , preSource
@@ -328,12 +332,15 @@ preSource = do
     fd <- openFd csv ReadOnly Nothing (OpenFileFlags False False False False False)
     dupTo fd stdInput
 
+-- parses a line from "session"-format CSV: timestamp,((x,y,z),vibe)
+parseSessionLine line = let
+  ts = parseTimeField (take 13 line)
+  p  = read (drop 14 line) :: PebbleMode60
+  in (ts,p)
+
+-- reading from stdin
 session1Input :: IO (Timestamp,PebbleMode60)
-session1Input = do
-  line <- getLine -- reading from stdin
-  let ts = parseTimeField (take 13 line)
-  let p  = read (drop 14 line) :: PebbleMode60
-  return (ts,p)
+session1Input = getLine >>= return . parseSessionLine
 
 ------------------------------------------------------------------------------
 -- identifying 'sessions' from a stream (without batching into windows)
