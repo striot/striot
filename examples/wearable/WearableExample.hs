@@ -318,6 +318,26 @@ rateFreq s = s
            & streamMap (round :: Double -> Int)
            & streamScan (\m i -> M.insertWith (+) i 1 m) M.empty
 
+-- alternative of pebbleStream which operates on session1.csv format
+pebbleStream' :: String -> Stream (Timestamp, PebbleMode60)
+pebbleStream' csvFile = csvFile
+                  & lines
+                  & map parseSessionLine
+                  & mkStream
+                  & streamWindow pebbleTimes
+                  & streamExpand
+
+-- output of filterAcc
+-- what is the frequency distribution of the calculated vectors over the dataset?
+movementFreq file = file
+                  & pebbleStream'
+                  & streamMap snd
+                  & streamFilter ((==0) . snd) -- vibe off
+                  & streamMap (\((x,y,z),_) -> (x*x,y*y,z*z))
+                  & streamMap (\(x,y,z) -> intSqrt (x+y+z))
+                  & streamScan (\m i -> M.insertWith (+) i 1 m) M.empty
+--                & streamFilterAcc (\_ n -> n) 0 (\n l -> (l>threshold) && (n <= threshold))
+
 ------------------------------------------------------------------------------
 -- functions exported for Main.hs (StreamGraph)
 
