@@ -17,13 +17,6 @@ opts = defaultOpts { imports = imports defaultOpts ++
                    , packages = []
                    }
 
--- read CSV data, count how many records there are (session1: 275310)
-numRecords = path
-  [ StreamVertex 1 (Source avgArrivalRate) [[| session1Input |]] "IO ()" "(Timestamp,PebbleMode60)" 25
-  , StreamVertex 2 Scan [ [| \c _-> c+1 |], [| 0 |] ] "(Timestamp,PebbleMode60)" "Int" 25
-  , StreamVertex 3 Sink [[| mapM_ print |]] "Int" "IO ()" 25
-  ]
-
 wearable = let thr = 2000 :: Int in path
   [ StreamVertex 1 (Source avgArrivalRate) [[| session1Input |]]
      "IO ()" "(Timestamp,PebbleMode60)" 25
@@ -59,6 +52,7 @@ wearable = let thr = 2000 :: Int in path
 wearableParts = [[1,2,3,4,5,6,7],[8,9,10,11]]
 
 main = do
-    partitionGraph calcArrivalRate parts opts
-    let partitionedGraph = createPartitions graph parts
+    let g = calcArrivalRate
+    partitionGraph g parts opts -- writes out Node*/*
+    let partitionedGraph = createPartitions g parts
     writeFile "compose.yml" (generateDockerCompose partitionedGraph)
