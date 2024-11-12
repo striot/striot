@@ -7,16 +7,11 @@ module WearableExample ( sampleDataGenerator
                        , intSqrt
                        , threshold
 
-                       , preSource
-                       , source
-                       , csvLineToPebbleMode60s
+                       -- used by Main.hs for StreamGraph
                        , pebbleTimes
-
-                       , pebbleStream
-
-                       -- input data and stats about it
-                       , session1Input
+                       , preSource
                        , avgArrivalRate
+                       , session1Input
 
                        ) where
 
@@ -200,27 +195,10 @@ graph = path            -- 25 Hz, per Path2IOT paper
   ]
 
 ------------------------------------------------------------------------------
--- CSV stuff
+-- CSV processing
 
-csv = "session1.csv"
-
-preSource = do
-    fd <- openFd csv ReadOnly Nothing (OpenFileFlags False False False False False)
-    dupTo fd stdInput
-
--- each line has a timestamp followed by ten readings
-csvLineToPebbleMode60s :: [String] -> [(Timestamp,PebbleMode60)]
-csvLineToPebbleMode60s (timestamp:fields) =
-  let ts = parseTimeField timestamp
-  in take 10
-    $ map (\(x:y:z:w:[]) -> (ts,((x,y,z),w)))
-    $ chunksOf 4
-    $ map (read :: String -> Int)
-    $ fields
-
--- csvLines :: [String]
--- csvLines <- return . lines =<< readFile csv
-
+-- for consuming from pebbleRawAccel_1806-02.csv, format: 10 groups of four readings
+-- per line, prefixed by timestamp as unix epoch, suffixed with some number of 0s
 -- produce one-record-per-line CSV for easier debugging
 csvLineToRecordLines :: String -> [[String]]
 csvLineToRecordLines line = let
@@ -246,27 +224,19 @@ parseTimeField timestamp = let -- s is e.g. "1529718763606"
   ms = parseTimeOrError True defaultTimeLocale "%s" ("0.00"++mS)
   in addUTCTime ms ts
 
-source = do
-  threadDelay 1000 -- µs
-  getLine >>= return . csvLineToPebbleMode60s . splitOn ","
-
 -- special window maker to set event timestamps from source data
 pebbleTimes :: WindowMaker (Timestamp,PebbleMode60)
 pebbleTimes = map (\(Event _ v) -> [Event (fmap fst v) v])
 
 ------------------------------------------------------------------------------
--- Explore the data-set using the Simple interface
---
--- mkStream :: [a] -> Stream a
--- unStream :: Stream a -> [a]
+-- Explore the data-set using the Simple Stream interface
 
--- GHCi:
--- csvFile <- readFile csv
-
--- common bit of stream processing for the functions that follow.
--- this unpacks the ten readings on each CSV line into separate
--- `Event PebbleMode60` with Event timestamps corresponding to the
--- dataset.`
+-- common bit of stream processing for building streams that consume
+-- data in pebbleRawAccel_1806-02.csv format:
+-- unix epoch timestamp, followed by ten readings as groups of
+-- four integers, followed by a number of zero fields.
+-- unpacks the readings to one per item in a Stream, with Event timestamps
+-- set to match the reading.
 pebbleStream :: String -> Stream (Timestamp, PebbleMode60)
 pebbleStream str = str
           & lines
@@ -337,18 +307,36 @@ arrivalRate'' s = s
                   in (count',sum',n,avg')) (0,0,0,0.0::Double)
                 & streamMap fth4
 
--- from the above, for session 1:
+-- frequency distribution of arrival rates as the stream progresses
+-- str & arrivalRate'' & rateFreq
+rateFreq :: Stream Double -> Stream (M.IntMap Int)
+rateFreq s = s
+           & streamMap (round :: Double -> Int)
+           & streamScan (\m i -> M.insertWith (+) i 1 m) M.empty
+
+------------------------------------------------------------------------------
+-- functions exported for Main.hs (StreamGraph)
+
+-- format:  one reading per line, unix epoch timestamp,((x,y,z),vibe)
+-- example: 1529598787929,((-8,-16,-1000),0)
+csv = "session1.csv"
+
+-- for session 1, calculated by arrivalRate'':
 avgArrivalRate = 20.947272312257475 :: Double
+
+preSource = do
+    fd <- openFd csv ReadOnly Nothing (OpenFileFlags False False False False False)
+    dupTo fd stdInput
 
 session1Input :: IO (Timestamp,PebbleMode60)
 session1Input = do
-  line <- getLine -- reading from stdin, as set up by preSource
-  -- example line:
-  -- 1529598787929,((-8,-16,-1000),0)
+  line <- getLine -- reading from stdin
   let ts = parseTimeField (take 13 line)
   let p  = read (drop 14 line) :: PebbleMode60
   return (ts,p)
 
+------------------------------------------------------------------------------
+-- identifying 'sessions' from a stream (without batching into windows)
 
 -- add a session ID label to each sample. Sessions are delineated by
 -- intervals of 15 minutes or longer between successive samples.
@@ -366,19 +354,11 @@ addSession = streamScan
 
 selectSession sId = streamFilter ((==sId) . fst3)
 
-
 sessionLength :: Stream (Int, Timestamp, PebbleMode60) -> Stream (Timestamp, Timestamp)
 sessionLength s@((Event (Just startTS) _):_) = streamMap ((,) startTS . snd3) s
 
--- frequency distribution of arrival rates as the stream progresses
--- str & arrivalRate'' & ratefreq
-rateFreq :: Stream Double -> Stream (M.IntMap Int)
-rateFreq s = s
-           & streamMap (round :: Double -> Int)
-           & streamScan (\m i -> M.insertWith (+) i 1 m) M.empty
-
 ------------------------------------------------------------------------------
--- functions that operate on batches of samples
+-- functions that operate on batches of samples (with windowing)
 
 -- convert csvLines into one-PebbleMode60-per-line with corrected
 -- Event timestamps, collects 1000s windows and assigned a 'session
