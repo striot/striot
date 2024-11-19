@@ -336,7 +336,13 @@ movementFreq file = file
                   & streamMap (\((x,y,z),_) -> (x*x,y*y,z*z))
                   & streamMap (\(x,y,z) -> intSqrt (x+y+z))
                   & streamScan (\m i -> M.insertWith (+) i 1 m) M.empty
---                & streamFilterAcc (\_ n -> n) 0 (\n l -> (l>threshold) && (n <= threshold))
+
+-- e.g. length $ stepEvents 2000 csvFile
+stepEvents thr file = file
+                & pebbleStream'
+                & streamMap snd
+                & edEvent
+                & stepEvent thr
 
 ------------------------------------------------------------------------------
 -- functions exported for Main.hs (StreamGraph)
