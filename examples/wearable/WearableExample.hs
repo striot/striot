@@ -2,7 +2,6 @@
 
 module WearableExample ( sampleDataGenerator
                        , PebbleMode60
-                       , graph
                        , sampleInput
                        , intSqrt
                        , threshold
@@ -26,7 +25,6 @@ import Striot.Partition
 
 import Striot.Simple
 
-import Algebra.Graph
 import Control.Concurrent
 import Control.Monad (replicateM)
 import System.Random
@@ -174,29 +172,6 @@ sampleInput = do
   print $ "emitting " ++ (show payload)
   threadDelay (1000*1000 `div` 25) -- sleep to approximate 25Hz emission rate
   return payload
-
--- corresponding to "main"
-graph = path            -- 25 Hz, per Path2IOT paper
-  [ StreamVertex 1 (Source 25)      [[| sampleInput |]]
-                                                                             "IO ()"        "PebbleMode60"   25
-    -- from sample dataset, 11 vibe events in 918150 samples
-  , StreamVertex 2 (Filter (1-(11/918150))) [[| (\((x,y,z),vibe)->vibe == 0) |]] "PebbleMode60"  "PebbleMode60"  25
-
-    -- edEvent (euclidean distance)
-  , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode60"  "(Int,Int,Int)" 25
-  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           25
-
-    -- stepEvent
-  , StreamVertex 5 (FilterAcc 0.5) [[| (\last new -> new) |]
-                                   ,[| 0 |]
-                                   ,[| (\new last ->(last>threshold) && (new<=threshold)) |]
-                                   ]                                         "Int"           "Int"           25
-    -- stepCount
-  , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           25
-  , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           25
-
-  , StreamVertex 8 Sink            [[| mapM_ print |]]                    "Int"           "IO ()"         25
-  ]
 
 ------------------------------------------------------------------------------
 -- CSV processing
