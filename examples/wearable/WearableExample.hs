@@ -82,10 +82,10 @@ MATCH RECOGNIZE (MEASURES A AS ed1, B AS ed2 PATTERN (A B) DEFINE A AS (A.ed > T
 -}
 
 threshold :: Int
-threshold = 100 -- made up number
+threshold = 100 -- reasonable number for the sample data generator
 
-stepEvent :: Stream Int -> Stream Int -- input is (ed,ts)
-stepEvent s = streamFilterAcc (\last new -> new) 0 (\new last ->(last>threshold) && (new<=threshold)) s
+stepEvent :: Int -> Stream Int -> Stream Int -- input is (ed,ts)
+stepEvent thr = streamFilterAcc (\last new -> new) 0 (\new last ->(last>thr) && (new<=thr))
 
 {-
 Query 4 aggregates the input information and - based on a tumbling
@@ -132,7 +132,7 @@ main :: IO ()
 main = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ stepCount $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
+  print.take 100 $ stepCount $ stepEvent threshold $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
 ------------- Tests for debugging----------------------------------
 main2 :: IO ()
@@ -145,7 +145,7 @@ main3 :: IO ()
 main3 = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
+  print.take 100 $ stepEvent threshold $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
 main4 :: IO ()
 main4 = do
@@ -163,7 +163,7 @@ main6 :: IO ()
 main6 = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ streamWindow (chopTime 120) $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
+  print.take 100 $ streamWindow (chopTime 120) $ stepEvent threshold $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
 sampleInput :: IO PebbleMode60
 sampleInput = do
