@@ -33,26 +33,33 @@ opts = defaultOpts { maxNodeUtil    = 3.0
                    , rules          = lrules
                    }
 
-graph = path            -- 25 Hz, per Path2IOT paper
-  [ StreamVertex 1 (Source 25)      [[| sampleInput |]]
-                                                                             "IO ()"        "PebbleMode60"   25
-    -- from sample dataset, 11 vibe events in 918150 samples
-  , StreamVertex 2 (Filter (1-(11/918150))) [[| (\((x,y,z),vibe)->vibe == 0) |]] "PebbleMode60"  "PebbleMode60"  25
+thr = 2000 :: Int
 
-    -- edEvent (euclidean distance)
-  , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode61"  "(Int,Int,Int)" 25
-  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           25
+graph = path
+  [ StreamVertex 1 (Source avgArrivalRate) [[| session1Input |]]
+     "IO ()" "PebbleMode60" 25 -- 25 Hz, per Path2IOT paper
 
-    -- stepEvent
-  , StreamVertex 5 (FilterAcc 0.5) [[| (\last new -> new) |]
-                                   ,[| 0 |]
-                                   ,[| (\new last ->(last>threshold) && (new<=threshold)) |]
-                                   ]                                         "Int"           "Int"           25
-    -- stepCount
-  , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           25
-  , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           25
+  , StreamVertex 2 (Filter vibeFrequency) [[| ((==0) . snd) |]]
+    "PebbleMode60"  "PebbleMode60"  61350
 
-  , StreamVertex 8 Sink            [[| mapM_ print |]]                    "Int"           "IO ()"         25
+  -- edEvent
+  , StreamVertex 3 Map [[| \((x,y,z),_) -> (x*x,y*y,z*z) |]]
+    "PebbleMode60"  "(Int,Int,Int)" 19763
+  , StreamVertex 4 Map [[| \(x,y,z) -> intSqrt (x+y+z) |]]
+    "(Int,Int,Int)" "Int" 17763
+
+  -- stepEvent
+  , StreamVertex 5 (FilterAcc 0.5) [[| (\_ n-> n) |], [| 0 |], [| (\new last ->(last>thr) && (new<=thr)) |]]
+    "Int" "Int" 32895
+
+  -- stepCount
+  , StreamVertex 6 Window [[| chopTime 120 |]]
+    "a" "[a]" 3110
+  , StreamVertex 7 Map [[| length |]]
+    "[Int]" "Int" 285714
+
+  , StreamVertex 8 Sink [[| mapM_ print |]]
+    "Int" "IO ()" 285714
   ]
 
 ---- Evaluation Stage 1: no program rewrites
