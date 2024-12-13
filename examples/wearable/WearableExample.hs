@@ -14,6 +14,8 @@ module WearableExample ( sampleDataGenerator
                        , pebbleTimes
                        , preSource
                        , avgArrivalRate
+                       , vibeFrequency
+
                        , session1Input
 
                        ) where
@@ -326,8 +328,9 @@ stepEvents thr file = file
 -- example: 1529598787929,((-8,-16,-1000),0)
 csv = "session1.csv"
 
--- for session 1, calculated by arrivalRate'':
-avgArrivalRate = 20.947272312257475 :: Double
+-- properties of the "session1" data-set
+avgArrivalRate = 20.947272312257475 :: Double -- calculated by arrivalRate''
+vibeFrequency  = 1-(5/275310) :: Double -- length $ filter (=='1') $ map (\s ->s!!((length s)-2)) (csvLines)
 
 preSource = do
     fd <- openFd csv ReadOnly Nothing (OpenFileFlags False False False False False)
