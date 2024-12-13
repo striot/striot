@@ -52,7 +52,8 @@ wearable = let thr = 2000 :: Int in path
 wearableParts = [[1,2,3,4,5,6,7],[8,9,10,11]]
 
 main = do
-    let g = calcArrivalRate
-    partitionGraph g parts opts -- writes out Node*/*
-    let partitionedGraph = createPartitions g parts
+    let g = wearable
+    let p = wearableParts
+    partitionGraph g p opts -- writes out Node*/*
+    let partitionedGraph = createPartitions g p
     writeFile "compose.yml" (generateDockerCompose partitionedGraph)
