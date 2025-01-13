@@ -200,7 +200,7 @@ instance Arbitrary a => Arbitrary (Event a) where
     arbitrary = do
         i <- arbitrary
         t <- arbitrary
-        return $ Event (Just t) (Just i)
+        return $ Event t i
 
 prop_streamScan_samelength :: Stream Int -> Bool
 prop_streamScan_samelength s = length s == length (streamScan (\_ x-> x) 0 s)
