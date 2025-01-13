@@ -131,7 +131,7 @@ wearableManualTime = let
 -- outputs for Jon's thesis (graphs, statistics)
 main = do
   writeFile "wearableStats.tex" wearableStats
-  writeFile "wearable.dot" $ export enumGraphStyle graph
+  writeFile "wearable.dot" $ export (bandwidthStyle graph) graph
   writeGraph (export enumGraphStyle) graph "wearable.png"
   writeFile "wearable_winner.dot" wearableWinnerDot
   writeGraph id wearableWinnerDot "wearable_winner.png"

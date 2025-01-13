@@ -13,6 +13,7 @@ module Striot.VizGraph ( streamGraphToDot
                        , subGraphToPartition
                        , writeGraph
 
+                       , bandwidthStyle
                        , baseGraphStyle
                        , jacksonStyle
                        , enumGraphStyle
@@ -143,7 +144,7 @@ baseGraphStyle = Style
 -- | A specialised Style to annotate edges with calculated bandwidth
 -- XXX merge with jacksonStyle?
 bandwidthStyle :: StreamGraph -> Style StreamVertex String
-bandwidthStyle sg = baseGraphStyle
+bandwidthStyle sg = enumGraphStyle
     {
         -- XXX: bandwidth units?
         edgeAttributes = \v o -> "xlabel" := concat
