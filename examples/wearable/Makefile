@@ -1,4 +1,5 @@
-GHC := stack ghc -- -XTemplateHaskell
+GHC_PREFIX = stack
+GHC := $(GHC_PREFIX) ghc -- -XTemplateHaskell
 
 run: nodes
 	docker-compose up --build
@@ -23,6 +24,9 @@ node2 node3 node1/node.hs node2/node.hs node3/node.hs: Main
 Main: Main.hs
 	$(GHC) -i../../src Main.hs
 
+bench:
+	$(GHC_PREFIX) runghc Criterion.hs -- --output Criterion.html $(bmark)
+
 clean:
 	rm -f \
 	    Main.hi Main.o \
@@ -33,7 +37,9 @@ clean:
 	    node1/node.o node2/node.o node3/node.o \
 	    node1/WearableExample.hs node2/WearableExample.hs node3/WearableExample.hs \
 	    node1/Dockerfile node2/Dockerfile node3/Dockerfile \
-	    compose.yml
+	    compose.yml \
+	    Criterion.html \
+	
 	-rmdir node1 node2 node3
 
-.PHONY: clean nodes gen
+.PHONY: clean nodes gen bench
