@@ -17,6 +17,10 @@ opts = defaultOpts { imports = imports defaultOpts ++
                    , packages = []
                    }
 
+-- pre-calculated properties of the "session1" data-set
+avgArrivalRate = 20.947272312257475 -- calculated by arrivalRate''
+vibeFrequency  = 1-(5/275310) -- length $ filter (=='1') $ map (\s ->s!!((length s)-2)) (csvLines)
+
 wearable = let thr = 2000 :: Int in path
   [ StreamVertex 1 (Source avgArrivalRate) [[| session1Input |]]
      "IO ()" "(Timestamp,PebbleMode60)" 25
