@@ -6,8 +6,10 @@ module WearableStreams where
 
 import qualified Data.IntMap.Strict as M
 import Data.Function ((&))
+import Data.List (intercalate)
 import Data.List.Split (chunksOf, splitOn)
 import Data.Time
+import System.Random
 import Striot.Simple
 import WearableExample
 
@@ -168,3 +170,25 @@ snd3 (_,x,_)   = x
 thd3 (_,_,x)   = x
 fth4 (_,_,_,x) = x
 
+jan_1_1900_day :: Day
+jan_1_1900_day = fromGregorian 1900 1 1
+-- 1/1/1900 as a UTCTime
+jan_1_1900_time :: UTCTime
+jan_1_1900_time = UTCTime jan_1_1900_day 0 -- gives example time for the first event
+
+
+-- generate a stand-in for session1.csv
+generateSampleData :: IO String
+generateSampleData = do
+  g <- getStdGen :: IO StdGen
+  let rs = randomRs (0,99) g :: [Int]
+  let r = rs & sampleDataGenerator jan_1_1900_time 10 
+             & unStream 
+             & zip (incr 1529598787929) 
+             & take 275309
+             & map (\(x,y) -> (show x) ++ "," ++ (show y)) 
+             & intercalate "\n"
+  return r
+  where incr x = take 10 (repeat x) ++ incr (x + 400)
+
+writeSampleData = generateSampleData >>= writeFile "session1.csv"
