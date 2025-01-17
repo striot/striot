@@ -26,8 +26,6 @@ import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
 import Striot.StreamGraph
 
-import Striot.Simple
-
 import Control.Concurrent
 import Control.Monad (replicateM)
 import System.Random
