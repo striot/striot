@@ -207,5 +207,5 @@ parseSessionLine line = let
 -- Exported for the StreamGraph example (Main.hs)
 session1Input :: IO (Timestamp,PebbleMode60)
 session1Input = do
---  threadDelay 1000 -- µs
+  threadDelay 1000 -- µs
   getLine >>= return . parseSessionLine
