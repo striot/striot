@@ -192,3 +192,5 @@ generateSampleData = do
   where incr x = take 10 (repeat x) ++ incr (x + 400)
 
 writeSampleData = generateSampleData >>= writeFile "session1.csv"
+
+main = writeSampleData

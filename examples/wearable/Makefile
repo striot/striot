@@ -25,12 +25,11 @@ Main: Main.hs
 bench:
 	$(GHC_PREFIX) runghc Criterion.hs -- --output Criterion.html $(bmark)
 
-# This file is deliberately left out of the "clean" target.
-session1.csv.xz:
-	curl https://www.staff.ncl.ac.uk/jon.dowland/phd/session1.csv.xz >$@
+session1.csv:
+	$(GHC_PREFIX) runhaskell ./WearableStreams.hs
 
-node1/session1.csv: session1.csv.xz
-	xzcat $< >$@
+node1/session1.csv: session1.csv
+	cp $< $@
 
 clean:
 	rm -f \
@@ -45,6 +44,7 @@ clean:
 	    node1/Dockerfile node2/Dockerfile \
 	    compose.yml \
 	    Criterion.html \
+	    session1.csv \
 	
 	-rmdir node1 node2
 
