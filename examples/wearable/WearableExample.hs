@@ -2,25 +2,38 @@
 
 module WearableExample ( sampleDataGenerator
                        , PebbleMode60
-                       , graph
                        , sampleInput
                        , intSqrt
                        , threshold
+
+                       -- used by WearableStream
+                       , edEvent
+                       , stepEvent
+
+                       -- used by Criterion for benchmarking
+                       , parseTimeField
+                       , parseSessionLine
+
+                       -- used by Main.hs for StreamGraph
+                       , pebbleTimes
+                       , preSource
+
+                       , session1Input
+
                        ) where
 
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
-import Striot.StreamGraph
-import Striot.Partition
 
-import Algebra.Graph
 import Control.Concurrent
 import Control.Monad (replicateM)
 import System.Random
 import System.IO
-import Data.Time (UTCTime)
+import System.Posix.IO -- openFd, OpenFileFlags, stdInput
+import Data.Time
 import Data.Time.Calendar
 import Data.Time.Clock
+import Data.Fixed
 
 type AccelVal = Int
 
@@ -62,10 +75,10 @@ MATCH RECOGNIZE (MEASURES A AS ed1, B AS ed2 PATTERN (A B) DEFINE A AS (A.ed > T
 -}
 
 threshold :: Int
-threshold = 100 -- made up number
+threshold = 100 -- reasonable number for the sample data generator
 
-stepEvent :: Stream Int -> Stream Int -- input is (ed,ts)
-stepEvent s = streamFilterAcc (\last new -> new) 0 (\new last ->(last>threshold) && (new<=threshold)) s
+stepEvent :: Int -> Stream Int -> Stream Int -- input is (ed,ts)
+stepEvent thr = streamFilterAcc (\last new -> new) 0 (\new last ->(last>thr) && (new<=thr))
 
 {-
 Query 4 aggregates the input information and - based on a tumbling
@@ -112,7 +125,7 @@ main :: IO ()
 main = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ stepCount $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
+  print.take 100 $ stepCount $ stepEvent threshold $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
 ------------- Tests for debugging----------------------------------
 main2 :: IO ()
@@ -125,7 +138,7 @@ main3 :: IO ()
 main3 = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
+  print.take 100 $ stepEvent threshold $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
 main4 :: IO ()
 main4 = do
@@ -143,7 +156,7 @@ main6 :: IO ()
 main6 = do
   g <- getStdGen
   let rs = randomRs (0,99) g :: [Int]
-  print.take 100 $ streamWindow (chopTime 120) $ stepEvent $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
+  print.take 100 $ streamWindow (chopTime 120) $ stepEvent threshold $ edEvent $ sampleDataGenerator jan_1_1900_time 10 rs
 
 sampleInput :: IO PebbleMode60
 sampleInput = do
@@ -155,34 +168,42 @@ sampleInput = do
   threadDelay (1000*1000 `div` 25) -- sleep to approximate 25Hz emission rate
   return payload
 
-{- example graph which reports the arrival rate in Hz
-graph = path
-  [ StreamVertex 1 (Source 25) [[| sampleInput |]]   "IO ()"          "PebbleMode60"   25
-  , StreamVertex 2 Window      [[| chopTime 1000 |]] "PebbleMode60"   "[PebbleMode60]" 25
-  , StreamVertex 3 Map         [[| length |]]        "[PebbleMode60]" "Int"            25
-  , StreamVertex 4 Sink        [[| mapM_ print |]]   "Int"            "IO ()"          25
-  ]
--}
+------------------------------------------------------------------------------
+-- CSV processing
 
--- corresponding to "main"
-graph = path            -- 25 Hz, per Path2IOT paper
-  [ StreamVertex 1 (Source 25)      [[| sampleInput |]]
-                                                                             "IO ()"        "PebbleMode60"   25
-    -- from sample dataset, 11 vibe events in 918150 samples
-  , StreamVertex 2 (Filter (1-(11/918150))) [[| (\((x,y,z),vibe)->vibe == 0) |]] "PebbleMode60"  "PebbleMode60"  25
+-- convert CSV timestamp field (ms since epoch) to Timestamp
+-- See also https://www.williamyaoh.com/posts/2019-09-16-time-cheatsheet.html
+parseTimeField :: String -> UTCTime
+parseTimeField timestamp = let -- s is e.g. "1529718763606"
+  (sS,mS) = splitAt 10 timestamp
+  ts = parseTimeOrError True defaultTimeLocale "%s" sS  :: UTCTime
+  ms = parseTimeOrError True defaultTimeLocale "%s" ("0.00"++mS)
+  in addUTCTime ms ts
 
-    -- edEvent (euclidean distance)
-  , StreamVertex 3 Map             [[| \((x,y,z),_) -> (x*x,y*y,z*z)     |]] "PebbleMode60"  "(Int,Int,Int)" 25
-  , StreamVertex 4 Map             [[| \(x,y,z)     -> intSqrt (x+y+z)   |]] "(Int,Int,Int)" "Int"           25
 
-    -- stepEvent
-  , StreamVertex 5 (FilterAcc 0.5) [[| (\last new -> new) |]
-                                   ,[| 0 |]
-                                   ,[| (\new last ->(last>threshold) && (new<=threshold)) |]
-                                   ]                                         "Int"           "Int"           25
-    -- stepCount
-  , StreamVertex 6 Window          [[| chopTime 120 |]]                      "a"             "[a]"           25
-  , StreamVertex 7 Map             [[| length |]]                            "[Int]"         "Int"           25
+-- special window maker to set event timestamps from source data
+-- used by Main.hs for StreamGraph and Criterion for benchmarking
+pebbleTimes :: Stream (Timestamp,PebbleMode60) -> [Stream (Timestamp,PebbleMode60)]
+pebbleTimes = map (\(Event _ v) -> [Event (fmap fst v) v])
 
-  , StreamVertex 8 Sink            [[| mapM_ print |]]                    "Int"           "IO ()"         25
-  ]
+-- Exported for the StreamGraph example (Main.hs)
+preSource = do
+    fd <- openFd "session1.csv" ReadOnly Nothing (OpenFileFlags False False False False False)
+    dupTo fd stdInput
+
+-- parses a line from "session"-format CSV: timestamp,((x,y,z),vibe)
+-- format:  one reading per line, unix epoch timestamp,((x,y,z),vibe)
+-- example: 1529598787929,((-8,-16,-1000),0)
+-- Exported for Criterion benchmarking
+parseSessionLine :: String -> (UTCTime, PebbleMode60)
+parseSessionLine line = let
+  ts = parseTimeField (take 13 line)
+  p  = read (drop 14 line) :: PebbleMode60
+  in (ts,p)
+
+-- reading from stdin
+-- Exported for the StreamGraph example (Main.hs)
+session1Input :: IO (Timestamp,PebbleMode60)
+session1Input = do
+  threadDelay 1000 -- µs
+  getLine >>= return . parseSessionLine
