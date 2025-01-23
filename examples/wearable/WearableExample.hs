@@ -24,7 +24,6 @@ module WearableExample ( sampleDataGenerator
 
 import Striot.FunctionalIoTtypes
 import Striot.FunctionalProcessing
-import Striot.StreamGraph
 
 import Control.Concurrent
 import Control.Monad (replicateM)
@@ -184,8 +183,7 @@ parseTimeField timestamp = let -- s is e.g. "1529718763606"
 
 -- special window maker to set event timestamps from source data
 -- used by Main.hs for StreamGraph and Criterion for benchmarking
--- This is the only function requiring StreamGraph in this module
-pebbleTimes :: WindowMaker (Timestamp,PebbleMode60)
+pebbleTimes :: Stream (Timestamp,PebbleMode60) -> [Stream (Timestamp,PebbleMode60)]
 pebbleTimes = map (\(Event _ v) -> [Event (fmap fst v) v])
 
 -- Exported for the StreamGraph example (Main.hs)
