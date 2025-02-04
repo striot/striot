@@ -33,7 +33,7 @@ opts = defaultOpts { maxNodeUtil    = 3.0
                    , rules          = lrules
                    }
 
-thr = 2000 :: Int
+thr = 1250 :: Int
 
 graph = path
   [ StreamVertex 1 (Source avgArrivalRate) [[| session1Input |]]
