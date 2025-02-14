@@ -49,7 +49,7 @@ graph = path
     "(Int,Int,Int)" "Int" 17763
 
   -- stepEvent
-  , StreamVertex 5 (FilterAcc 0.5) [[| (\_ n-> n) |], [| 0 |], [| (\new last ->(last>thr) && (new<=thr)) |]]
+  , StreamVertex 5 (FilterAcc 0.020272) [[| (\_ n-> n) |], [| 0 |], [| (\new last ->(last>thr) && (new<=thr)) |]]
     "Int" "Int" 32895
 
   -- stepCount
