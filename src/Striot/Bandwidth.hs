@@ -113,7 +113,9 @@ departRate g i = let
 
     Window      -> let params = (words . showParam . head . parameters) v in
                    if   "chopTime" == head params
-                   then 1 / read (params !! 1)
+                   then let ms = read (params !! 1)
+                            s  = ms / 1000
+                        in  1 / s
                    else departRate g p
 
     _           -> departRate g p
@@ -130,7 +132,7 @@ v9 = StreamVertex 9 Window [[| chopTime 120 |]] "a" "[a]" 9
 
 graph3 = path [v1, v2, v9, v7, v6]
 
-test_departRate_window = assertEqual (1/120) $ departRate graph3 9
+test_departRate_window = assertEqual (1/0.12) $ departRate graph3 9
 
 ------------------------------------------------------------------------------
 
