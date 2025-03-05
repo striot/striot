@@ -15,6 +15,7 @@ Experimental routines for reasoning about bandwidth.
 module Striot.Bandwidth ( howBig
                         , knownEventSizes
                         , departRate
+                        , chopSize
                         , whatBandwidth
                         , whatBandwidthWeighted
                         , connectedToSources
@@ -135,17 +136,31 @@ graph3 = path [v1, v2, v9, v7, v6]
 test_departRate_window = assertEqual (1/0.12) $ departRate graph3 9
 
 ------------------------------------------------------------------------------
+-- how big is the payload for a streamWindow (chopTime)?
+-- could I leverage whatBandwidth to simplify parent calcs?
+-- XXX no accounting for any serialization overhead for the list structure
+chopSize :: StreamGraph -> Int -> Int -> Maybe Double
+chopSize g i ms = let
+  pid            = parentsOf g i & head
+  pv             = (head . filter ((==pid) . vertexId) . vertexList) g
+  maybePsize     = lookup (outtype pv) knownEventSizes
+  prate          = departRate g pid -- Double
+  pcount         = 1.0/prate
+  s              = (fromIntegral ms) / 1000
+  eventsInWindow = s/pcount
+
+  in fmap ((*eventsInWindow).fromIntegral) maybePsize
 
 -- what is the bandwidth out of a StreamVertex
 whatBandwidth :: StreamGraph -> Int -> Maybe Double
 whatBandwidth g i =
-  let v = (head . filter ((==i) . vertexId) . vertexList) g
-  in if Window == operator v
-     then whatBandwidth g $ head $ parentsOf g i
-     else
-       let outrate = departRate g i
-       in fmap ((*outrate) . fromIntegral) (lookup (outtype v) knownEventSizes)
-
+  let v       = (head . filter ((==i) . vertexId) . vertexList) g
+      outrate = departRate g i
+      params  = (words . showParam . head . parameters) v
+      outsize = if   operator v == Window && "chopTime" == head params
+                then chopSize g i (read (params !! 1))
+                else fmap fromIntegral $ lookup (outtype v) knownEventSizes
+  in fmap ((*outrate)) outsize
 
 -- applies a rate-based overhead weighting
 weighting = 2.0
