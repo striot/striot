@@ -411,37 +411,3 @@ writePart opts (x,y) = let
 partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
 partitionGraph graph partitions opts = do
     mapM_ (writePart opts) $ zip [1..] $ generateCode opts graph partitions
-
-------------------------------------------------------------------------------
-
--- | Derive a partition map.
--- Eventually, derive all possible partition maps.
-partitionings :: StreamGraph -> [Partition] -> PartitionMap
-partitionings sg parts = let
-    vIds = map vertexId . vertexList $ sg
-    in case compareLength vIds parts of
-        EQ -> map (:[]) vIds
-
-        GT -> let
-            diff         = length vIds - length parts
-            (first,rest) = splitAt (diff + 1) vIds
-            in [first] ++ map (:[]) rest
-
-        LT -> error "cannot partition a graph over more partitions than there are nodes"
-
-partTestGraph = path
-    [ StreamVertex 0 (Source 1) []        "Int" "Int" 1
-    , StreamVertex 1 Map [[| show |]] "Int" "String" 2
-    , StreamVertex 2 (Filter 0.5) [[| (<3) |]]    "Int" "Int" 3
-    , StreamVertex 3 Window []        "String" "[String]" 4
-    , StreamVertex 4 Sink []          "String" "String" 5
-    ]
-
-test_partitionings_1 = assertEqual [[x]|x <- [0..4]] $
-    partitionings partTestGraph [0..4]
-
-test_partitionings_2 = assertEqual 3 $ length $
-    partitionings partTestGraph [0..2]
-
-test_partitionings_3 = assertEqual 3 $ length $ head $
-    partitionings partTestGraph [0..2]
