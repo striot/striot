@@ -10,11 +10,13 @@ jobs:
       - name: Install librdkafka and graphviz (for dot)
         run: |
           sudo apt-get update && sudo apt-get install librdkafka-dev graphviz
-      - uses: freckle/stack-action@v4
+      - uses: freckle/stack-action@v5
         id: stack
         with:
           pedantic: false
           stack-arguments: --no-haddock-deps --haddock
+          # no --pedantic
+          stack-build-arguments: --fast
           cache-prefix: v2
 
       - name: Build examples
@@ -28,7 +30,7 @@ jobs:
 
       - if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         name: Upload artifact
-        uses: actions/upload-pages-artifact@v2
+        uses: actions/upload-pages-artifact@v3
         with:
           path: ${{ steps.stack.outputs.dist-dir }}/doc/html/striot/
 
