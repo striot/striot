@@ -10,7 +10,7 @@ jobs:
       - name: Install librdkafka and graphviz (for dot)
         run: |
           sudo apt-get update && sudo apt-get install librdkafka-dev graphviz
-      - uses: freckle/stack-action@v4
+      - uses: freckle/stack-action@v5
         id: stack
         with:
           pedantic: false
