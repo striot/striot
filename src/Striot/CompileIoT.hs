@@ -2,17 +2,21 @@
 {-# OPTIONS_HADDOCK prune #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Striot.CompileIoT ( createPartitions
-                         , generateCode
+                         -- entrypoints
+module Striot.CompileIoT ( createPartitions -- pure
+                         , partitionGraph   -- impure
+
+                         -- types
                          , GenerateOpts(..)
                          , defaultOpts
                          , Partition
                          , PartitionMap
                          , Plan(..)
+
+                         -- not used outside CompileIoT
+                         , generateCode
                          , writePart
                          , genDockerfile
-                         , partitionGraph
-
                          , generateCodeFromStreamGraph
                          , nodeFn
                          , nodeType
@@ -56,6 +60,7 @@ type PartitionMap = [[Int]]
 -- be used for its partitioning and deployment.
 data Plan = Plan { planStreamGraph  :: StreamGraph
                  , planPartitionMap :: PartitionMap }
+                 deriving (Eq)
 
 -- |`createPartitions` returns ([partitions], [inter-graph links])
 -- where inter-graph links are the cut edges due to partitioning
@@ -63,14 +68,12 @@ createPartitions :: StreamGraph -> PartitionMap -> PartitionedGraph
 createPartitions _ [] = ([],empty)
 createPartitions g (p:ps) = (thisGraph:tailParts, edgesOut `overlay` tailCuts) where
     fv v       = (vertexId v) `elem` p
-    vs         = vertices $ filter fv (vertexList g)
-    es         = edges $ filter (\(v1,v2) -> (fv v1) && (fv v2)) (edgeList g)
-    thisGraph  = overlay vs es
+    thisGraph  = induce fv g
     edgesOut   = edges $ filter (\(v1,v2) -> (fv v1) && (not(fv v2))) (edgeList g)
     (tailParts, tailCuts) = createPartitions g ps
 
 unPartition :: PartitionedGraph -> Graph StreamVertex
-unPartition (a,b) = overlay b $ foldl overlay Empty a
+unPartition (a,b) = foldl overlay Empty (b:a)
 
 ------------------------------------------------------------------------------
 -- Code generation from StreamGraph definitions
@@ -406,37 +409,3 @@ writePart opts (x,y) = let
 partitionGraph :: StreamGraph -> PartitionMap -> GenerateOpts -> IO ()
 partitionGraph graph partitions opts = do
     mapM_ (writePart opts) $ zip [1..] $ generateCode opts graph partitions
-
-------------------------------------------------------------------------------
-
--- | Derive a partition map.
--- Eventually, derive all possible partition maps.
-partitionings :: StreamGraph -> [Partition] -> PartitionMap
-partitionings sg parts = let
-    vIds = map vertexId . vertexList $ sg
-    in case compareLength vIds parts of
-        EQ -> map (:[]) vIds
-
-        GT -> let
-            diff         = length vIds - length parts
-            (first,rest) = splitAt (diff + 1) vIds
-            in [first] ++ map (:[]) rest
-
-        LT -> error "cannot partition a graph over more partitions than there are nodes"
-
-partTestGraph = path
-    [ StreamVertex 0 (Source 1) []        "Int" "Int" 1
-    , StreamVertex 1 Map [[| show |]] "Int" "String" 2
-    , StreamVertex 2 (Filter 0.5) [[| (<3) |]]    "Int" "Int" 3
-    , StreamVertex 3 Window []        "String" "[String]" 4
-    , StreamVertex 4 Sink []          "String" "String" 5
-    ]
-
-test_partitionings_1 = assertEqual [[x]|x <- [0..4]] $
-    partitionings partTestGraph [0..4]
-
-test_partitionings_2 = assertEqual 3 $ length $
-    partitionings partTestGraph [0..2]
-
-test_partitionings_3 = assertEqual 3 $ length $ head $
-    partitionings partTestGraph [0..2]
