@@ -75,7 +75,7 @@ createPartitions g (p:ps) = (thisGraph:tailParts, edgesOut `overlay` tailCuts) w
     (tailParts, tailCuts) = createPartitions g ps
 
 unPartition :: PartitionedGraph -> Graph StreamVertex
-unPartition (a,b) = overlay b $ foldl overlay Empty a
+unPartition (a,b) = foldl overlay Empty (b:a)
 
 ------------------------------------------------------------------------------
 -- Code generation from StreamGraph definitions
