@@ -28,7 +28,7 @@ jobs:
 
       - if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         name: Upload artifact
-        uses: actions/upload-pages-artifact@v2
+        uses: actions/upload-pages-artifact@v3
         with:
           path: ${{ steps.stack.outputs.dist-dir }}/doc/html/striot/
 
