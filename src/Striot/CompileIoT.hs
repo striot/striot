@@ -113,7 +113,7 @@ defaultOpts = GenerateOpts
   , preSource   = Nothing
   , rules       = defaultRewriteRules
   , maxNodeUtil = 3.0 -- finger in the air
-  , bandwidthLimit = 31 -- same
+  , bandwidthLimit = 200 -- same
   }
 
 -- |Partitions the supplied `StreamGraph` according to the supplied `PartitionMap`
