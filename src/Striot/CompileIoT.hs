@@ -68,9 +68,7 @@ createPartitions :: StreamGraph -> PartitionMap -> PartitionedGraph
 createPartitions _ [] = ([],empty)
 createPartitions g (p:ps) = (thisGraph:tailParts, edgesOut `overlay` tailCuts) where
     fv v       = (vertexId v) `elem` p
-    vs         = vertices $ filter fv (vertexList g)
-    es         = edges $ filter (\(v1,v2) -> (fv v1) && (fv v2)) (edgeList g)
-    thisGraph  = overlay vs es
+    thisGraph  = induce fv g
     edgesOut   = edges $ filter (\(v1,v2) -> (fv v1) && (not(fv v2))) (edgeList g)
     (tailParts, tailCuts) = createPartitions g ps
 
