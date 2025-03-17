@@ -203,9 +203,7 @@ test_overUtilisedPartition_rejected = -- example of an over-utilised partition
 -- example of an acceptable PartitionMap
 test_overUtilisedPartition_acceptable = assertElem [[1,2,3],[4,5,6],[7,8,9]]
     $ map (sort . (map sort))
-    $ (map (planPartitionMap.costedPlanPlan) . viableRewrites opts) partUtilGraph -- :: [PartitionMap]
-    where
-        opts = defaultOpts { bandwidthLimit = 46 }
+    $ (map (planPartitionMap.costedPlanPlan) . viableRewrites defaultOpts) partUtilGraph -- :: [PartitionMap]
 
 {- $fromCompileIoT
 == CompileIoT functions
