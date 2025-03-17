@@ -2,17 +2,21 @@
 {-# OPTIONS_HADDOCK prune #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Striot.CompileIoT ( createPartitions
-                         , generateCode
+                         -- entrypoints
+module Striot.CompileIoT ( createPartitions -- pure
+                         , partitionGraph   -- impure
+
+                         -- types
                          , GenerateOpts(..)
                          , defaultOpts
                          , Partition
                          , PartitionMap
                          , Plan(..)
+
+                         -- not used outside CompileIoT
+                         , generateCode
                          , writePart
                          , genDockerfile
-                         , partitionGraph
-
                          , generateCodeFromStreamGraph
                          , nodeFn
                          , nodeType
