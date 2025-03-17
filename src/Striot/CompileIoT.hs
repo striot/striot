@@ -60,6 +60,7 @@ type PartitionMap = [[Int]]
 -- be used for its partitioning and deployment.
 data Plan = Plan { planStreamGraph  :: StreamGraph
                  , planPartitionMap :: PartitionMap }
+                 deriving (Eq)
 
 -- |`createPartitions` returns ([partitions], [inter-graph links])
 -- where inter-graph links are the cut edges due to partitioning
