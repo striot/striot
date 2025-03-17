@@ -163,7 +163,8 @@ whatBandwidth g i =
   in fmap ((*outrate)) outsize
 
 -- applies a rate-based overhead weighting
-weighting = 2.0
+-- TCP header size is 20-40 bytes; IP header size is 20-40 bytes
+weighting = 60.0
 whatBandwidthWeighted g i = fmap (+ (departRate g i * weighting)) (whatBandwidth g i)
 
 -- XXX: write an "departSize"? we could estimate window sizes for fixed-length
