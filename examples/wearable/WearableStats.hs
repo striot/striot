@@ -129,15 +129,25 @@ joint_winners = let
 
 wearableCountBestScoring = length joint_winners
 
-winner = case joint_winners of
-  [] -> error "joint_winners is empty"
-  ws -> ((\(Plan s p) -> createPartitions s p) .fst.head) ws
+test_thereAreWinners = assertNotEmpty joint_winners
+
+-- this is the winning rewrite we describe in the thesis text. The functions
+-- below ensure that this appears in the output of the Logical Optimiser.
+gvariant2 = graph
+          & applyRule filterAccWindow
+          & applyRule mapWindow
+
+-- we want to select a variant equivalent to gvariant2. Therefore it must
+-- be in the set of winners
+-- joint_winners is non-empty (test_thereAreWinner will fail otherwise)
+winner :: PartitionedGraph
+winner = joint_winners
+        & map fst
+        & filter ((== gvariant2) . planStreamGraph)
+        & head -- runtime error if gvariant2 is not in the list
+        & (\(Plan s p) -> createPartitions s p)
 
 wearableWinnerDot = partitionedGraphToDot winner
-
--- what's the bandwidth for each?
--- via whatBandwidthWeighted
--- 70,35,31
 
 latexCommand name val = "\\newcommand{\\" ++ name ++ "}{"++ humanInt val ++"}\n"
 
