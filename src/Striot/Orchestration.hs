@@ -14,6 +14,7 @@ programs described as 'StreamGraph's.
 
 -}
 module Striot.Orchestration ( Cost
+                            , CostedPlan(..)
                             , distributeProgram
                             , chopAndChange
                             , viableRewrites
