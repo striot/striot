@@ -18,6 +18,8 @@ module Striot.VizGraph ( streamGraphToDot
                        , jacksonStyle
                        , enumGraphStyle
 
+                       , displayPlan
+
                        , htf_thisModulesTests) where
 
 import Striot.StreamGraph
@@ -269,3 +271,10 @@ v9 = StreamVertex  5 Expand [] "[String]" "String" 2
 v10 = StreamVertex 6 Sink   [[|mapM_ print|]] "String" "IO ()" 3
 expandEx :: StreamGraph
 expandEx = path [v7, v8, v9, v10]
+
+------------------------------------------------------------------------------
+-- plans
+
+displayPlan :: Plan -> IO ()
+displayPlan (Plan g p) =
+  displayPartitionedGraph (createPartitions g p)
