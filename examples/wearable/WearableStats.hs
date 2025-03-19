@@ -28,8 +28,8 @@ toSnd f a = (a, f a)
 
 lrules = defaultRewriteRules ++ reshapingRules
 
-opts = defaultOpts { maxNodeUtil    = 3.0
-                   , bandwidthLimit = 30
+opts = defaultOpts { maxNodeUtil    = 1.1102e-4
+                   , bandwidthLimit = 1760
                    , rules          = lrules
                    }
 
