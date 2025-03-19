@@ -18,7 +18,10 @@ module WearableExample ( sampleDataGenerator
                        , pebbleTimes
                        , preSource
 
+                       -- used by Main and WearableStats
                        , session1Input
+                       , avgArrivalRate
+                       , vibeFrequency
 
                        ) where
 
@@ -207,3 +210,7 @@ session1Input :: IO (Timestamp,PebbleMode60)
 session1Input = do
   threadDelay 1000 -- µs
   getLine >>= return . parseSessionLine
+
+-- pre-calculated properties of the "session1" data-set
+avgArrivalRate = 20.947272312257475 -- calculated by arrivalRate''
+vibeFrequency  = 1-(5/275310) -- length $ filter (=='1') $ map (\s ->s!!((length s)-2)) (csvLines)

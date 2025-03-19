@@ -131,7 +131,12 @@ movementFreq file = file
                   & streamMap (\(x,y,z) -> intSqrt (x+y+z))
                   & streamScan (\m i -> M.insertWith (+) i 1 m) M.empty
 
--- e.g. length $ stepEvents 2000 csvFile
+-- to calculate the selectivity of the stepEvents stateful filter
+-- for session1.csv:
+-- λ> length $ stepEvents 1250 csvFile
+-- 5581
+-- λ> 5581 / 275305.0
+-- 0.020272
 stepEvents thr file = file
                 & pebbleStream'
                 & streamMap snd

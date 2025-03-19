@@ -22,7 +22,7 @@ node2 node1/node.hs node2/node.hs: Main
 Main: Main.hs
 	$(GHC) -i../../src Main.hs
 
-bench:
+bench: session1.csv
 	$(GHC_PREFIX) runghc Criterion.hs -- --output Criterion.html $(bmark)
 
 session1.csv:
