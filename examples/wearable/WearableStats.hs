@@ -37,29 +37,29 @@ thr = 1250 :: Int
 
 graph = path
   [ StreamVertex 1 (Source avgArrivalRate) [[| session1Input |]]
-     "IO ()" "PebbleMode60" 25 -- 25 Hz, per Path2IOT paper
+     "IO ()" "PebbleMode60" 6666666.667
 
   , StreamVertex 2 (Filter vibeFrequency) [[| ((==0) . snd) |]]
-    "PebbleMode60"  "PebbleMode60"  61350
+    "PebbleMode60"  "PebbleMode60"  1293661.061
 
   -- edEvent
   , StreamVertex 3 Map [[| \((x,y,z),_) -> (x*x,y*y,z*z) |]]
-    "PebbleMode60"  "(Int,Int,Int)" 19763
+    "PebbleMode60"  "(Int,Int,Int)" 1088139.282
   , StreamVertex 4 Map [[| \(x,y,z) -> intSqrt (x+y+z) |]]
-    "(Int,Int,Int)" "Int" 17763
+    "(Int,Int,Int)" "Int" 294117.6471
 
   -- stepEvent
   , StreamVertex 5 (FilterAcc 0.020272) [[| (\_ n-> n) |], [| 0 |], [| (\new last ->(last>thr) && (new<=thr)) |]]
-    "Int" "Int" 32895
+    "Int" "Int" 625000
 
   -- stepCount
   , StreamVertex 6 Window [[| chopTime 120 |]]
-    "a" "[a]" 3110
+    "a" "[a]" 806451.6129
   , StreamVertex 7 Map [[| length |]]
-    "[Int]" "Int" 285714
+    "[Int]" "Int" 6666666.667
 
   , StreamVertex 8 Sink [[| mapM_ print |]]
-    "Int" "IO ()" 285714
+    "Int" "IO ()" 6666666.667
   ]
 
 ---- Evaluation Stage 1: no program rewrites
