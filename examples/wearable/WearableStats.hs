@@ -70,17 +70,21 @@ norewritePartitionCount = length $ norewritePlans
 
 -- how many of those are not eliminated by maxNodeUtil (112)
 relaxedOpts = opts { bandwidthLimit = 999999999 }
-norewritePassMaxNodeUtil = norewritePlans
-                         & map (toSnd (planCost relaxedOpts))
-                         & filter (isJust . snd)
+norewritePassMaxNodeUtil' o = norewritePlans
+                            & map (toSnd (planCost o))
+                            & filter (isJust . snd)
+
+norewritePassMaxNodeUtil = norewritePassMaxNodeUtil' relaxedOpts
 norewritePassMaxNodeUtilCount = length norewritePassMaxNodeUtil
 norewriteRejectedMaxNodeUtil = -- 15
   norewritePartitionCount - norewritePassMaxNodeUtilCount
 
 -- by default, the bandwidth limit above rules out all program variants
-test_defaultgraph_bwlimit = assertEmpty $ norewritePlans
-                                        & map (toSnd (planCost opts))
-                                        & filter (isJust . snd)
+norewriteSurvivors    = norewritePlans
+                      & map (toSnd (planCost opts))
+                      & filter (isJust . snd)
+norewriteSurviveCount = length norewriteSurvivors
+test_defaultgraph_bwlimit = assertEqual 0 norewriteSurviveCount
 
 ---- Evaluation Stage 2: logical optimiser/rewrites
 
