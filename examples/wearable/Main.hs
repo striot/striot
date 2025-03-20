@@ -1,21 +1,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-import Algebra.Graph -- path
-
+import Algebra.Graph (path)
 import Striot.CompileIoT
 import Striot.CompileIoT.Compose
 import Striot.StreamGraph
 
 import WearableExample
 
-opts = defaultOpts { imports = imports defaultOpts ++
-                        [ "System.Random" -- getStdGen
-                        , "Data.Maybe" -- fromJust
-                        , "WearableExample"
-                        ]
-                   , Striot.CompileIoT.preSource = Just "preSource"
-                   , packages = []
-                   }
+opts = defaultOpts { imports   = "WearableExample" : imports defaultOpts
+                   , preSource = Just "wearablePreSource" }
 
 wearable = let thr = 100 :: Int in path
   [ StreamVertex 1 (Source avgArrivalRate) [[| session1Input |]]

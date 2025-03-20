@@ -16,7 +16,7 @@ module WearableExample ( sampleDataGenerator
 
                        -- used by Main.hs for StreamGraph
                        , pebbleTimes
-                       , preSource
+                       , wearablePreSource
 
                        -- used by Main and WearableStats
                        , session1Input
@@ -190,7 +190,7 @@ pebbleTimes :: Stream (Timestamp,PebbleMode60) -> [Stream (Timestamp,PebbleMode6
 pebbleTimes = map (\(Event _ v) -> [Event (fmap fst v) v])
 
 -- Exported for the StreamGraph example (Main.hs)
-preSource = do
+wearablePreSource = do
     fd <- openFd "session1.csv" ReadOnly Nothing (OpenFileFlags False False False False False)
     dupTo fd stdInput
 
