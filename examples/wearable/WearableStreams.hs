@@ -131,6 +131,20 @@ movementFreq file = file
                   & streamMap (\(x,y,z) -> intSqrt (x+y+z))
                   & streamScan (\m i -> M.insertWith (+) i 1 m) M.empty
 
+stepSelectivity :: String -> Double
+stepSelectivity file = let
+  thr = 1250
+  edEvents = file
+           & pebbleStream'
+           & streamMap snd
+           & edEvent
+  edEvLen  = edEvents & length & fromIntegral
+  stepEvLen = edEvents
+            & stepEvent thr
+            & length
+            & fromIntegral
+  in stepEvLen / edEvLen
+
 -- to calculate the selectivity of the stepEvents stateful filter
 -- for session1.csv:
 -- λ> length $ stepEvents 1250 csvFile
@@ -142,6 +156,20 @@ stepEvents thr file = file
                 & streamMap snd
                 & edEvent
                 & stepEvent thr
+
+-- to calculate the selectivity of vibeFilter
+vibeSelectivity :: String -> Double
+vibeSelectivity file = let
+  total  = (fromIntegral . length . lines) file
+  accept = (fromIntegral . vibeCount) file
+  in accept / total
+
+vibeCount file = file
+               & pebbleStream'
+               & streamMap snd
+               & edEvent
+               & unStream
+               & length
 
 ------------------------------------------------------------------------------
 -- identifying 'sessions' from a stream (without batching into windows)
