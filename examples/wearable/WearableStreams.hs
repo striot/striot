@@ -143,6 +143,20 @@ stepEvents thr file = file
                 & edEvent
                 & stepEvent thr
 
+-- to calculate the selectivity of vibeFilter
+vibeSelectivity :: String -> Double
+vibeSelectivity file = let
+  total  = (fromIntegral . length . lines) file
+  accept = (fromIntegral . vibeCount) file
+  in accept / total
+
+vibeCount file = file
+               & pebbleStream'
+               & streamMap snd
+               & edEvent
+               & unStream
+               & length
+
 ------------------------------------------------------------------------------
 -- identifying 'sessions' from a stream (without batching into windows)
 
