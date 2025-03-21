@@ -37,29 +37,29 @@ thr = 1250 :: Int
 
 graph = path
   [ StreamVertex 1 (Source avgArrivalRate) [[| session1Input |]]
-     "IO ()" "PebbleMode60" 6666666.667
+     "IO ()" "PebbleMode60" (1/1.5e-7)
 
   , StreamVertex 2 (Filter vibeFrequency) [[| ((==0) . snd) |]]
-    "PebbleMode60"  "PebbleMode60"  1293661.061
+    "PebbleMode60"  "PebbleMode60" (1/7.73e-7)
 
   -- edEvent
   , StreamVertex 3 Map [[| \((x,y,z),_) -> (x*x,y*y,z*z) |]]
-    "PebbleMode60"  "(Int,Int,Int)" 1088139.282
+    "PebbleMode60"  "(Int,Int,Int)" (1/9.19e-7)
   , StreamVertex 4 Map [[| \(x,y,z) -> intSqrt (x+y+z) |]]
-    "(Int,Int,Int)" "Int" 294117.6471
+    "(Int,Int,Int)" "Int" (1/3.4e-6)
 
   -- stepEvent
   , StreamVertex 5 (FilterAcc 0.020272) [[| (\_ n-> n) |], [| 0 |], [| (\new last ->(last>thr) && (new<=thr)) |]]
-    "Int" "Int" 625000
+    "Int" "Int" (1/1.6e-6)
 
   -- stepCount
   , StreamVertex 6 Window [[| chopTime 120 |]]
-    "a" "[a]" 806451.6129
+    "a" "[a]" (1/1.24e-6)
   , StreamVertex 7 Map [[| length |]]
-    "[Int]" "Int" 6666666.667
+    "[Int]" "Int" (1/1.5e-7)
 
   , StreamVertex 8 Sink [[| mapM_ print |]]
-    "Int" "IO ()" 6666666.667
+    "Int" "IO ()" (1/1.5e-7)
   ]
 
 ---- Evaluation Stage 1: no program rewrites
