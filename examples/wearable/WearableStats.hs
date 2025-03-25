@@ -29,7 +29,7 @@ toSnd f a = (a, f a)
 lrules = defaultRewriteRules ++ reshapingRules
 
 opts = defaultOpts { maxNodeUtil    = 1.1102e-4
-                   , bandwidthLimit = 1760
+                   , maxBandwidth   = 1760
                    , rules          = lrules
                    }
 
@@ -69,7 +69,7 @@ norewritePlans = makePlans graph
 norewritePartitionCount = length $ norewritePlans
 
 -- how many of those are not eliminated by maxNodeUtil (112)
-relaxedOpts = opts { bandwidthLimit = 999999999 }
+relaxedOpts = opts { maxBandwidth = 999999999 }
 norewritePassMaxNodeUtil' o = norewritePlans
                             & map (toSnd (planCost o))
                             & filter (isJust . snd)
@@ -183,7 +183,7 @@ wearableParams = "  \\begin{tabular}{ll}\n"
  ++ "    Parameter      & Value         \\\\\n"
  ++ "    \\midrule\n"
  ++ "    maxNodeUtil    & "++(show (100*(maxNodeUtil opts)))++"\\%         \\\\\n"
- ++ "    bandwidthLimit & "++(show (bandwidthLimit opts))++"bytes/s \\\\\n"
+ ++ "    maxBandwidth   & "++(show (maxBBandwidth opts))++"bytes/s \\\\\n"
  ++ "    rules          & defaultRewriteRules ++ reshapingRules \\\\\n"
  ++ "  \\end{tabular}\n"
 

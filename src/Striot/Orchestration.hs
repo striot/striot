@@ -122,7 +122,7 @@ planCost opts plan@(Plan sg pm) = let
     oi = calcAllSg sg
     in if   isOverUtilised oi
          || any (> maxNodeUtil opts) (totalNodeUtilisations oi pm)
-         || overBandwidthLimit plan (bandwidthLimit opts)
+         || overBandwidthLimit plan (maxBandwidth opts)
        then Nothing
        else Just (length pm)
 

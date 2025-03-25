@@ -100,7 +100,7 @@ data GenerateOpts = GenerateOpts
   , preSource         :: Maybe String  -- ^ code to run prior to starting 'nodeSource'
   , rules             :: [LabelledRewriteRule] -- ^ A list of rewrite rules for the logical optimiser
   , maxNodeUtil       :: Double        -- ^ The per-Partition utilisation limit
-  , bandwidthLimit    :: Double        -- ^ A program-global maximum bandwidth limit
+  , maxBandwidth      :: Double        -- ^ Bandwidth limit between the first two deployment Nodes
   }
 
 -- | Sensible default values for 'GenerateOpts'. Users who wish to customise
@@ -115,8 +115,8 @@ defaultOpts = GenerateOpts
   , packages    = []
   , preSource   = Nothing
   , rules       = defaultRewriteRules
-  , maxNodeUtil = 3.0 -- finger in the air
-  , bandwidthLimit = 200 -- same
+  , maxNodeUtil = 3.0
+  , maxBandwidth= 200
   }
 
 -- |Partitions the supplied `StreamGraph` according to the supplied `PartitionMap`
