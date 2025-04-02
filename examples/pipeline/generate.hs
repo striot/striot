@@ -4,6 +4,7 @@
  -}
 
 import Striot.CompileIoT
+import Striot.CompileIoT.Compose
 import Striot.StreamGraph
 import Algebra.Graph
 
@@ -19,4 +20,7 @@ graph = path
  ]
 
 pmap = [[1,2],[3],[4,5,6]]
-main = partitionGraph graph pmap defaultOpts
+main = do
+    partitionGraph graph pmap defaultOpts
+    writeFile "compose.yml" (generateDockerCompose
+                             (createPartitions graph pmap))
