@@ -8,7 +8,7 @@ import Striot.CompileIoT.Compose
 import Striot.StreamGraph
 import Algebra.Graph
 
-source = [| threadDelay (1000*1000) >> return "Hello from Client!" |]
+source = [| threadDelay 1000000 >> return "Hello from Client!" |]
 
 graph = path
  [ StreamVertex 1 (Source 1) [source] "IO ()"  "String" 0
