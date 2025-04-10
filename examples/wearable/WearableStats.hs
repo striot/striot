@@ -183,7 +183,7 @@ wearableParams = "  \\begin{tabular}{ll}\n"
  ++ "    Parameter      & Value         \\\\\n"
  ++ "    \\midrule\n"
  ++ "    maxNodeUtil    & "++(show (100*(maxNodeUtil opts)))++"\\%         \\\\\n"
- ++ "    maxBandwidth   & "++(show (maxBBandwidth opts))++"bytes/s \\\\\n"
+ ++ "    maxBandwidth   & "++(show (maxBandwidth opts))++"bytes/s \\\\\n"
  ++ "    rules          & defaultRewriteRules ++ reshapingRules \\\\\n"
  ++ "  \\end{tabular}\n"
 
